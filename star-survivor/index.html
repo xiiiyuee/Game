@@ -4773,9 +4773,10 @@
   }
 
   /* =====================================================================
-   * 16. 更新主逻辑
+   * 16. 模拟与更新入口
    * ===================================================================*/
-  function update(dt) {
+  // 只推进世界状态，不直接刷新 HUD / 播放音乐；返回本帧有效 dt，提前中止返回 false
+  function simulate(dt) {
     const rawDt = dt;
 
     // Boss 击杀特写：慢动作 + 延迟进入下一星域
@@ -4784,7 +4785,7 @@
       victoryFlash = Math.max(0, victoryFlash - rawDt * 0.75);
       if (victoryTimer <= 0) {
         chapterClear();
-        return;
+        return false;
       }
     }
     if (slowmo > 0) {
@@ -4794,7 +4795,7 @@
     // 命中顿帧：短暂冻结世界更新，强化打击反馈
     if (hitStop > 0) {
       hitStop = Math.max(0, hitStop - rawDt);
-      return;
+      return false;
     }
 
     elapsed += dt;
@@ -4832,7 +4833,7 @@
       if (waveNum % CFG.RUN.SHOP_WAVE === 0 && waveNum !== lastShopWave) {
         lastShopWave = waveNum;
         openShop("第 " + chapter + " 星域 · 第 " + waveNum + " 波补给");
-        return;
+        return false;
       }
     }
     if (!bossSpawned && waveNum >= CFG.RUN.CHAPTER_WAVES) spawnBoss();
@@ -4840,32 +4841,40 @@
     updateSpawner(dt);
     updateEvents(dt);
     updateCores(dt);
-    if (state !== "playing") { updateParticles(dt); return; }
+    if (state !== "playing") { updateParticles(dt); return false; }
 
     updatePlayer(dt);
     updateCamera(dt);
-    if (state !== "playing") return;
+    if (state !== "playing") return false;
 
     updateDrones(dt, elapsed);
     updateDefenses(dt);
     updateEnemies(dt, elapsed);
-    if (state !== "playing") { updateParticles(dt); return; }
+    if (state !== "playing") { updateParticles(dt); return false; }
 
     updateBullets(dt);
-    if (state !== "playing") { updateParticles(dt); return; }
+    if (state !== "playing") { updateParticles(dt); return false; }
 
     updateGems(dt);
-    if (state !== "playing") { updateParticles(dt); return; }
+    if (state !== "playing") { updateParticles(dt); return false; }
 
     updateParticles(dt);
-    updateMusic(dt);
+    return dt;
+  }
 
-    shake *= Math.pow(0.0009, dt);
+  // 表现层：只在模拟完整推进一帧后执行，避免暂停/选卡时刷新 HUD 或音乐
+  function update(dt) {
+    const simDt = simulate(dt);
+    if (simDt === false) return;
+
+    updateMusic(simDt);
+
+    shake *= Math.pow(0.0009, simDt);
     if (shake < 0.15) shake = 0;
-    hurtFlash = Math.max(0, hurtFlash - dt * 2.8);
+    hurtFlash = Math.max(0, hurtFlash - simDt * 2.8);
 
     // HUD 约 12Hz 刷新即可，避免每帧多次触发样式计算
-    hudAcc += dt;
+    hudAcc += simDt;
     if (hudAcc >= 0.08) {
       hudAcc = 0;
       refreshHud();
