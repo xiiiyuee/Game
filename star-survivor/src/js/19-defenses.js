@@ -41,18 +41,22 @@
     {
       id: "purge", icon: "✦", name: "净化协议", base: 50,
       desc: () => "移除 1 层诅咒强化",
-      can: () => Object.keys(stacks).some((id) => {
-        const d = ALL_DEFS.find((x) => x.id === id);
-        return d && d.curse;
-      }),
+      can: () => {
+        const lp = getLocalPlayer() || player;
+        return Object.keys(lp.stacks).some((id) => {
+          const d = ALL_DEFS.find((x) => x.id === id);
+          return d && d.curse;
+        });
+      },
       apply: () => {
-        const id = Object.keys(stacks).find((k) => {
+        const lp = getLocalPlayer() || player;
+        const id = Object.keys(lp.stacks).find((k) => {
           const d = ALL_DEFS.find((x) => x.id === k);
           return d && d.curse;
         });
         if (!id) return;
-        stacks[id] -= 1;
-        if (stacks[id] <= 0) delete stacks[id];
+        lp.stacks[id] -= 1;
+        if (lp.stacks[id] <= 0) delete lp.stacks[id];
         updateBuffPanel();
       },
     },
@@ -218,8 +222,9 @@
     emit(x, y, 8, "#c9a6ff", 150, 2.4, 0.5);
   }
 
-  function chipApply(c, sign) {
-    const s = stats;
+  function chipApply(c, sign, p) {
+    const owner = p || getLocalPlayer() || player;
+    const s = owner.stats;
     const v = c.value;
     switch (c.kind) {
       case "dmg": s.damage = Math.max(1, s.damage + v * sign); break;
@@ -235,7 +240,7 @@
         break;
       case "shield":
         s.shieldMax = Math.max(10, s.shieldMax + v * sign);
-        player.shield = Math.min(player.shield, s.shieldMax);
+        owner.shield = Math.min(owner.shield, s.shieldMax);
         break;
       case "armor":
         s.armor = sign > 0
@@ -249,6 +254,8 @@
   }
 
   function equipChip(chip) {
+    const owner = getLocalPlayer() || player;
+    const chips = owner.chips;
     let replaced = null;
     if (chips.length >= 3) {
       let wi = 0;
@@ -256,13 +263,13 @@
         if (chips[i].score < chips[wi].score) wi = i;
       }
       replaced = chips[wi];
-      chipApply(replaced, -1);
+      chipApply(replaced, -1, owner);
       chips.splice(wi, 1);
     }
     chips.push(chip);
-    chipApply(chip, 1);
-    emit(player.x, player.y, 18, chipColor(chip), 240, 3, 0.6);
-    addText(player.x, player.y - 52,
+    chipApply(chip, 1, owner);
+    emit(owner.x, owner.y, 18, chipColor(chip), 240, 3, 0.6);
+    addText(owner.x, owner.y - 52,
       replaced ? `替换 ${replaced.name} → ${chip.name}` : `芯片 ${chip.name} · ${chipText(chip)}`,
       chipColor(chip), 14);
     sfxLevelUp();

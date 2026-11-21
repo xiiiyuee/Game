@@ -42,6 +42,8 @@
       id,
       local: !!local,
       stats: st,                 // 每名玩家独立属性（移速 / 伤害 / 护盾 / 冷却等）
+      stacks: {},                // 每名玩家独立强化堆叠
+      chips: [],                 // 每名玩家独立芯片构筑（3 槽）
       x,
       y,
       r: P.RADIUS,
@@ -77,6 +79,8 @@
     player = createPlayer(localPlayerId, world.w / 2, world.h / 2, true);
     players = [player];
     stats = player.stats;      // 兼容别名：指向本地玩家属性对象
+    stacks = player.stacks;    // 兼容别名：指向本地玩家强化堆叠
+    chips = player.chips;      // 兼容别名：指向本地玩家芯片构筑
     applyMeta(stats, player);
 
     bullets = [];
@@ -92,7 +96,6 @@
     turrets = [];
     fields = [];
     coreDrops = [];
-    stacks = {};
     boss = null;
 
     elapsed = 0;
@@ -132,7 +135,6 @@
     slowmo = 0;
     victoryTimer = 0;
     victoryFlash = 0;
-    chips = [];
     chipDrops = [];
     asteroids = [];
     asteroidTimer = 6;

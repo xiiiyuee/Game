@@ -77,6 +77,9 @@
   function updateBuffPanel() {
     const panel = document.getElementById("buffs");
     const list = document.getElementById("buff-list");
+    const lp = getLocalPlayer() || player;
+    const stacks = (lp && lp.stacks) || {};   // 右侧面板只显示本地玩家
+    const chips = (lp && lp.chips) || [];
     const ids = Object.keys(stacks);
     if (!ids.length && !chips.length) {
       panel.classList.add("hidden");

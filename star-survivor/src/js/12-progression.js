@@ -250,15 +250,18 @@
   function makeCard(def, rarity) {
     // 进化与诅咒不随稀有度放大，数值固定
     const mult = def.curse || def.evolution ? def.base : def.base * rarity.mult;
+    const lp = getLocalPlayer() || player;
     return {
       def,
       rarity,
       mult,
-      text: def.desc(player.stats, mult, player),
+      text: def.desc(lp.stats, mult, lp),
     };
   }
 
   function buildCards() {
+    const lp = getLocalPlayer() || player;
+    const stacks = lp.stacks;   // 升级选项只看本地玩家的堆叠
     const chosen = new Set();
     const cards = [];
 
@@ -266,7 +269,7 @@
     const evoPool = EVOLUTIONS.filter((d) =>
       (stacks[d.id] || 0) < d.max &&
       (!d.weapon || d.weapon === chosenWeapon) &&
-      d.require(player.stats));
+      d.require(lp.stats));
     if (evoPool.length && Math.random() < 0.75) {
       const def = pick(evoPool);
       chosen.add(def.id);
@@ -354,8 +357,9 @@
     if (state !== "upgrade") return;
     const card = upgradeCards[idx];
     if (!card) return;
-    card.def.apply(player.stats, card.mult, player);
-    stacks[card.def.id] = (stacks[card.def.id] || 0) + 1;
+    const lp = getLocalPlayer() || player;
+    card.def.apply(lp.stats, card.mult, lp);
+    lp.stacks[card.def.id] = (lp.stacks[card.def.id] || 0) + 1;
     pendingLevels -= 1;
 
     document.getElementById("ov-upgrade").classList.add("hidden");
