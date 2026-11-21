@@ -113,15 +113,17 @@
     }
   }
 
-  // 相机对齐到玩家并限制在世界范围内
+  // 相机对齐到本地玩家并限制在世界范围内
   function snapCamera() {
-    camera.x = clamp(player.x - view.w / 2, 0, Math.max(0, world.w - view.w));
-    camera.y = clamp(player.y - view.h / 2, 0, Math.max(0, world.h - view.h));
+    const me = getLocalPlayer() || player;
+    camera.x = clamp(me.x - view.w / 2, 0, Math.max(0, world.w - view.w));
+    camera.y = clamp(me.y - view.h / 2, 0, Math.max(0, world.h - view.h));
   }
 
   function updateCamera(dt) {
-    const tx = clamp(player.x - view.w / 2, 0, Math.max(0, world.w - view.w));
-    const ty = clamp(player.y - view.h / 2, 0, Math.max(0, world.h - view.h));
+    const me = getLocalPlayer() || player;
+    const tx = clamp(me.x - view.w / 2, 0, Math.max(0, world.w - view.w));
+    const ty = clamp(me.y - view.h / 2, 0, Math.max(0, world.h - view.h));
     const k = Math.min(1, dt * CFG.WORLD.CAMERA_SMOOTH);
     camera.x += (tx - camera.x) * k;
     camera.y += (ty - camera.y) * k;

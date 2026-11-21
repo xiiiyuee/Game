@@ -764,7 +764,14 @@
       drawTrader(t);
       drawBullets();
       drawEnemies(t);
+      // 其他玩家先画，本地玩家最后画在最上层
+      for (let i = 0; i < players.length; i++) {
+        if (players[i] !== me) drawPlayer(t, players[i]);
+      }
       drawPlayer(t, me);
+      for (let i = 0; i < players.length; i++) {
+        if (players[i] !== me) drawDrones(t, players[i]);
+      }
       drawDrones(t, me);
       drawTurrets(t);
       drawPulses();
