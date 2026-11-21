@@ -589,6 +589,12 @@
       CRIT: 0.08,                 // 初始暴击率
       CRIT_MULT: 2.0,             // 暴击倍率
     },
+    WORLD: {
+      // 实际战场远大于视口，相机跟随玩家滚动
+      WIDTH_FACTOR: 2.2,          // 世界宽度 = max(视口宽, 960) × 该系数
+      HEIGHT_FACTOR: 2.0,         // 世界高度 = max(视口高, 720) × 该系数
+      CAMERA_SMOOTH: 10,          // 相机跟随平滑速度（越大越跟手）
+    },
     XP: {
       BASE: 8,                    // 1 级升 2 级所需经验
       GROWTH: 1.32,               // 每级经验需求成长系数
@@ -663,10 +669,12 @@
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
   const view = { w: 0, h: 0, dpr: 1, scale: 1 };
+  // 世界坐标尺寸与相机（世界远大于视口）
+  const world = { w: 2400, h: 1600 };
+  const camera = { x: 0, y: 0 };
   let bgGrad = null;
   let vgGrad = null;
   let stars = [];
-  let gridOffset = 0;
 
   function resize() {
     const w = window.innerWidth;
@@ -682,6 +690,10 @@
     view.dpr = dpr;
     // 移动端：按最短边缩放速度与范围，保证手感一致
     view.scale = clamp(Math.min(w, h) / 860, 0.62, 1.1);
+
+    // 战场尺寸：明显大于视口，由相机跟随滚动
+    world.w = Math.round(Math.max(w, 960) * CFG.WORLD.WIDTH_FACTOR);
+    world.h = Math.round(Math.max(h, 720) * CFG.WORLD.HEIGHT_FACTOR);
 
     bgGrad = ctx.createLinearGradient(0, 0, 0, h);
     bgGrad.addColorStop(0, "#070d1c");
@@ -707,14 +719,28 @@
     }
 
     if (player) {
-      player.x = clamp(player.x, player.r + 2, w - player.r - 2);
-      player.y = clamp(player.y, player.r + 2, h - player.r - 2);
+      player.x = clamp(player.x, player.r + 2, world.w - player.r - 2);
+      player.y = clamp(player.y, player.r + 2, world.h - player.r - 2);
+      snapCamera();
     }
+  }
+
+  // 相机对齐到玩家并限制在世界范围内
+  function snapCamera() {
+    camera.x = clamp(player.x - view.w / 2, 0, Math.max(0, world.w - view.w));
+    camera.y = clamp(player.y - view.h / 2, 0, Math.max(0, world.h - view.h));
+  }
+
+  function updateCamera(dt) {
+    const tx = clamp(player.x - view.w / 2, 0, Math.max(0, world.w - view.w));
+    const ty = clamp(player.y - view.h / 2, 0, Math.max(0, world.h - view.h));
+    const k = Math.min(1, dt * CFG.WORLD.CAMERA_SMOOTH);
+    camera.x += (tx - camera.x) * k;
+    camera.y += (ty - camera.y) * k;
   }
 
   function updateStars(dt, t) {
     if (state === "playing") {
-      gridOffset = (gridOffset + dt * 10) % 90;
       for (let i = 0; i < stars.length; i++) {
         const s = stars[i];
         s.y += s.sp * dt * 0.35;
@@ -944,7 +970,6 @@
       armor: 0,
       bulletCount: 1,
       pierce: 0,
-      bounce: 0,
       shieldMax: P.SHIELD_MAX,
       shieldRegen: P.SHIELD_REGEN,
     };
@@ -954,8 +979,8 @@
     const P = CFG.PLAYER;
     stats = makeStats();
     player = {
-      x: view.w / 2,
-      y: view.h / 2,
+      x: world.w / 2,
+      y: world.h / 2,
       r: P.RADIUS,
       hp: P.HP,
       hpMax: P.HP,
@@ -999,6 +1024,7 @@
     musicTimer = 0;
 
     hideBossBar();
+    snapCamera();
     updateBuffPanel();
     refreshHud(true);
   }
@@ -1323,14 +1349,6 @@
       },
     },
     {
-      id: "bounce", name: "折射棱镜", icon: "⤢", max: 2,
-      base: 1, minRarity: 0,
-      apply(s) { s.bounce += 1; },
-      desc(s) {
-        return `反弹次数 <b>+1</b><br>${s.bounce} → ${s.bounce + 1}`;
-      },
-    },
-    {
       id: "armor", name: "复合装甲", icon: "▣", max: 7,
       base: 0.05, minRarity: 0,
       apply(s, m) { s.armor = Math.min(0.65, 1 - (1 - s.armor) * (1 - m)); },
@@ -1515,14 +1533,16 @@
     let x = px, y = py;
     if (x === undefined) {
       const margin = 56;
-      // 至少尝试数次，避免贴脸生成
+      // 从当前镜头外缘生成，避免贴脸；再限制在世界边界内
       for (let attempt = 0; attempt < 8; attempt++) {
         const side = randInt(4);
-        if (side === 0) { x = rand(0, view.w); y = -margin; }
-        else if (side === 1) { x = view.w + margin; y = rand(0, view.h); }
-        else if (side === 2) { x = rand(0, view.w); y = view.h + margin; }
-        else { x = -margin; y = rand(0, view.h); }
-        if (dist2(x, y, player.x, player.y) > 200 * 200) break;
+        if (side === 0) { x = rand(camera.x, camera.x + view.w); y = camera.y - margin; }
+        else if (side === 1) { x = camera.x + view.w + margin; y = rand(camera.y, camera.y + view.h); }
+        else if (side === 2) { x = rand(camera.x, camera.x + view.w); y = camera.y + view.h + margin; }
+        else { x = camera.x - margin; y = rand(camera.y, camera.y + view.h); }
+        x = clamp(x, 16, world.w - 16);
+        y = clamp(y, 16, world.h - 16);
+        if (dist2(x, y, player.x, player.y) > 220 * 220) break;
       }
     }
 
@@ -1558,10 +1578,12 @@
     const side = randInt(4);
     const margin = 90;
     let x, y;
-    if (side === 0) { x = view.w / 2; y = -margin; }
-    else if (side === 1) { x = view.w + margin; y = view.h / 2; }
-    else if (side === 2) { x = view.w / 2; y = view.h + margin; }
-    else { x = -margin; y = view.h / 2; }
+    if (side === 0) { x = camera.x + view.w / 2; y = camera.y - margin; }
+    else if (side === 1) { x = camera.x + view.w + margin; y = camera.y + view.h / 2; }
+    else if (side === 2) { x = camera.x + view.w / 2; y = camera.y + view.h + margin; }
+    else { x = camera.x - margin; y = camera.y + view.h / 2; }
+    x = clamp(x, 70, world.w - 70);
+    y = clamp(y, 70, world.h - 70);
 
     const B = CFG.BOSS;
     boss = {
@@ -1797,7 +1819,8 @@
       if (gun && gun.count > 0) {
         e.shotCd -= dt;
         if (e.shotCd <= 0) {
-          const inView = e.x > -16 && e.x < view.w + 16 && e.y > -16 && e.y < view.h + 16;
+          const inView = e.x > camera.x - 16 && e.x < camera.x + view.w + 16 &&
+                         e.y > camera.y - 16 && e.y < camera.y + view.h + 16;
           const inRange = dist2(e.x, e.y, player.x, player.y) < (640 * view.scale) ** 2;
           if (inView && inRange) {
             const base = Math.atan2(player.y - e.y, player.x - e.x);
@@ -1909,9 +1932,9 @@
       player.y += v.y * sp * dt;
     }
 
-    // 边界限制
-    player.x = clamp(player.x, player.r + 2, view.w - player.r - 2);
-    player.y = clamp(player.y, player.r + 2, view.h - player.r - 2);
+    // 边界限制（世界边界，而非视口）
+    player.x = clamp(player.x, player.r + 2, world.w - player.r - 2);
+    player.y = clamp(player.y, player.r + 2, world.h - player.r - 2);
 
     // 拖尾
     player.trailCd -= dt;
@@ -1965,7 +1988,6 @@
         r: 4,
         dmg: stats.damage,
         pierce: stats.pierce,
-        bounce: stats.bounce,
         life: 1.5,
         dead: false,
         hit: new Set(),
@@ -2016,19 +2038,8 @@
       b.y += b.vy * dt;
       b.life -= dt;
 
-      // 边缘反弹
-      if (b.x < 0 || b.x > view.w || b.y < 0 || b.y > view.h) {
-        if (b.bounce > 0) {
-          b.bounce -= 1;
-          if (b.x < 0) { b.x = 0; b.vx = Math.abs(b.vx); }
-          else if (b.x > view.w) { b.x = view.w; b.vx = -Math.abs(b.vx); }
-          if (b.y < 0) { b.y = 0; b.vy = Math.abs(b.vy); }
-          else if (b.y > view.h) { b.y = view.h; b.vy = -Math.abs(b.vy); }
-          b.ang = Math.atan2(b.vy, b.vx);
-        } else {
-          b.dead = true;
-        }
-      }
+      // 大世界不再做镜面反弹：飞出世界或超时即销毁
+      if (b.x < 0 || b.x > world.w || b.y < 0 || b.y > world.h) b.dead = true;
 
       if (!b.dead) {
         // 与敌人碰撞（每个敌人只结算一次）
@@ -2076,7 +2087,8 @@
         emit(b.x, b.y, 8, b.color, 160, 2.4, 0.4);
       }
 
-      if (b.dead || b.life <= 0 || b.x < -40 || b.x > view.w + 40 || b.y < -40 || b.y > view.h + 40) {
+      if (b.dead || b.life <= 0 || b.x < camera.x - 80 || b.x > camera.x + view.w + 80 ||
+          b.y < camera.y - 80 || b.y > camera.y + view.h + 80) {
         ebullets.splice(i, 1);
       }
     }
@@ -2232,12 +2244,13 @@
     const newWave = Math.min(CFG.WAVE.BOSS_WAVE, 1 + Math.floor(elapsed / CFG.WAVE.INTERVAL));
     if (newWave !== waveNum) {
       waveNum = newWave;
-      addText(view.w / 2, view.h * 0.28, "第 " + waveNum + " 波", "#7ef0ff", 22);
+      addText(camera.x + view.w / 2, camera.y + view.h * 0.28, "第 " + waveNum + " 波", "#7ef0ff", 22);
     }
     if (!bossSpawned && waveNum >= CFG.WAVE.BOSS_WAVE) spawnBoss();
 
     updateSpawner(dt);
     updatePlayer(dt);
+    updateCamera(dt);
     if (state !== "playing") return;
 
     updateEnemies(dt, elapsed);
@@ -2271,26 +2284,34 @@
     ctx.fillStyle = bgGrad || "#05070f";
     ctx.fillRect(0, 0, view.w, view.h);
 
-    // 星点
+    // 星点（视差：随相机轻微反向移动）
+    const ox = (camera.x * 0.12) % view.w;
+    const oy = (camera.y * 0.12) % view.h;
     for (let i = 0; i < stars.length; i++) {
       const s = stars[i];
       const tw = 0.55 + 0.45 * Math.sin(t * 0.9 + s.ph);
+      let px = s.x - ox;
+      let py = s.y - oy;
+      if (px < 0) px += view.w;
+      if (py < 0) py += view.h;
       ctx.globalAlpha = s.a * tw * 0.5;
       ctx.fillStyle = i % 7 === 0 ? "#8fe8ff" : "#cfe4ff";
-      ctx.fillRect(s.x, s.y, s.r, s.r);
+      ctx.fillRect(px, py, s.r, s.r);
     }
     ctx.globalAlpha = 1;
 
-    // 低对比度网格
+    // 低对比度网格（随相机滚动，体现大世界移动感）
     ctx.strokeStyle = "rgba(63, 229, 255, 0.05)";
     ctx.lineWidth = 1;
     const gap = 90;
+    const gx = ((camera.x % gap) + gap) % gap;
+    const gy = ((camera.y % gap) + gap) % gap;
     ctx.beginPath();
-    for (let x = -(gridOffset % gap); x < view.w; x += gap) {
+    for (let x = -gx; x < view.w + gap; x += gap) {
       ctx.moveTo(x, 0);
       ctx.lineTo(x, view.h);
     }
-    for (let y = -(gridOffset % gap); y < view.h; y += gap) {
+    for (let y = -gy; y < view.h + gap; y += gap) {
       ctx.moveTo(0, y);
       ctx.lineTo(view.w, y);
     }
@@ -2301,6 +2322,35 @@
       ctx.fillStyle = vgGrad;
       ctx.fillRect(0, 0, view.w, view.h);
     }
+  }
+
+  // 世界边界：让玩家感知可活动范围
+  function drawWorldBounds() {
+    ctx.save();
+    // 内侧柔光，让贴近边界时也有清晰反馈
+    ctx.strokeStyle = "rgba(63, 229, 255, 0.36)";
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = "#3fe5ff";
+    ctx.shadowBlur = 30;
+    ctx.strokeRect(1, 1, world.w - 2, world.h - 2);
+    ctx.shadowBlur = 0;
+
+    const L = 70;
+    const corners = [
+      [0, 0, 1, 1], [world.w, 0, -1, 1],
+      [0, world.h, 1, -1], [world.w, world.h, -1, -1],
+    ];
+    ctx.strokeStyle = "rgba(63, 229, 255, 0.38)";
+    ctx.lineWidth = 3;
+    for (let i = 0; i < corners.length; i++) {
+      const c = corners[i];
+      ctx.beginPath();
+      ctx.moveTo(c[0] + c[2] * L, c[1]);
+      ctx.lineTo(c[0], c[1]);
+      ctx.lineTo(c[0], c[1] + c[3] * L);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function drawGem(g) {
@@ -2567,6 +2617,9 @@
     drawBackground(t);
 
     if (player && state !== "menu") {
+      ctx.save();
+      ctx.translate(-camera.x, -camera.y);
+      drawWorldBounds();
       drawGems();
       drawBullets();
       drawEnemies(t);
@@ -2574,6 +2627,7 @@
       drawEnemyBullets();
       drawParticles();
       drawTexts();
+      ctx.restore();
     }
 
     // 受伤红色闪屏
