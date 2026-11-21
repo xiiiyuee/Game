@@ -608,9 +608,22 @@
       penta:   { name: "游弋者", hp: 26, speed: 80,  dmg: 10, xp: 4,  score: 13, r: 13.5, color: "#b06bff", weight: 20 },
       diamond: { name: "裂星精英", hp: 82, speed: 108, dmg: 18, xp: 11, score: 40, r: 16,  color: "#ff9f2e", weight: 0 },
     },
+    // 小怪远程弹幕：间隔范围（秒）、弹速、伤害倍率、每次弹数、扇形角（三角怪不射击）
+    ENEMY_GUN: {
+      square:  { cd: [4.4, 5.8], speed: 165, dmgMul: 0.55, count: 1, spread: 0 },
+      penta:   { cd: [3.2, 4.4], speed: 185, dmgMul: 0.5,  count: 1, spread: 0 },
+      diamond: { cd: [2.9, 4.0], speed: 200, dmgMul: 0.6,  count: 3, spread: 0.4 },
+    },
     BOSS: {
       name: "虚空之眼 · 吞噬者",
       hp: 2400, speed: 62, dmg: 28, xp: 140, score: 800, r: 44, color: "#ff3b6b",
+      PHASE2: 0.66,          // 血量低于 66% 进入二阶段
+      PHASE3: 0.33,          // 血量低于 33% 进入三阶段
+      DASH_SPEED: 620,       // 冲刺速度
+      DASH_CD: 7.5,          // 冲刺冷却
+      DASH_WARN: 0.55,       // 冲刺预警时间
+      DASH_TIME: 0.32,       // 冲刺持续时间
+      RING_GAP: 0.55,        // 环形弹幕安全缺口半角（弧度）
     },
     LIMITS: {
       ENEMIES: 140,               // 同屏敌人上限
@@ -1531,6 +1544,7 @@
       dashCd: rand(1, 2.4),
       dashTime: 0,
       dashAng: 0,
+      shotCd: rand(1.6, 3.4),   // 小怪首次开火延迟
       isBoss: false,
       dead: false,
     };
@@ -1566,15 +1580,20 @@
       seed: Math.random() * TAU,
       isBoss: true,
       dead: false,
-      fireCd: 1.6,
-      burstCd: 6,
-      minionCd: 7,
+      fireCd: 1.8,       // 瞄准扇形弹幕计时
+      burstCd: 0.5,      // 旋转螺旋计时
+      ringCd: 3.4,       // 环形弹幕计时
+      minionCd: 8,       // 召唤计时
+      warn: 0,           // 冲刺蓄力预警
+      dashTime: 0,
+      dashCd: 6,
+      dashAng: 0,
       phase: 1,
       spin: 0,
     };
     enemies.push(boss);
 
-    document.getElementById("ui-boss-name").textContent = CFG.BOSS.name;
+    document.getElementById("ui-boss-name").textContent = CFG.BOSS.name + " · 阶段 I";
     document.getElementById("boss-wrap").classList.remove("hidden");
     document.getElementById("ui-boss").style.width = "100%";
     shake = Math.max(shake, 18 * CFG.FX.SHAKE);
@@ -1596,54 +1615,121 @@
   }
 
   function updateBoss(b, dt, t) {
+    // ===== 阶段判定 =====
+    const ratio = b.hp / b.maxHp;
+    const nextPhase = ratio > CFG.BOSS.PHASE2 ? 1 : ratio > CFG.BOSS.PHASE3 ? 2 : 3;
+    if (nextPhase !== b.phase) {
+      b.phase = nextPhase;
+      b.fireCd = 0.9;
+      b.ringCd = 1.8;
+      b.minionCd = 2.5;
+      b.warn = 0;
+      b.dashTime = 0;
+      document.getElementById("ui-boss-name").textContent =
+        CFG.BOSS.name + " · 阶段 " + ["", "I", "II", "III"][b.phase];
+      shake = Math.max(shake, 15 * CFG.FX.SHAKE);
+      hurtFlash = 0.35;
+      emit(b.x, b.y, 34, "#ffc857", 300, 4.5, 0.9);
+      // 转阶段时消散部分弹幕，给玩家喘息空间
+      for (let i = ebullets.length - 1; i >= 0; i--) {
+        if (Math.random() < 0.45) ebullets.splice(i, 1);
+      }
+      sfxBoss();
+    }
+
     const dx = player.x - b.x;
     const dy = player.y - b.y;
     const d = Math.hypot(dx, dy) || 1;
-    const desired = 250;
-    const dirSign = d > desired ? 1 : -0.55;
-    b.x += (dx / d) * b.speed * dirSign * dt;
-    b.y += (dy / d) * b.speed * dirSign * dt;
     b.angle = Math.atan2(dy, dx);
-    b.spin += dt * 0.8;
+    b.spin += dt * (0.7 + b.phase * 0.35);
 
-    b.phase = b.hp < b.maxHp * 0.55 ? 2 : 1;
+    // ===== 突进机制（二阶段起）：预警蓄力 → 高速冲刺 =====
+    b.dashCd -= dt;
+    if (b.dashTime > 0) {
+      b.dashTime -= dt;
+      const sp = CFG.BOSS.DASH_SPEED * view.scale;
+      b.x += Math.cos(b.dashAng) * sp * dt;
+      b.y += Math.sin(b.dashAng) * sp * dt;
+      emit(b.x, b.y, 2, "#ff3b6b", 90, 4, 0.35);
+    } else if (b.warn > 0) {
+      b.warn -= dt;   // 蓄力期间原地不动
+      if (b.warn <= 0) {
+        b.dashTime = CFG.BOSS.DASH_TIME;
+        b.dashAng = Math.atan2(player.y - b.y, player.x - b.x);
+      }
+    } else {
+      // 常态：与玩家保持距离
+      const desired = 250 + Math.sin(t * 0.8) * 40;
+      const dirSign = d > desired ? 1 : -0.55;
+      b.x += (dx / d) * b.speed * dirSign * dt;
+      b.y += (dy / d) * b.speed * dirSign * dt;
+      if (b.phase >= 2 && b.dashCd <= 0 && d < 560 * view.scale) {
+        b.dashCd = CFG.BOSS.DASH_CD;
+        b.warn = CFG.BOSS.DASH_WARN;
+        b.dashAng = Math.atan2(dy, dx);
+        emit(b.x, b.y, 16, "#ffc857", 180, 3, 0.5);
+      }
+    }
 
-    // 主要弹幕
+    // ===== 瞄准扇形弹幕 =====
     b.fireCd -= dt;
     if (b.fireCd <= 0) {
-      if (b.phase === 1) {
-        b.fireCd = 2.0;
-        bossVolley(b, 5, 0.5, 210, 10);
-      } else {
-        b.fireCd = 1.15;
-        bossVolley(b, 9, TAU * 0.72, 230, 11);
-      }
+      if (b.phase === 1) { b.fireCd = 2.2; bossVolley(b, 5, 0.55, 205, 9); }
+      else if (b.phase === 2) { b.fireCd = 1.7; bossVolley(b, 7, 0.75, 225, 10); }
+      else { b.fireCd = 1.25; bossVolley(b, 9, 0.95, 245, 11); }
     }
 
-    // 二阶段旋转螺旋
-    if (b.phase === 2) {
+    // ===== 环形弹幕（带缓慢旋转的安全缺口）=====
+    b.ringCd -= dt;
+    if (b.ringCd <= 0) {
+      const count = b.phase === 1 ? 12 : b.phase === 2 ? 16 : 22;
+      const speed = b.phase === 3 ? 170 : 150;
+      const gap = b.spin * 1.3;
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * TAU;
+        let diff = Math.abs(((a - gap + Math.PI) % TAU + TAU) % TAU - Math.PI);
+        if (diff < CFG.BOSS.RING_GAP) continue;
+        fireEnemyBullet(b.x, b.y, a, speed, 8 + b.phase * 2, "#ff9f2e", 5);
+      }
+      b.ringCd = b.phase === 1 ? 5.5 : b.phase === 2 ? 4.2 : 3.4;
+    }
+
+    // ===== 旋转螺旋（二阶段起）=====
+    if (b.phase >= 2) {
       b.burstCd -= dt;
       if (b.burstCd <= 0) {
-        b.burstCd = 0.16;
-        const ang = b.spin * 2.4;
-        fireEnemyBullet(b.x, b.y, ang, 170, 9, "#ff9f2e", 5);
-        fireEnemyBullet(b.x, b.y, ang + Math.PI, 170, 9, "#ff9f2e", 5);
+        b.burstCd = b.phase === 2 ? 0.15 : 0.11;
+        const arms = b.phase === 2 ? 2 : 3;
+        for (let k = 0; k < arms; k++) {
+          const ang = b.spin * 2.4 + (k / arms) * TAU;
+          fireEnemyBullet(b.x, b.y, ang, b.phase === 2 ? 170 : 195, 8, "#b06bff", 5);
+        }
       }
     }
 
-    // 召唤小怪
+    // ===== 召唤小怪（三阶段召唤精英）=====
     b.minionCd -= dt;
     if (b.minionCd <= 0) {
-      b.minionCd = 7;
-      for (let i = 0; i < 2; i++) {
-        const a = Math.random() * TAU;
-        spawnEnemy("tri", b.x + Math.cos(a) * 50, b.y + Math.sin(a) * 50);
+      if (b.phase === 3) {
+        b.minionCd = 9;
+        for (let i = 0; i < 2; i++) {
+          const a = Math.random() * TAU;
+          spawnEnemy("diamond", b.x + Math.cos(a) * 60, b.y + Math.sin(a) * 60);
+        }
+      } else {
+        b.minionCd = 8;
+        for (let i = 0; i < 2; i++) {
+          const a = Math.random() * TAU;
+          spawnEnemy("tri", b.x + Math.cos(a) * 50, b.y + Math.sin(a) * 50);
+        }
       }
     }
 
-    // 接触伤害
+    // ===== 接触伤害（冲刺撞击更痛）=====
     const rr = b.r + player.r;
-    if (d < rr) damagePlayer(b.dmg * 0.6);
+    if (dist2(b.x, b.y, player.x, player.y) < rr * rr) {
+      damagePlayer(b.dmg * (b.dashTime > 0 ? 1 : 0.6));
+    }
   }
 
   function bossVolley(b, count, spread, speed, dmg) {
@@ -1705,6 +1791,26 @@
       e.x += Math.cos(ang) * sp * dt;
       e.y += Math.sin(ang) * sp * dt;
       e.angle = ang;
+
+      // ===== 小怪远程弹幕（稀疏；三角怪只近战不射击）=====
+      const gun = CFG.ENEMY_GUN[e.type];
+      if (gun && gun.count > 0) {
+        e.shotCd -= dt;
+        if (e.shotCd <= 0) {
+          const inView = e.x > -16 && e.x < view.w + 16 && e.y > -16 && e.y < view.h + 16;
+          const inRange = dist2(e.x, e.y, player.x, player.y) < (640 * view.scale) ** 2;
+          if (inView && inRange) {
+            const base = Math.atan2(player.y - e.y, player.x - e.x);
+            for (let k = 0; k < gun.count; k++) {
+              const off = gun.count === 1 ? 0 : (k / (gun.count - 1) - 0.5) * gun.spread;
+              fireEnemyBullet(e.x, e.y, base + off, gun.speed, e.dmg * gun.dmgMul, e.color, 4.5);
+            }
+            e.shotCd = rand(gun.cd[0], gun.cd[1]);
+          } else {
+            e.shotCd = 0.4;   // 未进入视野/射程，稍后再判断
+          }
+        }
+      }
 
       // 接触伤害
       const rr = e.r + player.r;
@@ -2280,16 +2386,37 @@
       const e = enemies[i];
 
       if (e.isBoss) {
+        // 冲刺预警：虚线指示突进方向
+        if (e.warn > 0) {
+          ctx.save();
+          ctx.setLineDash([12, 9]);
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(255, 200, 87, " + (0.28 + 0.22 * Math.sin(t * 28)) + ")";
+          ctx.beginPath();
+          ctx.moveTo(e.x, e.y);
+          ctx.lineTo(e.x + Math.cos(e.dashAng) * 620, e.y + Math.sin(e.dashAng) * 620);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        const bodyFill = ["", "rgba(120, 20, 60, 0.42)", "rgba(255, 46, 99, 0.35)", "rgba(255, 120, 46, 0.35)"][e.phase];
+        const bodyStroke = ["", "#ff4d6d", "#ff6b9d", "#ffb238"][e.phase];
+        const eyeColor = ["", "#ff8fa8", "#ffc857", "#ffe3a3"][e.phase];
         const pulse = 1 + Math.sin(t * 3) * 0.03;
+
         ctx.save();
         ctx.translate(e.x, e.y);
+
+        // 外环：阶段越高层数越多
         ctx.rotate(e.spin);
-        // 外环
-        ctx.strokeStyle = "rgba(255, 59, 107, 0.55)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(0, 0, e.r * 1.32, 0, TAU);
-        ctx.stroke();
+        for (let ring = 0; ring < e.phase; ring++) {
+          ctx.strokeStyle = `rgba(255, 59, 107, ${0.5 - ring * 0.14})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, e.r * (1.32 + ring * 0.26), 0, TAU);
+          ctx.stroke();
+        }
+
         // 六边形本体
         ctx.beginPath();
         for (let k = 0; k < 6; k++) {
@@ -2299,17 +2426,18 @@
           if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
         }
         ctx.closePath();
-        ctx.fillStyle = e.phase === 2 ? "rgba(255, 46, 99, 0.35)" : "rgba(120, 20, 60, 0.42)";
+        ctx.fillStyle = bodyFill;
         ctx.fill();
-        ctx.strokeStyle = "#ff4d6d";
+        ctx.strokeStyle = bodyStroke;
         ctx.lineWidth = 3;
         ctx.shadowColor = "#ff3b6b";
         ctx.shadowBlur = 22;
         ctx.stroke();
         ctx.shadowBlur = 0;
+
         // 核心之眼
         ctx.rotate(-e.spin * 2);
-        ctx.fillStyle = e.phase === 2 ? "#ffc857" : "#ff8fa8";
+        ctx.fillStyle = eyeColor;
         ctx.beginPath();
         ctx.arc(0, 0, e.r * 0.3, 0, TAU);
         ctx.fill();
