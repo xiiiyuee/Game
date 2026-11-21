@@ -517,6 +517,29 @@
   }
   .mute.off { color: #5b728c; }
 
+  .fx-btn {
+    bottom: 60px;
+    font-size: 10px;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+
+  .mute { transition: opacity 0.15s ease; }
+  body.in-overlay .mute, body.in-overlay .fx-btn { opacity: 0; pointer-events: none; }
+
+  /* 低血量警示 */
+  .lowhp {
+    position: fixed;
+    inset: 0;
+    z-index: 7;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    background: radial-gradient(ellipse at center, transparent 52%, rgba(255, 40, 80, 0.42) 100%);
+  }
+  .lowhp.on { animation: lowPulse 1.05s ease-in-out infinite; }
+  @keyframes lowPulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.8; } }
+
   /* ========== 移动端控件 ========== */
   #touch { display: none; }
   body.touch #touch { display: block; }
@@ -589,6 +612,7 @@
     height: 34px;
     font-size: 14px;
   }
+  body.touch .fx-btn { bottom: max(192px, calc(env(safe-area-inset-bottom) + 184px)); }
 
   /* ========== 响应式 ========== */
   @media (max-width: 700px) {
@@ -757,6 +781,8 @@
   </div>
 </div>
 
+<div class="lowhp" id="lowhp"></div>
+<button class="mute fx-btn" id="fx-btn" aria-label="特效模式">特效</button>
 <button class="mute" id="mute" aria-label="静音切换">🔊</button>
 <button class="build-btn hidden" id="build-btn">建造 <b id="ui-core-btn">0</b></button>
 
@@ -789,7 +815,8 @@
       ENEMY_ARMOR_MAX: 0.45,      // 敌人减伤上限
       ENEMY_SPEED_CAP: 1.9,       // 敌人移速成长上限
       EBULLET_SPEED_PER_CHAPTER: 0.05, // 每章敌方弹速成长
-      EBULLET_SPEED_CAP: 1.45,    // 敌方弹速成长上限
+      EBULLET_SPEED_CAP: 1.6,     // 敌方弹速总上限（含风暴词条）
+      POWER_ADAPT: 0.22,          // 深渊适应指数（越大越克制高伤害）
       CLEAR_HEAL: 0.25,           // 击破 Boss 后回复生命比例
       CLEAR_CREDITS: 60,          // 击破 Boss 星币奖励
       SHOP_WAVE: 3,               // 每 3 波进入星港
@@ -1306,6 +1333,11 @@
   let bountyCd = CFG.BOUNTY.FIRST_DELAY;
   let lastShopWave = 0;
   let shopCounts = {};             // 本局商店购买次数（用于涨价）
+  let chapterMod = null;           // 当前星域环境词条
+  let hitStop = 0;                 // 命中顿帧（秒）
+  let lowFx = (() => {
+    try { return localStorage.getItem("sf_lowfx") === "1"; } catch (e) { return false; }
+  })();
   let waveNum = 1;
   let score = 0;
   let kills = 0;
@@ -1433,6 +1465,8 @@
     nextEnemyId = 1;
     nextPropId = 1;
     upgradeCards = [];
+    chapterMod = pick(CHAPTER_MODS);
+    hitStop = 0;
     musicTimer = 0;
     ultTimer = 0;
     echoTimer = 0;
@@ -1641,6 +1675,19 @@
     if (btn) startGame(btn.dataset.weapon);
   });
 
+  // 特效档位：流畅模式减少辉光与粒子，降低手机发热
+  function applyFxLabel() {
+    const el = document.getElementById("fx-btn");
+    el.textContent = lowFx ? "省电" : "特效";
+    el.classList.toggle("off", lowFx);
+  }
+  document.getElementById("fx-btn").addEventListener("click", () => {
+    lowFx = !lowFx;
+    try { localStorage.setItem("sf_lowfx", lowFx ? "1" : "0"); } catch (e) {}
+    applyFxLabel();
+  });
+  applyFxLabel();
+
   // 静音开关
   document.getElementById("mute").addEventListener("click", () => {
     audio.muted = !audio.muted;
@@ -1656,7 +1703,8 @@
    * 9. 粒子 / 飘字 / 经验球
    * ===================================================================*/
   function emit(x, y, count, color, speed, size, life) {
-    const cap = CFG.LIMITS.PARTICLES;
+    const cap = lowFx ? 120 : CFG.LIMITS.PARTICLES;
+    if (lowFx) count = Math.ceil(count * 0.4);
     for (let i = 0; i < count; i++) {
       if (particles.length >= cap) break;
       const a = Math.random() * TAU;
@@ -2066,7 +2114,7 @@
   }
   // 深渊适应：敌人生命随玩家武器伤害提升（次线性），避免后期一发清屏
   function playerPowerMul() {
-    return Math.pow(Math.max(1, stats.damage / 10), 0.22);
+    return Math.pow(Math.max(1, stats.damage / 10), CFG.RUN.POWER_ADAPT);
   }
   function waveScaleSpeed() {
     return Math.min(CFG.RUN.ENEMY_SPEED_CAP, 1 + (waveNum - 1) * 0.028 + (chapter - 1) * 0.06);
@@ -2075,8 +2123,8 @@
     return (1 + (waveNum - 1) * 0.045) * Math.pow(CFG.RUN.ENEMY_DMG_GROWTH, chapter - 1);
   }
   function ebSpeedScale() {
-    return Math.min(CFG.RUN.EBULLET_SPEED_CAP,
-      1 + (waveNum - 1) * 0.018 + (chapter - 1) * CFG.RUN.EBULLET_SPEED_PER_CHAPTER);
+    const base = 1 + (waveNum - 1) * 0.018 + (chapter - 1) * CFG.RUN.EBULLET_SPEED_PER_CHAPTER;
+    return Math.min(CFG.RUN.EBULLET_SPEED_CAP, base * (chapterMod ? chapterMod.ebMul || 1 : 1));
   }
 
   function weightedEnemyType() {
@@ -2120,7 +2168,8 @@
       }
     }
 
-    const hp = def.hp * waveScaleHp() * playerPowerMul();
+    const hp = def.hp * waveScaleHp() * playerPowerMul() *
+      (chapterMod ? chapterMod.hpMul || 1 : 1);
     const e = {
       id: nextEnemyId++,
       type: typeKey,
@@ -2128,7 +2177,7 @@
       r: def.r,
       hp,
       maxHp: hp,
-      speed: def.speed * waveScaleSpeed(),
+      speed: def.speed * waveScaleSpeed() * (chapterMod ? chapterMod.speedMul || 1 : 1),
       dmg: def.dmg * waveScaleDmg(),
       armor: waveScaleArmor(),
       xp: def.xp,
@@ -2242,7 +2291,8 @@
     if (spawnTimer > 0) return;
 
     spawnTimer = Math.max(CFG.WAVE.SPAWN_MIN,
-      CFG.WAVE.SPAWN_BASE - (waveNum - 1) * 0.065 - (chapter - 1) * 0.06);
+      CFG.WAVE.SPAWN_BASE - (waveNum - 1) * 0.065 - (chapter - 1) * 0.06) *
+      (chapterMod ? chapterMod.spawnMul || 1 : 1);
     const count = 1 + Math.floor(waveNum / 6) + Math.floor((chapter - 1) * 0.8);
     for (let i = 0; i < count; i++) {
       spawnEnemy(weightedEnemyType());
@@ -2505,8 +2555,12 @@
     if (combo > comboBest) comboBest = combo;
     const mul = comboMultiplier();
     score += Math.round(e.score * mul);
-    credits += e.isBoss ? CFG.RUN.CREDIT_BOSS : e.type === "diamond" ? CFG.RUN.CREDIT_ELITE : CFG.RUN.CREDIT_KILL;
+    credits += Math.round(
+      (e.isBoss ? CFG.RUN.CREDIT_BOSS : e.type === "diamond" ? CFG.RUN.CREDIT_ELITE : CFG.RUN.CREDIT_KILL) *
+      (chapterMod ? chapterMod.creditMul || 1 : 1)
+    );
     bountyOnKill(e);
+    if (e.type === "diamond") hitStop = Math.max(hitStop, 0.045);
 
     if (e.isBoss) {
       emit(e.x, e.y, 110, "#ffc857", 420, 6, 1.3);
@@ -2772,6 +2826,8 @@
     shake = Math.max(shake, 12 * CFG.FX.SHAKE);
     emit(player.x, player.y, 14, "#ff4d6d", 220, 3, 0.5);
     sfxHurt();
+    hitStop = Math.max(hitStop, 0.025);
+    if (document.body.classList.contains("touch") && navigator.vibrate) navigator.vibrate(28);
     // 受击断连杀
     combo = 0;
     comboTimer = 0;
@@ -3063,7 +3119,12 @@
     setText(document.getElementById("ui-credits"), String(credits));
     setText(document.getElementById("ui-cores"), String(cores));
     setText(document.getElementById("ui-core-btn"), String(cores));
-    setText(document.getElementById("ui-chapter"), `星域 ${chapter} · 波次 ${waveNum}/${CFG.RUN.CHAPTER_WAVES}`);
+    setText(document.getElementById("ui-chapter"),
+      `星域 ${chapter} · ${waveNum}/${CFG.RUN.CHAPTER_WAVES}` +
+      (chapterMod ? ` · ${chapterMod.name}` : ""));
+    document.getElementById("lowhp").classList.toggle(
+      "on", state === "playing" && player.hp / player.hpMax < 0.3);
+    document.body.classList.toggle("in-overlay", state !== "playing");
     const power = playerPowerMul();
     setText(document.getElementById("ui-weapon"),
       CFG.WEAPONS[chosenWeapon].name +
@@ -3374,6 +3435,25 @@
         updateBuffPanel();
       },
     },
+    {
+      id: "multishot", icon: "⋔", name: "弹道扩展", base: 85,
+      desc: () => "本武器弹道 +1（上限 8）",
+      can: () => stats.bulletCount < 8,
+      apply: () => { stats.bulletCount += 1; },
+    },
+    {
+      id: "pierce", icon: "→", name: "穿透镀层", base: 80,
+      desc: () => "弹道穿透 +1（上限 7）",
+      can: () => stats.pierce < 7,
+      apply: () => { stats.pierce += 1; },
+    },
+  ];
+
+  // 星域环境词条：每章随机，改变对局节奏
+  const CHAPTER_MODS = [
+    { id: "rich", name: "富矿", desc: "击杀星币 +40% · 敌人生命 +8%", creditMul: 1.4, hpMul: 1.08 },
+    { id: "storm", name: "离子风暴", desc: "敌弹速度 +18% · 敌人移速 +5%", ebMul: 1.18, speedMul: 1.05 },
+    { id: "fracture", name: "裂解空间", desc: "敌人生命 -10% · 刷怪间隔 -15%", hpMul: 0.9, spawnMul: 0.85 },
   ];
 
   function shopCost(def) {
@@ -3676,6 +3756,7 @@
     victoryFlash = 0;
     slowmo = 0;
     chapter += 1;
+    chapterMod = pick(CHAPTER_MODS.filter((m) => !chapterMod || m.id !== chapterMod.id));
     chapterStartElapsed = elapsed;
     waveNum = 1;
     bossSpawned = false;
@@ -3700,6 +3781,7 @@
       (chapter - 1) * CFG.RUN.CHAPTER_WAVES) - 1) * 100);
     const armorPct = Math.round(waveScaleArmor() * 100);
     addText(cx, cy + 54, `深渊压制：敌人生命 +${hpPct}% · 护甲 ${armorPct}%`, "#ff9f2e", 14);
+    if (chapterMod) addText(cx, cy + 74, `星域环境：${chapterMod.name} · ${chapterMod.desc}`, "#7ef0ff", 13);
     emit(player.x, player.y, 34, "#8bffdc", 280, 3.6, 0.9);
     sfxWin();
     openShop("第 " + chapter + " 星域 · 星港补给");
@@ -3724,6 +3806,11 @@
     if (slowmo > 0) {
       slowmo = Math.max(0, slowmo - rawDt);
       dt *= 0.3;
+    }
+    // 命中顿帧：短暂冻结世界更新，强化打击反馈
+    if (hitStop > 0) {
+      hitStop = Math.max(0, hitStop - rawDt);
+      return;
     }
 
     elapsed += dt;
@@ -3957,7 +4044,7 @@
     for (let i = 0; i < bullets.length; i++) {
       const b = bullets[i];
       if (b.x < cull.x0 || b.x > cull.x1 || b.y < cull.y0 || b.y > cull.y1) continue;
-      drawGlow(b.color || "#3fe5ff", b.x, b.y, b.r * 4.2, 0.5);
+      if (!lowFx) drawGlow(b.color || "#3fe5ff", b.x, b.y, b.r * 4.2, 0.5);
       ctx.fillStyle = "#eaffff";
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, TAU);
@@ -3970,7 +4057,7 @@
     for (let i = 0; i < ebullets.length; i++) {
       const b = ebullets[i];
       if (b.x < cull.x0 || b.x > cull.x1 || b.y < cull.y0 || b.y > cull.y1) continue;
-      drawGlow(b.color, b.x, b.y, b.r * 3.6, 0.55);
+      if (!lowFx) drawGlow(b.color, b.x, b.y, b.r * 3.6, 0.55);
       ctx.fillStyle = b.color;
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, TAU);
@@ -4028,7 +4115,7 @@
         ctx.translate(e.x, e.y);
 
         // 柔和外发光改为缓存贴图，避免大半径 shadowBlur
-        drawGlow("#ff3b6b", 0, 0, e.r * 2.1, 0.4);
+        if (!lowFx) drawGlow("#ff3b6b", 0, 0, e.r * 2.1, 0.4);
 
         // 外环：阶段越高层数越多
         ctx.rotate(e.spin);
@@ -4067,7 +4154,8 @@
 
       ctx.save();
       ctx.translate(e.x, e.y);
-      drawGlow(e.color, 0, 0, e.r * (e.type === "diamond" ? 3 : 2.4), e.type === "diamond" ? 0.55 : 0.42);
+      const detail = e.r * view.scale > 7;
+      if (!lowFx) drawGlow(e.color, 0, 0, e.r * (e.type === "diamond" ? 3 : 2.4), e.type === "diamond" ? 0.55 : 0.42);
 
       if (e.type === "tri") {
         drawShape(0, 0, e.r, 3, e.angle + Math.PI / 2, "rgba(255, 82, 82, 0.22)", e.color, 2);
@@ -4081,7 +4169,7 @@
       ctx.shadowBlur = 0;
 
       // 精英血条
-      if (e.type === "diamond") {
+      if (detail && e.type === "diamond") {
         const w = e.r * 2.1;
         const pct = clamp(e.hp / e.maxHp, 0, 1);
         ctx.fillStyle = "rgba(0,0,0,0.5)";
@@ -4091,8 +4179,8 @@
       }
 
       // 词缀标识：护盾环 + 顶部彩色标记点
-      if (e.affixes && e.affixes.length) {
-        if (e.affixes.includes("shield")) {
+      if (detail && e.affixes && e.affixes.length) {
+        if (!lowFx && e.affixes.includes("shield")) {
           ctx.strokeStyle = "rgba(126, 240, 255, 0.7)";
           ctx.lineWidth = 1.4;
           ctx.beginPath();
@@ -4468,7 +4556,8 @@
     cull.y1 = camera.y + view.h + 120;
     ctx.save();
     if (state === "playing" && shake > 0) {
-      ctx.translate(rand(-shake, shake), rand(-shake, shake));
+      const s = shake * (lowFx ? 0.35 : 1);
+      ctx.translate(rand(-s, s), rand(-s, s));
     }
 
     drawBackground(t);
