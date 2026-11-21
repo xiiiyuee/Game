@@ -343,6 +343,24 @@
     transition: transform 0.12s ease, box-shadow 0.12s ease;
   }
   .card:hover { transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); }
+  .card-key {
+    position: absolute;
+    left: -6px;
+    top: -6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #04121a;
+    background: linear-gradient(135deg, var(--cyan-soft), var(--cyan));
+    box-shadow: 0 0 12px var(--glow);
+    pointer-events: none;
+  }
+  @media (hover: none) { .card-key, .kb-hint { display: none; } }
   .card:active { transform: scale(0.98); }
   .card.rarity-common { border-color: rgba(159, 179, 200, 0.7); }
   .card.rarity-rare { border-color: rgba(63, 180, 255, 0.85); box-shadow: 0 0 18px rgba(63, 180, 255, 0.18); }
@@ -802,7 +820,7 @@
 <div class="overlay hidden" id="ov-upgrade">
   <div class="panel wide">
     <h2>等级提升</h2>
-    <p class="sub">选择一项强化 · 当前 <span id="ui-up-level">LV 2</span></p>
+    <p class="sub">选择一项强化 · 当前 <span id="ui-up-level">LV 2</span><span class="kb-hint"> · 按 1 / 2 / 3 快速选择</span></p>
     <div class="cards" id="cards"></div>
   </div>
 </div>
@@ -1733,6 +1751,10 @@
       else if (state === "playing" || state === "paused") togglePause();
       return;
     }
+    if (state === "upgrade") {
+      const pick = /^(?:Digit|Numpad)([1-3])$/.exec(code);
+      if (pick) { chooseUpgrade(Number(pick[1]) - 1); return; }
+    }
     if (code === "KeyT") { cycleTheme(); return; }
     if (code === "KeyB") {
       if (state === "playing") openBuildMenu();
@@ -2391,6 +2413,7 @@
       const special = c.def.curse ? " curse" : c.def.evolution ? " evo" : "";
       const label = c.def.curse ? "诅咒" : c.def.evolution ? "进化" : c.rarity.name;
       html += `<button class="card rarity-${c.rarity.key}${special}" data-i="${i}">
+        <span class="card-key">${i + 1}</span>
         <div class="card-top"><span class="card-ic">${c.def.icon}</span><span class="card-rt">${label}</span></div>
         <h3>${c.def.name}</h3>
         <p>${c.text}</p>
