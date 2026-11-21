@@ -781,10 +781,15 @@
     // 无尽远航：每章 10 波，Boss 后进入下一星域，难度持续攀升
     RUN: {
       CHAPTER_WAVES: 10,          // 每章波数（第 10 波 Boss）
-      BOSS_HP_GROWTH: 1.75,       // 章节 Boss 生命成长
-      BOSS_DMG_GROWTH: 1.15,      // 章节 Boss 伤害成长
-      ENEMY_HP_GROWTH: 1.16,      // 章节敌人生命成长
-      ENEMY_DMG_GROWTH: 1.10,     // 章节敌人伤害成长
+      BOSS_HP_GROWTH: 1.8,        // 章节 Boss 生命成长
+      BOSS_DMG_GROWTH: 1.18,      // 章节 Boss 伤害成长
+      ENEMY_HP_GROWTH: 1.06,      // 每个等效波次生命成长（跨章节连续，不回落）
+      ENEMY_DMG_GROWTH: 1.16,     // 章节敌人伤害成长
+      ENEMY_ARMOR_PER_CHAPTER: 0.04, // 每章获得减伤
+      ENEMY_ARMOR_MAX: 0.45,      // 敌人减伤上限
+      ENEMY_SPEED_CAP: 1.9,       // 敌人移速成长上限
+      EBULLET_SPEED_PER_CHAPTER: 0.05, // 每章敌方弹速成长
+      EBULLET_SPEED_CAP: 1.45,    // 敌方弹速成长上限
       CLEAR_HEAL: 0.25,           // 击破 Boss 后回复生命比例
       CLEAR_CREDITS: 60,          // 击破 Boss 星币奖励
       SHOP_WAVE: 3,               // 每 3 波进入星港
@@ -845,7 +850,7 @@
       INTERVAL: 30,               // 每波持续时间（秒）
       ELITE_WAVE: 5,              // 第 5 波后开始出现精英
       SPAWN_BASE: 1.05,           // 初始刷怪间隔
-      SPAWN_MIN: 0.5,             // 最短刷怪间隔
+      SPAWN_MIN: 0.34,           // 最短刷怪间隔（后期压力）
     },
     ENEMIES: {
       tri:     { name: "疾行者", hp: 16, speed: 96,  dmg: 8,  xp: 3,  score: 10, r: 12,   color: "#ff5252", weight: 42 },
@@ -899,7 +904,8 @@
       START_WAVE: 5,
       BASE_CHANCE: 0.18,
       PER_WAVE: 0.015,
-      MAX_CHANCE: 0.55,
+      PER_CHAPTER: 0.06,      // 每章额外词缀概率
+      MAX_CHANCE: 0.85,
       ELITE_EXTRA: 0.5,       // 精英额外获得第二个词缀的概率
       SHIELD_HP: 1.4,         // 护盾词缀：生命倍率
       SHIELD_ARMOR: 0.25,     // 护盾词缀：减伤
@@ -2051,13 +2057,26 @@
    * 11. 敌人 / 波次 / Boss
    * ===================================================================*/
   function waveScaleHp() {
-    return (1 + (waveNum - 1) * 0.17) * Math.pow(CFG.RUN.ENEMY_HP_GROWTH, chapter - 1);
+    // 用“等效波次”连续成长：章节切换时不回落，后期指数抬升
+    const totalWave = (chapter - 1) * CFG.RUN.CHAPTER_WAVES + (waveNum - 1);
+    return Math.pow(CFG.RUN.ENEMY_HP_GROWTH, totalWave);
+  }
+  function waveScaleArmor() {
+    return Math.min(CFG.RUN.ENEMY_ARMOR_MAX, (chapter - 1) * CFG.RUN.ENEMY_ARMOR_PER_CHAPTER);
+  }
+  // 深渊适应：敌人生命随玩家武器伤害提升（次线性），避免后期一发清屏
+  function playerPowerMul() {
+    return Math.pow(Math.max(1, stats.damage / 10), 0.22);
   }
   function waveScaleSpeed() {
-    return Math.min(1.75, 1 + (waveNum - 1) * 0.028 + (chapter - 1) * 0.04);
+    return Math.min(CFG.RUN.ENEMY_SPEED_CAP, 1 + (waveNum - 1) * 0.028 + (chapter - 1) * 0.06);
   }
   function waveScaleDmg() {
     return (1 + (waveNum - 1) * 0.045) * Math.pow(CFG.RUN.ENEMY_DMG_GROWTH, chapter - 1);
+  }
+  function ebSpeedScale() {
+    return Math.min(CFG.RUN.EBULLET_SPEED_CAP,
+      1 + (waveNum - 1) * 0.018 + (chapter - 1) * CFG.RUN.EBULLET_SPEED_PER_CHAPTER);
   }
 
   function weightedEnemyType() {
@@ -2066,7 +2085,7 @@
       const def = CFG.ENEMIES[key];
       let w = def.weight;
       if (key === "diamond") {
-        w = waveNum >= CFG.WAVE.ELITE_WAVE ? 11 : 0;
+        w = waveNum >= CFG.WAVE.ELITE_WAVE ? 11 + (chapter - 1) * 2 : 0;
       }
       if (w > 0) list.push({ key, w });
     }
@@ -2101,7 +2120,7 @@
       }
     }
 
-    const hp = def.hp * waveScaleHp();
+    const hp = def.hp * waveScaleHp() * playerPowerMul();
     const e = {
       id: nextEnemyId++,
       type: typeKey,
@@ -2111,6 +2130,7 @@
       maxHp: hp,
       speed: def.speed * waveScaleSpeed(),
       dmg: def.dmg * waveScaleDmg(),
+      armor: waveScaleArmor(),
       xp: def.xp,
       score: def.score,
       color: def.color,
@@ -2130,21 +2150,30 @@
       const elite = typeKey === "diamond";
       const chance = Math.min(
         CFG.AFFIX.MAX_CHANCE,
-        CFG.AFFIX.BASE_CHANCE + (waveNum - CFG.AFFIX.START_WAVE) * CFG.AFFIX.PER_WAVE
+        CFG.AFFIX.BASE_CHANCE + (waveNum - CFG.AFFIX.START_WAVE) * CFG.AFFIX.PER_WAVE +
+        (chapter - 1) * CFG.AFFIX.PER_CHAPTER
       );
       const pool = ["shield", "haste", "split", "boom"];
       if (elite || Math.random() < chance) {
         const first = pick(pool);
         e.affixes.push(first);
-        if (elite && Math.random() < CFG.AFFIX.ELITE_EXTRA) {
-          const rest = pool.filter((a) => a !== first);
-          e.affixes.push(pick(rest));
+        if (elite) {
+          const extraChance = Math.min(0.95, CFG.AFFIX.ELITE_EXTRA + (chapter - 1) * 0.12);
+          if (Math.random() < extraChance) {
+            const rest = pool.filter((a) => a !== first);
+            const second = pick(rest);
+            e.affixes.push(second);
+            // 第 3 星域起精英有概率三词缀
+            if (chapter >= 3 && Math.random() < 0.35) {
+              e.affixes.push(pick(rest.filter((a) => a !== second)));
+            }
+          }
         }
       }
       if (e.affixes.includes("shield")) {
         e.hp *= CFG.AFFIX.SHIELD_HP;
         e.maxHp = e.hp;
-        e.armor = CFG.AFFIX.SHIELD_ARMOR;
+        e.armor = Math.min(0.6, (e.armor || 0) + CFG.AFFIX.SHIELD_ARMOR);
       }
       if (e.affixes.includes("haste")) e.speed *= CFG.AFFIX.HASTE;
     }
@@ -2166,7 +2195,7 @@
     y = clamp(y, 70, world.h - 70);
 
     const B = CFG.BOSS;
-    const hpMul = Math.pow(CFG.RUN.BOSS_HP_GROWTH, chapter - 1);
+    const hpMul = Math.pow(CFG.RUN.BOSS_HP_GROWTH, chapter - 1) * playerPowerMul();
     const dmgMul = Math.pow(CFG.RUN.BOSS_DMG_GROWTH, chapter - 1);
     boss = {
       id: nextEnemyId++,
@@ -2212,8 +2241,9 @@
     spawnTimer -= dt;
     if (spawnTimer > 0) return;
 
-    spawnTimer = Math.max(CFG.WAVE.SPAWN_MIN, CFG.WAVE.SPAWN_BASE - (waveNum - 1) * 0.065);
-    const count = 1 + Math.floor(waveNum / 6) + Math.min(2, chapter - 1);
+    spawnTimer = Math.max(CFG.WAVE.SPAWN_MIN,
+      CFG.WAVE.SPAWN_BASE - (waveNum - 1) * 0.065 - (chapter - 1) * 0.06);
+    const count = 1 + Math.floor(waveNum / 6) + Math.floor((chapter - 1) * 0.8);
     for (let i = 0; i < count; i++) {
       spawnEnemy(weightedEnemyType());
     }
@@ -2353,7 +2383,7 @@
 
   function fireEnemyBullet(x, y, ang, speed, dmg, color, r, heavy) {
     if (ebullets.length >= CFG.LIMITS.EBULLETS) return;
-    const sp = speed * view.scale;
+    const sp = speed * view.scale * ebSpeedScale();
     ebullets.push({
       x, y,
       vx: Math.cos(ang) * sp,
@@ -2417,11 +2447,12 @@
           const inRange = dist2(e.x, e.y, player.x, player.y) < (640 * view.scale) ** 2;
           if (inView && inRange) {
             const base = Math.atan2(player.y - e.y, player.x - e.x);
-            for (let k = 0; k < gun.count; k++) {
-              const off = gun.count === 1 ? 0 : (k / (gun.count - 1) - 0.5) * gun.spread;
+            const shots = gun.count + (gun.count > 1 ? Math.min(3, Math.floor((chapter - 1) / 2)) : 0);
+            for (let k = 0; k < shots; k++) {
+              const off = shots === 1 ? 0 : (k / (shots - 1) - 0.5) * gun.spread;
               fireEnemyBullet(e.x, e.y, base + off, gun.speed, e.dmg * gun.dmgMul, e.color, 4.5);
             }
-            e.shotCd = rand(gun.cd[0], gun.cd[1]);
+            e.shotCd = rand(gun.cd[0], gun.cd[1]) / Math.min(1.8, 1 + (chapter - 1) * 0.08);
           } else {
             e.shotCd = 0.4;   // 未进入视野/射程，稍后再判断
           }
@@ -2535,7 +2566,7 @@
       c.xp = e.xp * 0.35;
       c.score = Math.round(e.score * 0.4);
       c.affixes = [];
-      c.armor = 0;
+      c.armor = waveScaleArmor();
       c.shotCd = 1.6 + Math.random();
     }
   }
@@ -3033,7 +3064,10 @@
     setText(document.getElementById("ui-cores"), String(cores));
     setText(document.getElementById("ui-core-btn"), String(cores));
     setText(document.getElementById("ui-chapter"), `星域 ${chapter} · 波次 ${waveNum}/${CFG.RUN.CHAPTER_WAVES}`);
-    setText(document.getElementById("ui-weapon"), CFG.WEAPONS[chosenWeapon].name);
+    const power = playerPowerMul();
+    setText(document.getElementById("ui-weapon"),
+      CFG.WEAPONS[chosenWeapon].name +
+      (power > 1.05 ? ` · 深渊适应 ×${power.toFixed(1)}` : ""));
 
     // 悬赏
     const bountyEl = document.getElementById("ui-bounty");
@@ -3662,6 +3696,10 @@
     const cy = camera.y + view.h * 0.26;
     addText(cx, cy, "第 " + chapter + " 星域", "#ffd666", 30);
     addText(cx, cy + 32, `+${bonus} 星币 · 生命修复 25%`, "#8bffdc", 16);
+    const hpPct = Math.round((Math.pow(CFG.RUN.ENEMY_HP_GROWTH,
+      (chapter - 1) * CFG.RUN.CHAPTER_WAVES) - 1) * 100);
+    const armorPct = Math.round(waveScaleArmor() * 100);
+    addText(cx, cy + 54, `深渊压制：敌人生命 +${hpPct}% · 护甲 ${armorPct}%`, "#ff9f2e", 14);
     emit(player.x, player.y, 34, "#8bffdc", 280, 3.6, 0.9);
     sfxWin();
     openShop("第 " + chapter + " 星域 · 星港补给");
