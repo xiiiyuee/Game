@@ -98,6 +98,8 @@
     else if (act === "meta-close") closeMeta();
     else if (act === "theme") openTheme();
     else if (act === "theme-close") document.getElementById("ov-theme").classList.add("hidden");
+    else if (act === "coop-copy") copyRoom();
+    else if (act === "coop-new") newRoom();
   });
 
   // 成长档案购买

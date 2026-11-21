@@ -360,6 +360,32 @@
   .help b { color: var(--cyan); font-weight: 600; }
   .note { margin: 14px 0 0; font-size: 11px; color: var(--muted); letter-spacing: 1px; }
 
+  /* 联机房间码 */
+  .coop-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 14px auto 0;
+    padding: 10px 14px;
+    max-width: 420px;
+    border: 1px solid rgba(63, 229, 255, 0.18);
+    border-radius: 12px;
+    background: rgba(63, 229, 255, 0.05);
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+  .coop-row b {
+    font-size: 18px;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    text-shadow: 0 0 14px rgba(63, 229, 255, 0.5);
+  }
+  .coop-row .btn { margin-top: 0; padding: 8px 14px; font-size: 12px; letter-spacing: 1px; }
+
+
   /* ========== 升级卡片 ========== */
   .cards {
     display: grid;
@@ -790,6 +816,12 @@
     <button class="btn" data-act="start">开始游戏</button>
     <button class="btn ghost small" data-act="meta">成长档案</button>
     <button class="btn ghost small" data-act="theme">涂装 / 配色</button>
+    <div class="coop-row hidden" id="coop-row">
+      <span id="coop-label">房间码</span>
+      <b id="coop-code">------</b>
+      <button class="btn ghost small" data-act="coop-copy">复制邀请链接</button>
+      <button class="btn ghost small" data-act="coop-new">换一个</button>
+    </div>
     <ul class="help">
       <li><b>WASD / 方向键</b> 移动（斜向速度已归一化）</li>
       <li>开局三选一武器：<b>脉冲 / 散射 / 轨道激光</b></li>
@@ -2200,6 +2232,8 @@
     else if (act === "meta-close") closeMeta();
     else if (act === "theme") openTheme();
     else if (act === "theme-close") document.getElementById("ov-theme").classList.add("hidden");
+    else if (act === "coop-copy") copyRoom();
+    else if (act === "coop-new") newRoom();
   });
 
   // 成长档案购买
@@ -4010,6 +4044,70 @@
   function hideBossBar() {
     document.getElementById("boss-wrap").classList.add("hidden");
   }
+
+  /* =====================================================================
+   * 联机房间码（P2-02）：只负责生成 / 解析 / 展示，连接在后续任务接入
+   * ===================================================================*/
+  const ROOM_CHARS = "23456789";     // 去掉 0/1 等易混字符
+  let roomCode = null;               // 当前房间码
+  let roomHost = false;              // 是否由本页创建（房主）
+
+  function genRoomCode() {
+    let s = "";
+    for (let i = 0; i < 6; i++) s += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
+    return s;
+  }
+
+  function shareLink(code) {
+    return location.origin + location.pathname + "?room=" + encodeURIComponent(code);
+  }
+
+  function refreshRoomPanel() {
+    const row = document.getElementById("coop-row");
+    if (!row) return;
+    row.classList.toggle("hidden", !roomCode);
+    const codeEl = document.getElementById("coop-code");
+    if (codeEl) codeEl.textContent = roomCode || "------";
+    const label = document.getElementById("coop-label");
+    if (label) label.textContent = roomHost ? "房间码" : "加入房间";
+    const again = row.querySelector('[data-act="coop-new"]');
+    if (again) again.classList.toggle("hidden", !roomHost);
+    const copy = row.querySelector('[data-act="coop-copy"]');
+    if (copy) copy.textContent = roomHost ? "复制邀请链接" : "复制房间号";
+  }
+
+  function newRoom() {
+    roomCode = genRoomCode();
+    roomHost = true;
+    refreshRoomPanel();
+    return roomCode;
+  }
+
+  // 支持 ?coop=1 建房、?room=CODE 加入；房间码只保留字母数字
+  function initCoop() {
+    let params;
+    try { params = new URLSearchParams(location.search); } catch (err) { return; }
+    const room = (params.get("room") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+    if (room) {
+      roomCode = room;
+      roomHost = false;
+      document.body.classList.add("coop");
+      refreshRoomPanel();
+    } else if (params.get("coop") === "1") {
+      document.body.classList.add("coop");
+      newRoom();
+    }
+  }
+
+  function copyRoom() {
+    if (!roomCode) return;
+    const text = roomHost ? shareLink(roomCode) : roomCode;
+    try {
+      const p = navigator.clipboard && navigator.clipboard.writeText(text);
+      if (p && p.catch) p.catch(() => {});
+    } catch (err) {}
+  }
+
 
   /* =====================================================================
    * 15. HUD / 强化面板更新
@@ -6068,6 +6166,7 @@
   buildThemeGrid();
   resize();
   resetGame();
+  initCoop();
   // 菜单阶段隐藏游戏 HUD 与强化栏
   document.getElementById("hud").classList.add("hidden");
 

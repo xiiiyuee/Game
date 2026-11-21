@@ -90,3 +90,67 @@
     document.getElementById("boss-wrap").classList.add("hidden");
   }
 
+  /* =====================================================================
+   * 联机房间码（P2-02）：只负责生成 / 解析 / 展示，连接在后续任务接入
+   * ===================================================================*/
+  const ROOM_CHARS = "23456789";     // 去掉 0/1 等易混字符
+  let roomCode = null;               // 当前房间码
+  let roomHost = false;              // 是否由本页创建（房主）
+
+  function genRoomCode() {
+    let s = "";
+    for (let i = 0; i < 6; i++) s += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
+    return s;
+  }
+
+  function shareLink(code) {
+    return location.origin + location.pathname + "?room=" + encodeURIComponent(code);
+  }
+
+  function refreshRoomPanel() {
+    const row = document.getElementById("coop-row");
+    if (!row) return;
+    row.classList.toggle("hidden", !roomCode);
+    const codeEl = document.getElementById("coop-code");
+    if (codeEl) codeEl.textContent = roomCode || "------";
+    const label = document.getElementById("coop-label");
+    if (label) label.textContent = roomHost ? "房间码" : "加入房间";
+    const again = row.querySelector('[data-act="coop-new"]');
+    if (again) again.classList.toggle("hidden", !roomHost);
+    const copy = row.querySelector('[data-act="coop-copy"]');
+    if (copy) copy.textContent = roomHost ? "复制邀请链接" : "复制房间号";
+  }
+
+  function newRoom() {
+    roomCode = genRoomCode();
+    roomHost = true;
+    refreshRoomPanel();
+    return roomCode;
+  }
+
+  // 支持 ?coop=1 建房、?room=CODE 加入；房间码只保留字母数字
+  function initCoop() {
+    let params;
+    try { params = new URLSearchParams(location.search); } catch (err) { return; }
+    const room = (params.get("room") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+    if (room) {
+      roomCode = room;
+      roomHost = false;
+      document.body.classList.add("coop");
+      refreshRoomPanel();
+    } else if (params.get("coop") === "1") {
+      document.body.classList.add("coop");
+      newRoom();
+    }
+  }
+
+  function copyRoom() {
+    if (!roomCode) return;
+    const text = roomHost ? shareLink(roomCode) : roomCode;
+    try {
+      const p = navigator.clipboard && navigator.clipboard.writeText(text);
+      if (p && p.catch) p.catch(() => {});
+    } catch (err) {}
+  }
+
+

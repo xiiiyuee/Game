@@ -10,6 +10,7 @@
   buildThemeGrid();
   resize();
   resetGame();
+  initCoop();
   // 菜单阶段隐藏游戏 HUD 与强化栏
   document.getElementById("hud").classList.add("hidden");
 
