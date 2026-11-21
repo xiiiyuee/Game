@@ -220,6 +220,7 @@
   }
 
   function updateBoss(b, dt, t) {
+    const tgt = nearestPlayer(b.x, b.y);
     // ===== 阶段判定 =====
     const ratio = b.hp / b.maxHp;
     const nextPhase = ratio > CFG.BOSS.PHASE2 ? 1 : ratio > CFG.BOSS.PHASE3 ? 2 : 3;
@@ -241,8 +242,8 @@
       sfxBoss();
     }
 
-    const dx = player.x - b.x;
-    const dy = player.y - b.y;
+    const dx = tgt.x - b.x;
+    const dy = tgt.y - b.y;
     const d = Math.hypot(dx, dy) || 1;
     b.angle = Math.atan2(dy, dx);
     // 超载期间：Boss 移动、攻击频率与弹幕同步减速
@@ -286,14 +287,14 @@
       if (b.laserTime > 0) {
         b.laserTime -= slowDt;
         b.laserAng += slowDt * 0.95;
-        const px = player.x - b.x;
-        const py = player.y - b.y;
+        const px = tgt.x - b.x;
+        const py = tgt.y - b.y;
         for (let k = 0; k < 2; k++) {
           const a = b.laserAng + k * Math.PI;
           const proj = px * Math.cos(a) + py * Math.sin(a);
           if (proj <= 0) continue;
           const perp = Math.abs(-px * Math.sin(a) + py * Math.cos(a));
-          if (perp < player.r + 9) { damagePlayer(b.dmg * CFG.BOSS.LASER_DMG); break; }
+          if (perp < tgt.r + 9) { damagePlayer(b.dmg * CFG.BOSS.LASER_DMG, tgt); break; }
         }
       } else {
         b.laserCd -= slowDt;
@@ -318,7 +319,7 @@
       b.warn -= slowDt;   // 蓄力期间原地不动
       if (b.warn <= 0) {
         b.dashTime = CFG.BOSS.DASH_TIME;
-        b.dashAng = Math.atan2(player.y - b.y, player.x - b.x);
+        b.dashAng = Math.atan2(tgt.y - b.y, tgt.x - b.x);
       }
     } else {
       // 常态：与玩家保持距离
@@ -391,14 +392,15 @@
     }
 
     // ===== 接触伤害（冲刺撞击更痛）=====
-    const rr = b.r + player.r;
-    if (dist2(b.x, b.y, player.x, player.y) < rr * rr) {
-      damagePlayer(b.dmg * (b.dashTime > 0 ? 1 : 0.6));
+    const rr = b.r + tgt.r;
+    if (dist2(b.x, b.y, tgt.x, tgt.y) < rr * rr) {
+      damagePlayer(b.dmg * (b.dashTime > 0 ? 1 : 0.6), tgt);
     }
   }
 
   function bossVolley(b, count, spread, speed, dmg) {
-    const base = Math.atan2(player.y - b.y, player.x - b.x);
+    const tgt = nearestPlayer(b.x, b.y);
+    const base = Math.atan2(tgt.y - b.y, tgt.x - b.x);
     for (let i = 0; i < count; i++) {
       const t = count === 1 ? 0.5 : i / (count - 1);
       const ang = base + (t - 0.5) * spread;
@@ -436,7 +438,8 @@
         continue;
       }
 
-      let ang = Math.atan2(player.y - e.y, player.x - e.x);
+      const tgt = nearestPlayer(e.x, e.y);
+      let ang = Math.atan2(tgt.y - e.y, tgt.x - e.x);
 
       // 五边形：带横向摆动
       if (e.type === "penta") {
@@ -470,9 +473,9 @@
         if (e.shotCd <= 0) {
           const inView = e.x > camera.x - 16 && e.x < camera.x + view.w + 16 &&
                          e.y > camera.y - 16 && e.y < camera.y + view.h + 16;
-          const inRange = dist2(e.x, e.y, player.x, player.y) < (640 * view.scale) ** 2;
+          const inRange = dist2(e.x, e.y, tgt.x, tgt.y) < (640 * view.scale) ** 2;
           if (inView && inRange) {
-            const base = Math.atan2(player.y - e.y, player.x - e.x);
+            const base = Math.atan2(tgt.y - e.y, tgt.x - e.x);
             const shots = gun.count + (gun.count > 1 ? Math.min(3, Math.floor((chapter - 1) / 2)) : 0);
             for (let k = 0; k < shots; k++) {
               const off = shots === 1 ? 0 : (k / (shots - 1) - 0.5) * gun.spread;
@@ -486,9 +489,9 @@
       }
 
       // 接触伤害
-      const rr = e.r + player.r;
-      if (dist2(e.x, e.y, player.x, player.y) < rr * rr) {
-        damagePlayer(e.dmg);
+      const rr = e.r + tgt.r;
+      if (dist2(e.x, e.y, tgt.x, tgt.y) < rr * rr) {
+        damagePlayer(e.dmg, tgt);
         e.x -= Math.cos(ang) * 10;
         e.y -= Math.sin(ang) * 10;
       }

@@ -174,11 +174,17 @@
       b.y += b.vy * dt * slow;
       b.life -= dt * slow;
 
-      const rr = b.r + player.r;
-      if (dist2(b.x, b.y, player.x, player.y) <= rr * rr) {
-        damagePlayer(b.dmg);
-        b.dead = true;
-        emit(b.x, b.y, 8, b.color, 160, 2.4, 0.4);
+      // 命中任意存活玩家；玩家之间无友伤
+      for (let k = 0; k < players.length; k++) {
+        const p = players[k];
+        if (p.down || p.eliminated) continue;
+        const rr = b.r + p.r;
+        if (dist2(b.x, b.y, p.x, p.y) <= rr * rr) {
+          damagePlayer(b.dmg, p);
+          b.dead = true;
+          emit(b.x, b.y, 8, b.color, 160, 2.4, 0.4);
+          break;
+        }
       }
 
       if (b.dead || b.life <= 0 || b.x < camera.x - 80 || b.x > camera.x + view.w + 80 ||

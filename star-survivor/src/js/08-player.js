@@ -87,6 +87,49 @@
     return 1 + (partyCount() - 1) * perExtra;
   }
 
+  // 最近的存活玩家：倒地/淘汰者不参与索敌，全部倒地时回退
+  function nearestPlayer(x, y) {
+    let best = null, bestD = Infinity;
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (p.down || p.eliminated) continue;
+      const d = dist2(x, y, p.x, p.y);
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    if (best) return best;
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (p.eliminated) continue;
+      const d = dist2(x, y, p.x, p.y);
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    return best || player;
+  }
+
+  // 玩家之间轻微推挤，避免完全重叠；单机直接跳过
+  function separatePlayers() {
+    if (players.length < 2) return;
+    for (let i = 0; i < players.length; i++) {
+      const a = players[i];
+      if (a.down || a.eliminated) continue;
+      for (let j = i + 1; j < players.length; j++) {
+        const b = players[j];
+        if (b.down || b.eliminated) continue;
+        const min = a.r + b.r;
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let d = Math.hypot(dx, dy);
+        if (d >= min) continue;
+        let ux = 1, uy = 0;
+        if (d >= 0.001) { ux = dx / d; uy = dy / d; }
+        const push = (min - d) * 0.5;
+        a.x = clamp(a.x - ux * push, a.r, world.w - a.r);
+        a.y = clamp(a.y - uy * push, a.r, world.h - a.r);
+        b.x = clamp(b.x + ux * push, b.r, world.w - b.r);
+        b.y = clamp(b.y + uy * push, b.r, world.h - b.r);
+      }
+    }
+  }
+
   function resetGame() {
     localPlayerId = "p1";
     player = createPlayer(localPlayerId, world.w / 2, world.h / 2, true);

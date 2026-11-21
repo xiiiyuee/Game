@@ -76,6 +76,7 @@
 
     updatePlayer(dt);
     updateDownState(dt);
+    separatePlayers();
     updateCamera(dt);
     if (state !== "playing") return false;
 
