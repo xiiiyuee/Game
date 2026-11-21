@@ -66,6 +66,45 @@
   .bar.ult span { font-size: 8px; letter-spacing: 1px; }
   @keyframes ultPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.45); } }
 
+  /* 队友状态：本地玩家血条下方，单机时整块隐藏 */
+  .team-list { margin-top: 3px; display: flex; flex-direction: column; gap: 5px; }
+  .team-list.hidden { display: none; }
+  .team-row {
+    padding: 4px 6px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .team-row.down { border-color: rgba(255, 77, 109, 0.45); background: rgba(255, 77, 109, 0.08); }
+  .team-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 3px;
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+  .team-name { color: var(--cyan-soft); font-weight: 600; }
+  .team-row.down .team-name, .team-row.down .team-note { color: var(--red); }
+  .team-bar {
+    position: relative;
+    height: 6px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.07);
+  }
+  .team-bar + .team-bar { margin-top: 2px; }
+  .team-bar i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: 4px;
+    transition: width 0.12s linear;
+  }
+  .team-bar.hp i { background: linear-gradient(90deg, #ff3b5c, #ff6f8b); }
+  .team-bar.sh { height: 4px; }
+  .team-bar.sh i { background: linear-gradient(90deg, var(--purple), var(--cyan)); }
+
   .hud-right { text-align: right; }
   .timer {
     font-size: clamp(22px, 4vw, 30px);

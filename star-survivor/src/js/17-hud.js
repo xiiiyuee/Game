@@ -5,6 +5,42 @@
     if (el.textContent !== v) el.textContent = v;
   }
 
+  let teamHudHtml = "";
+
+  // 队友 HUD：只显示其他玩家；单机时整块隐藏
+  function updateTeamHud(me) {
+    const wrap = document.getElementById("team-list");
+    let html = "";
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (!p || p === me) continue;
+      const down = !!p.down;
+      const hpPct = clamp(p.hp / p.hpMax, 0, 1) * 100;
+      const shPct = clamp(p.shield / p.stats.shieldMax, 0, 1) * 100;
+      const note = down
+        ? `倒地 ${Math.max(0, Math.ceil(p.downTimer || 0))}s`
+        : `${Math.ceil(p.hp)} / ${p.hpMax}`;
+      html += `<div class="team-row${down ? " down" : ""}">
+        <div class="team-top"><span class="team-name">${p.name || String(p.id).toUpperCase()}</span><span class="team-note">${note}</span></div>
+        <div class="team-bar hp"><i style="width:${hpPct.toFixed(1)}%"></i></div>
+        <div class="team-bar sh"><i style="width:${shPct.toFixed(1)}%"></i></div>
+      </div>`;
+    }
+    if (!html) {
+      if (teamHudHtml !== "") {
+        wrap.classList.add("hidden");
+        wrap.innerHTML = "";
+        teamHudHtml = "";
+      }
+      return;
+    }
+    wrap.classList.remove("hidden");
+    if (html !== teamHudHtml) {
+      wrap.innerHTML = html;
+      teamHudHtml = html;
+    }
+  }
+
   function refreshHud(force) {
     const me = getLocalPlayer();
     if (!me) return;
@@ -72,6 +108,8 @@
       document.getElementById("boss-wrap").classList.remove("hidden");
       document.getElementById("ui-boss").style.width = clamp(boss.hp / boss.maxHp, 0, 1) * 100 + "%";
     }
+
+    updateTeamHud(me);
   }
 
   function updateBuffPanel() {

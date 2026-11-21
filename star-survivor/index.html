@@ -117,6 +117,45 @@
   .bar.ult span { font-size: 8px; letter-spacing: 1px; }
   @keyframes ultPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.45); } }
 
+  /* 队友状态：本地玩家血条下方，单机时整块隐藏 */
+  .team-list { margin-top: 3px; display: flex; flex-direction: column; gap: 5px; }
+  .team-list.hidden { display: none; }
+  .team-row {
+    padding: 4px 6px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .team-row.down { border-color: rgba(255, 77, 109, 0.45); background: rgba(255, 77, 109, 0.08); }
+  .team-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 3px;
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+  .team-name { color: var(--cyan-soft); font-weight: 600; }
+  .team-row.down .team-name, .team-row.down .team-note { color: var(--red); }
+  .team-bar {
+    position: relative;
+    height: 6px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.07);
+  }
+  .team-bar + .team-bar { margin-top: 2px; }
+  .team-bar i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: 4px;
+    transition: width 0.12s linear;
+  }
+  .team-bar.hp i { background: linear-gradient(90deg, #ff3b5c, #ff6f8b); }
+  .team-bar.sh { height: 4px; }
+  .team-bar.sh i { background: linear-gradient(90deg, var(--purple), var(--cyan)); }
+
   .hud-right { text-align: right; }
   .timer {
     font-size: clamp(22px, 4vw, 30px);
@@ -715,6 +754,7 @@
     <div class="bar shield"><i id="ui-shield"></i><span id="ui-shield-text">50 / 50</span></div>
     <div class="bar xp"><i id="ui-xp"></i><span id="ui-xp-text">0 / 8</span></div>
     <div class="bar ult" id="ult-bar"><i id="ui-ult"></i><span id="ui-ult-text">超载 0%</span></div>
+    <div class="team-list hidden" id="team-list"></div>
   </div>
   <div class="hud-right">
     <div class="timer" id="ui-timer">0:00</div>
@@ -3827,6 +3867,42 @@
     if (el.textContent !== v) el.textContent = v;
   }
 
+  let teamHudHtml = "";
+
+  // 队友 HUD：只显示其他玩家；单机时整块隐藏
+  function updateTeamHud(me) {
+    const wrap = document.getElementById("team-list");
+    let html = "";
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (!p || p === me) continue;
+      const down = !!p.down;
+      const hpPct = clamp(p.hp / p.hpMax, 0, 1) * 100;
+      const shPct = clamp(p.shield / p.stats.shieldMax, 0, 1) * 100;
+      const note = down
+        ? `倒地 ${Math.max(0, Math.ceil(p.downTimer || 0))}s`
+        : `${Math.ceil(p.hp)} / ${p.hpMax}`;
+      html += `<div class="team-row${down ? " down" : ""}">
+        <div class="team-top"><span class="team-name">${p.name || String(p.id).toUpperCase()}</span><span class="team-note">${note}</span></div>
+        <div class="team-bar hp"><i style="width:${hpPct.toFixed(1)}%"></i></div>
+        <div class="team-bar sh"><i style="width:${shPct.toFixed(1)}%"></i></div>
+      </div>`;
+    }
+    if (!html) {
+      if (teamHudHtml !== "") {
+        wrap.classList.add("hidden");
+        wrap.innerHTML = "";
+        teamHudHtml = "";
+      }
+      return;
+    }
+    wrap.classList.remove("hidden");
+    if (html !== teamHudHtml) {
+      wrap.innerHTML = html;
+      teamHudHtml = html;
+    }
+  }
+
   function refreshHud(force) {
     const me = getLocalPlayer();
     if (!me) return;
@@ -3894,6 +3970,8 @@
       document.getElementById("boss-wrap").classList.remove("hidden");
       document.getElementById("ui-boss").style.width = clamp(boss.hp / boss.maxHp, 0, 1) * 100 + "%";
     }
+
+    updateTeamHud(me);
   }
 
   function updateBuffPanel() {
