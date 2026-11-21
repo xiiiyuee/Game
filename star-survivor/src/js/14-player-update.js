@@ -16,15 +16,7 @@
   }
 
   function readMoveInput() {
-    let x = 0, y = 0;
-    if (keys.KeyA || keys.ArrowLeft) x -= 1;
-    if (keys.KeyD || keys.ArrowRight) x += 1;
-    if (keys.KeyW || keys.ArrowUp) y -= 1;
-    if (keys.KeyS || keys.ArrowDown) y += 1;
-    if (touchVec.active) { x += touchVec.x; y += touchVec.y; }
-    const len = Math.hypot(x, y);
-    if (len > 1) { x /= len; y /= len; }
-    return { x, y };
+    return { x: intent.mx, y: intent.my };
   }
 
   function updatePlayer(dt, p) {

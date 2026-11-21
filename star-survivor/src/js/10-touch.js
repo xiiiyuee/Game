@@ -58,11 +58,11 @@
 
     dashBtn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
-      if (state === "playing") tryDash();
+      if (state === "playing") intent.dash = true;
     });
     ultBtn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
-      if (state === "playing") activateUltimate();
+      if (state === "playing") intent.ult = true;
     });
     pauseBtn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
