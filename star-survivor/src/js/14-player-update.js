@@ -33,7 +33,7 @@
     if (p.shieldDelay > 0) p.shieldDelay -= dt;
     else p.shield = Math.min(s.shieldMax, p.shield + s.shieldRegen * dt);
 
-    const v = readMoveInput();
+    const v = p.local ? readMoveInput() : { x: p.intent.mx || 0, y: p.intent.my || 0 };
 
     if (p.dashTime > 0) {
       p.dashTime -= dt;

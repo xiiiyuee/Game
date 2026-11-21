@@ -1869,6 +1869,7 @@
       hitFlash: 0,
       energy: 0,                 // 超载能量
       weapon: chosenWeapon,
+      intent: { mx: 0, my: 0 },  // 非本地玩家的移动意图（联机时由输入包写入）
       droneCd: [],               // 每架无人机的射击冷却
       down: false,               // 联机倒地状态
       downTimer: 0,              // 倒地剩余倒计时（秒）
@@ -3423,7 +3424,7 @@
     if (p.shieldDelay > 0) p.shieldDelay -= dt;
     else p.shield = Math.min(s.shieldMax, p.shield + s.shieldRegen * dt);
 
-    const v = readMoveInput();
+    const v = p.local ? readMoveInput() : { x: p.intent.mx || 0, y: p.intent.my || 0 };
 
     if (p.dashTime > 0) {
       p.dashTime -= dt;
@@ -5151,7 +5152,7 @@
     updateCores(dt);
     if (state !== "playing") { updateParticles(dt); return false; }
 
-    updatePlayer(dt);
+    for (let i = 0; i < players.length; i++) updatePlayer(dt, players[i]);
     updateDownState(dt);
     separatePlayers();
     updateCamera(dt);

@@ -74,7 +74,7 @@
     updateCores(dt);
     if (state !== "playing") { updateParticles(dt); return false; }
 
-    updatePlayer(dt);
+    for (let i = 0; i < players.length; i++) updatePlayer(dt, players[i]);
     updateDownState(dt);
     separatePlayers();
     updateCamera(dt);

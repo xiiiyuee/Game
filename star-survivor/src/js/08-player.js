@@ -62,6 +62,7 @@
       hitFlash: 0,
       energy: 0,                 // 超载能量
       weapon: chosenWeapon,
+      intent: { mx: 0, my: 0 },  // 非本地玩家的移动意图（联机时由输入包写入）
       droneCd: [],               // 每架无人机的射击冷却
       down: false,               // 联机倒地状态
       downTimer: 0,              // 倒地剩余倒计时（秒）
