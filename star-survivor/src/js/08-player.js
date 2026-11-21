@@ -34,12 +34,14 @@
     };
   }
 
-  function resetGame() {
+  // 创建一名玩家；id 在整局内保持稳定，联机时由房间槽位分配
+  function createPlayer(id, x, y, local) {
     const P = CFG.PLAYER;
-    stats = makeStats(chosenWeapon);
-    player = {
-      x: world.w / 2,
-      y: world.h / 2,
+    return {
+      id,
+      local: !!local,
+      x,
+      y,
       r: P.RADIUS,
       hp: P.HP,
       hpMax: P.HP,
@@ -58,6 +60,13 @@
       weapon: chosenWeapon,
       droneCd: [],               // 每架无人机的射击冷却
     };
+  }
+
+  function resetGame() {
+    stats = makeStats(chosenWeapon);
+    localPlayerId = "p1";
+    player = createPlayer(localPlayerId, world.w / 2, world.h / 2, true);
+    players = [player];
     applyMeta(stats, player);
 
     bullets = [];

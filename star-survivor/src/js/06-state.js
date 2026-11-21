@@ -2,7 +2,9 @@
    * 5. 游戏状态
    * ===================================================================*/
   let state = "menu";              // menu | playing | paused | upgrade | over
-  let player = null;
+  let player = null;               // 本地玩家别名（保留单机写法）
+  let players = [];                // 本局全部玩家集合
+  let localPlayerId = null;        // 本地玩家稳定 ID；单机固定为 "p1"
   let stats = null;
   let bullets = [];
   let enemies = [];
