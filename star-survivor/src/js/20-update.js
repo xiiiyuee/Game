@@ -75,6 +75,7 @@
     if (state !== "playing") { updateParticles(dt); return false; }
 
     updatePlayer(dt);
+    updateDownState(dt);
     updateCamera(dt);
     if (state !== "playing") return false;
 

@@ -51,6 +51,10 @@
       RANGE: 470,                 // 自动索敌范围
       CRIT: 0.08,                 // 初始暴击率
       CRIT_MULT: 2.0,             // 暴击倍率
+      DOWN_TIMEOUT: 30,           // 联机倒地倒计时（秒）
+      REVIVE_TIME: 2,             // 队友靠近复活所需时间
+      REVIVE_RADIUS: 80,          // 复活交互半径
+      REVIVE_HP: 0.5,             // 复活后生命比例
     },
     WORLD: {
       // 实际战场远大于视口，相机跟随玩家滚动

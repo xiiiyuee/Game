@@ -14,12 +14,15 @@
     for (let i = 0; i < players.length; i++) {
       const p = players[i];
       if (!p || p === me) continue;
-      const down = !!p.down;
+      const dead = !!p.eliminated;
+      const down = !!p.down || dead;
       const hpPct = clamp(p.hp / p.hpMax, 0, 1) * 100;
       const shPct = clamp(p.shield / p.stats.shieldMax, 0, 1) * 100;
-      const note = down
-        ? `倒地 ${Math.max(0, Math.ceil(p.downTimer || 0))}s`
-        : `${Math.ceil(p.hp)} / ${p.hpMax}`;
+      const note = dead
+        ? "已淘汰"
+        : p.down
+          ? `倒地 ${Math.max(0, Math.ceil(p.downTimer || 0))}s`
+          : `${Math.ceil(p.hp)} / ${p.hpMax}`;
       html += `<div class="team-row${down ? " down" : ""}">
         <div class="team-top"><span class="team-name">${p.name || String(p.id).toUpperCase()}</span><span class="team-note">${note}</span></div>
         <div class="team-bar hp"><i style="width:${hpPct.toFixed(1)}%"></i></div>

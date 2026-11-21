@@ -148,6 +148,7 @@
   // 终极技能「超载」：清弹 + 范围爆发 + 短时减速
   function activateUltimate() {
     if (state !== "playing" || player.energy < CFG.ULT.MAX) return;
+    if (player.down || player.eliminated) return;
     player.energy = 0;
     ultTimer = CFG.ULT.SLOW_TIME;
     player.invuln = Math.max(player.invuln, CFG.ULT.INVULN);

@@ -3,6 +3,7 @@
    * ===================================================================*/
   function tryDash() {
     if (state !== "playing") return;
+    if (player.down || player.eliminated) return;
     if (player.dashCd > 0) return;
     const v = readMoveInput();
     const hasInput = v.x !== 0 || v.y !== 0;
@@ -23,6 +24,7 @@
     p = p || player;
     const P = CFG.PLAYER;
     const s = p.stats;
+    if (p.down || p.eliminated) return;
     p.invuln = Math.max(0, p.invuln - dt);
     p.dashCd = Math.max(0, p.dashCd - dt);
     p.hitFlash = Math.max(0, p.hitFlash - dt * 2.6);
@@ -190,6 +192,7 @@
     p = p || player;
     const s = p.stats;
     if (state !== "playing") return;
+    if (p.down || p.eliminated) return;
     if (p.invuln > 0) return;
 
     const dmg = baseDmg * (1 - s.armor) * s.takenMul;
@@ -216,7 +219,7 @@
 
     if (p.hp <= 0) {
       p.hp = 0;
-      if (!tryRevive(p)) endGame(false, "hp");
+      downPlayer(p);
     }
   }
 
@@ -224,6 +227,7 @@
   function drainPlayer(amount, p) {
     p = p || player;
     if (state !== "playing") return;
+    if (p.down || p.eliminated) return;
     let remain = amount;
     if (p.shield > 0) {
       const a = Math.min(p.shield, remain);
@@ -235,8 +239,77 @@
     hurtFlash = Math.max(hurtFlash, 0.1);
     if (p.hp <= 0) {
       p.hp = 0;
-      if (!tryRevive(p)) endGame(false, "hp");
+      downPlayer(p);
     }
+  }
+
+  // 生命归零：单机保持原有结算；联机进入倒地倒计时，全队倒地才结算
+  function downPlayer(p) {
+    if (p.down || p.eliminated) return;
+    if (tryRevive(p)) return;
+    if (players.length <= 1) {
+      endGame(false, "hp");
+      return;
+    }
+    p.down = true;
+    p.downTimer = CFG.PLAYER.DOWN_TIMEOUT;
+    p.reviveProgress = 0;
+    p.shield = 0;
+    p.dashTime = 0;
+    addText(p.x, p.y - 44, "倒地 · 等待队友救援", "#ff4d6d", 18);
+    emit(p.x, p.y, 24, "#ff4d6d", 220, 3, 0.7);
+    sfxHurt();
+    if (players.every((q) => q.down || q.eliminated)) endGame(false, "hp");
+  }
+
+  // 队友靠近读条完成后的复活
+  function revivePlayer(p) {
+    p.down = false;
+    p.downTimer = 0;
+    p.reviveProgress = 0;
+    p.eliminated = false;
+    p.hp = Math.round(p.hpMax * CFG.PLAYER.REVIVE_HP);
+    p.shield = 0;
+    p.invuln = 2;
+    p.shieldDelay = 2;
+    addText(p.x, p.y - 44, "救援成功", "#8bffdc", 18);
+    emit(p.x, p.y, 28, "#8bffdc", 260, 3.4, 0.8);
+    sfxLevelUp();
+  }
+
+  // 联机倒地状态推进：倒计时、救援读条、全队淘汰结算
+  function updateDownState(dt) {
+    if (players.length <= 1) return;
+    const R = CFG.PLAYER.REVIVE_RADIUS * view.scale;
+    const R2 = R * R;
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (p.eliminated) continue;
+      if (!p.down) { p.reviveProgress = 0; continue; }
+
+      p.downTimer -= dt;
+      if (p.downTimer <= 0) {
+        p.downTimer = 0;
+        p.eliminated = true;
+        p.reviveProgress = 0;
+        addText(p.x, p.y - 44, "信号消失", "#ff4d6d", 16);
+        continue;
+      }
+
+      let near = false;
+      for (let k = 0; k < players.length; k++) {
+        const q = players[k];
+        if (q === p || q.down || q.eliminated) continue;
+        if (dist2(q.x, q.y, p.x, p.y) <= R2) { near = true; break; }
+      }
+      if (near) {
+        p.reviveProgress += dt;
+        if (p.reviveProgress >= CFG.PLAYER.REVIVE_TIME) revivePlayer(p);
+      } else {
+        p.reviveProgress = Math.max(0, p.reviveProgress - dt * 0.5);
+      }
+    }
+    if (players.every((q) => q.eliminated)) endGame(false, "hp");
   }
 
   // 星港应急保险：以 50% 生命复活一次

@@ -441,7 +441,7 @@
 
     // 外发光使用缓存贴图（原先每帧一次 shadowBlur 16）
     drawGlow(red ? THEME.danger : THEME.cyan, 0, 0, p.r * 3.2, 0.45);
-    ctx.globalAlpha = blink ? 0.45 : 1;
+    ctx.globalAlpha = blink ? 0.45 : (p.down || p.eliminated ? 0.4 : 1);
 
     // 外层三角
     ctx.strokeStyle = red ? rgbaOf(THEME.danger, 0.9) : THEME.cyanSoft;

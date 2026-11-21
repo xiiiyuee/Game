@@ -63,6 +63,10 @@
       energy: 0,                 // 超载能量
       weapon: chosenWeapon,
       droneCd: [],               // 每架无人机的射击冷却
+      down: false,               // 联机倒地状态
+      downTimer: 0,              // 倒地剩余倒计时（秒）
+      reviveProgress: 0,         // 队友救援进度（秒）
+      eliminated: false,         // 倒计时结束，已淘汰
     };
   }
 
