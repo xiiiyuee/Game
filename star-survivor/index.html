@@ -695,8 +695,8 @@
       ENEMIES: 140,               // 同屏敌人上限
       BULLETS: 220,               // 同屏玩家子弹上限
       EBULLETS: 160,              // 同屏敌方子弹上限
-      PARTICLES: 420,             // 同屏粒子上限
-      GEMS: 120,                  // 经验球上限
+      PARTICLES: 340,             // 同屏粒子上限
+      GEMS: 100,                  // 经验球上限
       NUMBERS: 40,                // 飘字上限
     },
     FX: {
@@ -732,14 +732,32 @@
   // 世界坐标尺寸与相机（世界远大于视口）
   const world = { w: 2400, h: 1600 };
   const camera = { x: 0, y: 0 };
+  // 视口剔除范围（世界坐标），降低后期对象增多时的绘制量
+  const cull = { x0: 0, y0: 0, x1: 0, y1: 0 };
   let bgGrad = null;
   let vgGrad = null;
   let stars = [];
 
+  // ===== 自适应分辨率：后期对象多时自动降低内部渲染倍率，保证帧率 =====
+  let renderScale = 1;          // 1 = 设备像素比全开
+  let perfAcc = 0;              // 采样窗口累计时长
+  let perfFrames = 0;           // 窗口内帧数
+  let perfGoodTime = 0;         // 持续流畅时长
+  let qualityCd = 0;            // 调档冷却
+  let idleRenderAcc = 0;        // 非游戏状态下的低帧率绘制累计
+
+  function targetDpr() {
+    const raw = Math.min(window.devicePixelRatio || 1, 2);
+    // Canvas 像素预算：大屏 + 高 DPR 时避免生成上千万像素的画布
+    const cssPixels = Math.max(1, window.innerWidth * window.innerHeight);
+    const budget = Math.sqrt(2800000 / cssPixels);
+    return Math.max(0.55, Math.min(raw, budget) * renderScale);
+  }
+
   function resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = targetDpr();
     canvas.width = Math.max(1, Math.round(w * dpr));
     canvas.height = Math.max(1, Math.round(h * dpr));
     canvas.style.width = w + "px";
@@ -814,6 +832,7 @@
    * ===================================================================*/
   const audio = { ctx: null, master: null, sfx: null, music: null, noise: null, muted: false };
   let lastShootSfx = 0;
+  let lastExplodeSfx = 0;
 
   function initAudio() {
     if (audio.ctx) {
@@ -913,6 +932,11 @@
   }
   function sfxExplode(big) {
     if (!audio.ctx || audio.muted) return;
+    if (!big) {
+      const now = performance.now();
+      if (now - lastExplodeSfx < 40) return;   // 后期大量击杀时限流，避免音频线程过载
+      lastExplodeSfx = now;
+    }
     noiseBurst(big ? 0.55 : 0.22, big ? 0.5 : 0.22, 1600, 120);
     if (big) tone(90, 40, 0.5, "sawtooth", 0.18, 400);
   }
@@ -1020,6 +1044,7 @@
   let spawnTimer = 1.2;
   let shake = 0;
   let hurtFlash = 0;
+  let hudAcc = 0;          // HUD 刷新节流（每帧写 DOM 会造成额外布局开销）
   let nextEnemyId = 1;
   let nextPropId = 1;
   let lastFrame = performance.now();
@@ -2741,7 +2766,12 @@
     if (shake < 0.15) shake = 0;
     hurtFlash = Math.max(0, hurtFlash - dt * 2.8);
 
-    refreshHud();
+    // HUD 约 12Hz 刷新即可，避免每帧多次触发样式计算
+    hudAcc += dt;
+    if (hudAcc >= 0.08) {
+      hudAcc = 0;
+      refreshHud();
+    }
 
     if (timeLeft <= 0) {
       timeLeft = 0;
@@ -2799,13 +2829,17 @@
   // 世界边界：让玩家感知可活动范围
   function drawWorldBounds() {
     ctx.save();
-    // 内侧柔光，让贴近边界时也有清晰反馈
-    ctx.strokeStyle = "rgba(63, 229, 255, 0.36)";
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = "#3fe5ff";
-    ctx.shadowBlur = 30;
-    ctx.strokeRect(1, 1, world.w - 2, world.h - 2);
-    ctx.shadowBlur = 0;
+    // 多层描边模拟柔光：避免对大矩形做 shadowBlur 30
+    const ring = [
+      [14, "rgba(63, 229, 255, 0.05)"],
+      [7, "rgba(63, 229, 255, 0.1)"],
+      [2.5, "rgba(63, 229, 255, 0.36)"],
+    ];
+    for (let i = 0; i < ring.length; i++) {
+      ctx.lineWidth = ring[i][0];
+      ctx.strokeStyle = ring[i][1];
+      ctx.strokeRect(1, 1, world.w - 2, world.h - 2);
+    }
 
     const L = 70;
     const corners = [
@@ -2825,15 +2859,14 @@
     ctx.restore();
   }
 
-  function drawGem(g) {
+  function drawGem(g, withGlow) {
     const a = 0.75 + Math.sin(g.pulse) * 0.25;
     ctx.save();
     ctx.translate(g.x, g.y);
     ctx.rotate(g.pulse * 0.5);
+    if (withGlow) drawGlow("#43ffd0", 0, 0, g.r * 3.6, 0.4 * a);
     ctx.globalAlpha = a;
     ctx.fillStyle = "#43ffd0";
-    ctx.shadowColor = "#43ffd0";
-    ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.moveTo(0, -g.r);
     ctx.lineTo(g.r, 0);
@@ -2845,40 +2878,81 @@
     ctx.globalAlpha = 1;
   }
 
+  /* --- 发光贴图缓存：替代逐对象 shadowBlur（后者在高 DPR 下开销极大） --- */
+  const glowCache = new Map();
+  function rgbaOf(hex, a) {
+    if (typeof hex !== "string" || hex[0] !== "#") return `rgba(255,255,255,${a})`;
+    let r, g, b;
+    if (hex.length === 4) {
+      r = parseInt(hex[1] + hex[1], 16);
+      g = parseInt(hex[2] + hex[2], 16);
+      b = parseInt(hex[3] + hex[3], 16);
+    } else {
+      r = parseInt(hex.slice(1, 3), 16);
+      g = parseInt(hex.slice(3, 5), 16);
+      b = parseInt(hex.slice(5, 7), 16);
+    }
+    return `rgba(${r},${g},${b},${a})`;
+  }
+  function glowSprite(color) {
+    let s = glowCache.get(color);
+    if (s) return s;
+    s = document.createElement("canvas");
+    s.width = s.height = 64;
+    const g = s.getContext("2d");
+    const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grd.addColorStop(0, rgbaOf(color, 0.9));
+    grd.addColorStop(0.45, rgbaOf(color, 0.32));
+    grd.addColorStop(1, rgbaOf(color, 0));
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+    glowCache.set(color, s);
+    return s;
+  }
+  function drawGlow(color, x, y, radius, alpha) {
+    const s = glowSprite(color);
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(s, x - radius, y - radius, radius * 2, radius * 2);
+    ctx.globalAlpha = 1;
+  }
+
   function drawBullets() {
+    // 拖尾合并为一条路径，减少 stroke 次数
+    ctx.strokeStyle = "rgba(126, 240, 255, 0.4)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
     for (let i = 0; i < bullets.length; i++) {
       const b = bullets[i];
+      if (b.x < cull.x0 || b.x > cull.x1 || b.y < cull.y0 || b.y > cull.y1) continue;
       const tx = b.x - Math.cos(b.ang) * 12;
       const ty = b.y - Math.sin(b.ang) * 12;
-      ctx.strokeStyle = "rgba(126, 240, 255, 0.45)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
       ctx.moveTo(tx, ty);
       ctx.lineTo(b.x, b.y);
-      ctx.stroke();
+    }
+    ctx.stroke();
 
-      ctx.fillStyle = "#d8fbff";
-      ctx.shadowColor = "#3fe5ff";
-      ctx.shadowBlur = 10;
+    ctx.fillStyle = "#d8fbff";
+    for (let i = 0; i < bullets.length; i++) {
+      const b = bullets[i];
+      if (b.x < cull.x0 || b.x > cull.x1 || b.y < cull.y0 || b.y > cull.y1) continue;
+      drawGlow("#3fe5ff", b.x, b.y, b.r * 4.2, 0.5);
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, TAU);
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
   }
 
   function drawEnemyBullets() {
+    ctx.globalAlpha = 0.95;
     for (let i = 0; i < ebullets.length; i++) {
       const b = ebullets[i];
+      if (b.x < cull.x0 || b.x > cull.x1 || b.y < cull.y0 || b.y > cull.y1) continue;
+      drawGlow(b.color, b.x, b.y, b.r * 3.6, 0.55);
       ctx.fillStyle = b.color;
-      ctx.shadowColor = b.color;
-      ctx.shadowBlur = 12;
-      ctx.globalAlpha = 0.9;
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, TAU);
       ctx.fill();
     }
-    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
   }
 
@@ -2906,6 +2980,7 @@
   function drawEnemies(t) {
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
+      if (e.x < cull.x0 || e.x > cull.x1 || e.y < cull.y0 || e.y > cull.y1) continue;
 
       if (e.isBoss) {
         // 冲刺预警：虚线指示突进方向
@@ -2928,6 +3003,9 @@
 
         ctx.save();
         ctx.translate(e.x, e.y);
+
+        // 柔和外发光改为缓存贴图，避免大半径 shadowBlur
+        drawGlow("#ff3b6b", 0, 0, e.r * 2.1, 0.4);
 
         // 外环：阶段越高层数越多
         ctx.rotate(e.spin);
@@ -2952,10 +3030,7 @@
         ctx.fill();
         ctx.strokeStyle = bodyStroke;
         ctx.lineWidth = 3;
-        ctx.shadowColor = "#ff3b6b";
-        ctx.shadowBlur = 22;
         ctx.stroke();
-        ctx.shadowBlur = 0;
 
         // 核心之眼
         ctx.rotate(-e.spin * 2);
@@ -2969,8 +3044,7 @@
 
       ctx.save();
       ctx.translate(e.x, e.y);
-      ctx.shadowColor = e.color;
-      ctx.shadowBlur = e.type === "diamond" ? 16 : 9;
+      drawGlow(e.color, 0, 0, e.r * (e.type === "diamond" ? 3 : 2.4), e.type === "diamond" ? 0.55 : 0.42);
 
       if (e.type === "tri") {
         drawShape(0, 0, e.r, 3, e.angle + Math.PI / 2, "rgba(255, 82, 82, 0.22)", e.color, 2);
@@ -3012,22 +3086,15 @@
 
     ctx.save();
     ctx.translate(player.x, player.y);
-    const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, player.r * 3.4);
-    glow.addColorStop(0, red ? "rgba(255, 90, 110, 0.55)" : "rgba(63, 229, 255, 0.45)");
-    glow.addColorStop(1, "rgba(63, 229, 255, 0)");
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(0, 0, player.r * 3.4, 0, TAU);
-    ctx.fill();
-
-    ctx.globalAlpha = blink ? 0.45 : 1;
     ctx.rotate(player.facing + Math.PI / 2);
+
+    // 外发光使用缓存贴图（原先每帧一次 shadowBlur 16）
+    drawGlow(red ? "#ff4d6d" : "#3fe5ff", 0, 0, player.r * 3.2, 0.45);
+    ctx.globalAlpha = blink ? 0.45 : 1;
 
     // 外层三角
     ctx.strokeStyle = red ? "#ff7a92" : "#7ef0ff";
     ctx.lineWidth = 2;
-    ctx.shadowColor = red ? "#ff4d6d" : "#3fe5ff";
-    ctx.shadowBlur = 16;
     ctx.beginPath();
     ctx.moveTo(0, -player.r - 4);
     ctx.lineTo(player.r * 0.85, player.r * 0.75);
@@ -3049,6 +3116,7 @@
   function drawParticles() {
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
+      if (p.x < cull.x0 || p.x > cull.x1 || p.y < cull.y0 || p.y > cull.y1) continue;
       const a = clamp(p.life / p.max, 0, 1);
       ctx.globalAlpha = a * 0.9;
       ctx.fillStyle = p.color;
@@ -3060,24 +3128,33 @@
   }
 
   function drawTexts() {
+    if (!texts.length) return;
+    ctx.textAlign = "center";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(2, 6, 14, 0.75)";
     for (let i = 0; i < texts.length; i++) {
       const t = texts[i];
+      if (t.x < cull.x0 || t.x > cull.x1 || t.y < cull.y0 || t.y > cull.y1) continue;
       const a = clamp(t.life / 0.75, 0, 1);
       ctx.globalAlpha = a;
       ctx.font = `600 ${t.size}px system-ui, -apple-system, sans-serif`;
-      ctx.textAlign = "center";
       ctx.fillStyle = t.color;
-      ctx.shadowColor = t.color;
-      ctx.shadowBlur = 6;
+      // 深色描边替代 shadowBlur，保证可读性且更便宜
+      ctx.strokeText(t.text, t.x, t.y);
       ctx.fillText(t.text, t.x, t.y);
     }
-    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
     ctx.textAlign = "left";
   }
 
   function drawGems() {
-    for (let i = 0; i < gems.length; i++) drawGem(gems[i]);
+    // 宝石过多时关闭逐个发光，明显降低填充开销
+    const withGlow = gems.length <= 60;
+    for (let i = 0; i < gems.length; i++) {
+      const g = gems[i];
+      if (g.x < cull.x0 || g.x > cull.x1 || g.y < cull.y0 || g.y > cull.y1) continue;
+      drawGem(g, withGlow);
+    }
   }
 
   // 风险星域：红色虚线警示圈
@@ -3200,6 +3277,10 @@
   }
 
   function render(t) {
+    cull.x0 = camera.x - 120;
+    cull.y0 = camera.y - 120;
+    cull.x1 = camera.x + view.w + 120;
+    cull.y1 = camera.y + view.h + 120;
     ctx.save();
     if (state === "playing" && shake > 0) {
       ctx.translate(rand(-shake, shake), rand(-shake, shake));
@@ -3251,9 +3332,50 @@
     dt = Math.min(dt, 0.05);
 
     const t = ts / 1000;
-    if (state === "playing") update(dt);
+    if (state === "playing") {
+      update(dt);
+
+      // 帧率采样（每 2 秒一次），低于目标时下调渲染倍率
+      perfAcc += dt;
+      perfFrames++;
+      if (qualityCd > 0) qualityCd -= dt;
+      if (perfAcc >= 2 && qualityCd <= 0) {
+        const fps = perfFrames / perfAcc;
+        if (fps < 48 && renderScale > 0.6) {
+          // 按实际帧率一次性降到接近合适的倍率，避免多轮才追上
+          const factor = clamp(fps / 58, 0.62, 0.92);
+          renderScale = Math.max(0.6, renderScale * factor);
+          qualityCd = 3;
+          resize();
+          snapCamera();
+        } else if (fps > 57 && renderScale < 1) {
+          perfGoodTime += perfAcc;
+          if (perfGoodTime >= 6) {
+            renderScale = Math.min(1, renderScale / 0.9);
+            qualityCd = 3;
+            perfGoodTime = 0;
+            resize();
+            snapCamera();
+          }
+        } else {
+          perfGoodTime = 0;
+        }
+        perfAcc = 0;
+        perfFrames = 0;
+      }
+    }
     updateStars(dt, t);
-    render(t);
+
+    // 暂停/升级/结算时画面静止，降低绘制频率，避免选卡界面卡顿
+    if (state === "playing" || state === "menu") {
+      render(t);
+    } else {
+      idleRenderAcc += dt;
+      if (idleRenderAcc >= 0.1) {
+        idleRenderAcc = 0;
+        render(t);
+      }
+    }
 
     requestAnimationFrame(loop);
   }
