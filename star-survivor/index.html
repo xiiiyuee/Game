@@ -130,6 +130,24 @@
     color: var(--muted);
   }
   .stat-row b { color: var(--text); font-weight: 600; }
+  .weapon-tag {
+    margin-top: 5px;
+    text-align: right;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: rgba(126, 240, 255, 0.75);
+  }
+  .combo {
+    margin-top: 3px;
+    text-align: right;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #ffd666;
+    text-shadow: 0 0 12px rgba(255, 200, 87, 0.55);
+  }
+  .combo b { font-size: 17px; font-weight: 700; }
+  .combo span { font-size: 10.5px; color: #ffe9a8; }
+  .combo.hidden { display: none; }
 
   /* ========== Boss 血条 ========== */
   .boss-wrap {
@@ -351,6 +369,9 @@
   .card h3 { margin: 0; font-size: 15px; letter-spacing: 1px; font-weight: 600; }
   .card p { margin: 0; font-size: 11.5px; line-height: 1.75; color: #9db6ce; }
   .card p b { color: var(--cyan-soft); font-weight: 600; }
+  .card.weapon { min-height: 152px; }
+  .card.weapon .card-ic { font-size: 26px; }
+  .card.weapon:hover { border-color: rgba(126, 240, 255, 0.9); }
 
   /* ========== 结算 ========== */
   .res-grid {
@@ -513,6 +534,8 @@
       <span>击杀 <b id="ui-kills">0</b></span>
       <span>波次 <b id="ui-wave">1</b></span>
     </div>
+    <div class="weapon-tag" id="ui-weapon">脉冲核心</div>
+    <div class="combo hidden" id="ui-combo">连杀 <b id="ui-combo-n">0</b> <span id="ui-combo-m">×1.00</span></div>
   </div>
 </div>
 
@@ -534,14 +557,42 @@
     <button class="btn" data-act="start">开始游戏</button>
     <ul class="help">
       <li><b>WASD / 方向键</b> 移动（斜向速度已归一化）</li>
+      <li>开局三选一武器：<b>脉冲 / 散射 / 轨道激光</b></li>
       <li><b>空格 / Shift</b> 冲刺，短暂无敌并带有冷却</li>
       <li><b>ESC</b> 暂停 / 继续（切出窗口会自动暂停）</li>
       <li><b>E / 超载按钮</b> 能量满时释放：清除弹幕、击退周围敌人、短暂减速战场</li>
+      <li>子弹可以<b>击落小怪弹幕</b>；3 秒内连续击杀叠加<b>连杀倍率</b>（最高 ×2）</li>
       <li>留意地图上的<b>风险星域</b>（经验翻倍但持续掉血）与<b>补给舱 / 能量水晶</b></li>
       <li>武器自动锁定最近的敌人开火</li>
       <li>手机：左侧摇杆移动，右侧按钮超载 / 冲刺 / 暂停</li>
     </ul>
     <p class="note">音效由 Web Audio 实时合成，点击开始后才会启用</p>
+  </div>
+</div>
+
+<!-- 开局武器选择 -->
+<div class="overlay hidden" id="ov-weapon">
+  <div class="panel wide">
+    <h2>选择核心</h2>
+    <p class="sub">三种武器决定本局的攻击节奏 · 之后仍可强化</p>
+    <div class="cards weapon-cards" id="weapon-cards">
+      <button class="card rarity-common weapon" data-weapon="pulse">
+        <div class="card-top"><span class="card-ic">◇</span><span class="card-rt">均衡</span></div>
+        <h3>脉冲核心</h3>
+        <p>单发稳定、射速均衡<br>伤害 <b>10</b> · 间隔 <b>0.26s</b> · 射程 <b>470</b></p>
+      </button>
+      <button class="card rarity-rare weapon" data-weapon="scatter">
+        <div class="card-top"><span class="card-ic">⋔</span><span class="card-rt">近战爆发</span></div>
+        <h3>散射核心</h3>
+        <p>一次 4 发扇形弹<br>单发 <b>6.2</b> · 间隔 <b>0.44s</b> · 射程 <b>380</b></p>
+      </button>
+      <button class="card rarity-epic weapon" data-weapon="rail">
+        <div class="card-top"><span class="card-ic">↟</span><span class="card-rt">远程穿透</span></div>
+        <h3>轨道激光</h3>
+        <p>高伤慢射速，贯穿 2 个敌人<br>伤害 <b>26</b> · 间隔 <b>0.64s</b> · 射程 <b>560</b></p>
+      </button>
+    </div>
+    <p class="note">手机同样适用：点选卡片后进入战斗</p>
   </div>
 </div>
 
@@ -660,7 +711,52 @@
       DASH_TIME: 0.32,       // 冲刺持续时间
       RING_GAP: 0.55,        // 环形弹幕安全缺口半角（弧度）
     },
-    // 终极技能「超载」：击杀充能，满能量后主动释放
+    // 开局武器：不同弹道 / 节奏决定本局玩法骨架
+    WEAPONS: {
+      pulse: {
+        name: "脉冲核心", icon: "◇", tag: "均衡",
+        desc: "单发稳定、射速均衡，泛用性最强",
+        damage: 10, interval: 0.26, speed: 640, count: 1, pierce: 0, range: 470, spread: 0, bulletR: 4, color: "#3fe5ff",
+      },
+      scatter: {
+        name: "散射核心", icon: "⋔", tag: "近战爆发",
+        desc: "一次 4 发扇形弹，近距离火力极高，射程较短",
+        damage: 6.2, interval: 0.44, speed: 690, count: 4, pierce: 0, range: 380, spread: 0.5, bulletR: 3.4, color: "#9ff8ff",
+      },
+      rail: {
+        name: "轨道激光", icon: "↟", tag: "远程穿透",
+        desc: "单发高伤慢射速，可贯穿 2 个敌人",
+        damage: 26, interval: 0.64, speed: 1320, count: 1, pierce: 2, range: 560, spread: 0, bulletR: 5.5, color: "#7ea8ff",
+      },
+    },
+    // 连杀狂热：短时间连续击杀叠加收益，受击断连
+    COMBO: {
+      TIME: 3.0,              // 连杀保持时间
+      STEP: 0.02,             // 每层连杀增加倍率
+      MAX: 2.0,               // 倍率上限
+    },
+    // 第 5 波后敌人随机获得词缀
+    AFFIX: {
+      START_WAVE: 5,
+      BASE_CHANCE: 0.18,
+      PER_WAVE: 0.015,
+      MAX_CHANCE: 0.55,
+      ELITE_EXTRA: 0.5,       // 精英额外获得第二个词缀的概率
+      SHIELD_HP: 1.4,         // 护盾词缀：生命倍率
+      SHIELD_ARMOR: 0.25,     // 护盾词缀：减伤
+      HASTE: 1.35,            // 迅捷词缀：移速倍率
+      BOOM_COUNT: 8,          // 爆裂词缀：死亡弹幕数量
+      SPLIT_COUNT: 2,         // 分裂词缀：分裂数量
+    },
+    // 守护无人机（召唤流）
+    DRONES: {
+      MAX: 3,
+      ORBIT: 44,              // 环绕半径
+      FIRE_CD: 0.95,          // 单架射击间隔
+      DMG_MUL: 0.45,          // 伤害 = 玩家伤害 × 该系数
+      RANGE_MUL: 0.85,        // 索敌范围倍率
+      SPEED_MUL: 0.95,
+    },
     ULT: {
       MAX: 100,              // 能量上限
       GAIN_KILL: 7,          // 普通敌人击杀充能
@@ -1054,23 +1150,35 @@
   let zoneTimer = 6;
   let crystalTimer = 5;
   let podTimer = 10;
+  let combo = 0;                   // 当前连杀
+  let comboTimer = 0;              // 连杀保持倒计时
+  let comboBest = 0;               // 本局最高连杀
+  let chosenWeapon = "pulse";      // 本局选择的武器
+  let slowmo = 0;                  // Boss 击杀慢动作剩余时间
+  let victoryTimer = 0;            // Boss 击杀后的结算延迟
+  let victoryFlash = 0;            // Boss 击杀白闪
 
   /* =====================================================================
    * 6. 玩家与统计数据
    * ===================================================================*/
-  function makeStats() {
+  function makeStats(weaponKey) {
     const P = CFG.PLAYER;
+    const W = CFG.WEAPONS[weaponKey] || CFG.WEAPONS.pulse;
     return {
       moveSpeed: P.SPEED,
-      fireInterval: P.FIRE_INTERVAL,
-      damage: P.BASE_DAMAGE,
-      bulletSpeed: P.BULLET_SPEED,
-      range: P.RANGE,
+      fireInterval: W.interval,
+      damage: W.damage,
+      bulletSpeed: W.speed,
+      range: W.range,
       crit: P.CRIT,
       critMult: P.CRIT_MULT,
       armor: 0,
-      bulletCount: 1,
-      pierce: 0,
+      bulletCount: W.count,
+      pierce: W.pierce,
+      spread: W.spread,          // 武器固有扇形（散射）
+      bulletR: W.bulletR,
+      bulletColor: W.color,
+      drones: 0,                 // 守护无人机数量
       shieldMax: P.SHIELD_MAX,
       shieldRegen: P.SHIELD_REGEN,
       // 事件 / 进化 / 诅咒修正
@@ -1084,7 +1192,7 @@
 
   function resetGame() {
     const P = CFG.PLAYER;
-    stats = makeStats();
+    stats = makeStats(chosenWeapon);
     player = {
       x: world.w / 2,
       y: world.h / 2,
@@ -1103,6 +1211,8 @@
       trailCd: 0,
       hitFlash: 0,
       energy: 0,                 // 超载能量
+      weapon: chosenWeapon,
+      droneCd: [],               // 每架无人机的射击冷却
     };
 
     bullets = [];
@@ -1140,6 +1250,12 @@
     zoneTimer = 7;
     crystalTimer = 5;
     podTimer = 12;
+    combo = 0;
+    comboTimer = 0;
+    comboBest = 0;
+    slowmo = 0;
+    victoryTimer = 0;
+    victoryFlash = 0;
 
     hideBossBar();
     snapCamera();
@@ -1173,10 +1289,10 @@
       return;
     }
     if (code === "Space" || code === "ShiftLeft" || code === "ShiftRight") {
-      if (state === "menu") { startGame(); return; }
+      if (state === "menu") { openWeaponSelect(); return; }
       if (state === "playing") { tryDash(); return; }
     }
-    if (code === "Enter" && state === "menu") startGame();
+    if (code === "Enter" && state === "menu") openWeaponSelect();
   });
 
   window.addEventListener("keyup", (e) => {
@@ -1285,9 +1401,21 @@
     const btn = e.target.closest("[data-act]");
     if (!btn) return;
     const act = btn.dataset.act;
-    if (act === "start") startGame();
+    if (act === "start") openWeaponSelect();
     else if (act === "resume") togglePause();
     else if (act === "restart") startGame();
+  });
+
+  // 开局武器选择
+  function openWeaponSelect() {
+    document.getElementById("ov-menu").classList.add("hidden");
+    document.getElementById("ov-weapon").classList.remove("hidden");
+    document.getElementById("ov-weapon").scrollTop = 0;
+  }
+
+  document.getElementById("weapon-cards").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-weapon]");
+    if (btn) startGame(btn.dataset.weapon);
   });
 
   // 静音开关
@@ -1457,6 +1585,16 @@
       apply(s, m, p) { p.hp = Math.min(p.hpMax, p.hp + m); },
       desc(s, m, p) {
         return `立即回复生命 <b>${Math.round(m)}</b><br>${Math.ceil(p.hp)} → ${Math.ceil(Math.min(p.hpMax, p.hp + m))}`;
+      },
+    },
+    {
+      id: "drone", name: "守护无人机", icon: "⬢", max: 3, minRarityIndex: 1,
+      base: 0.45, minRarity: 1,
+      apply(s) { s.drones = Math.min(CFG.DRONES.MAX, (s.drones || 0) + 1); },
+      desc(s) {
+        const cur = s.drones || 0;
+        const next = Math.min(CFG.DRONES.MAX, cur + 1);
+        return `环绕无人机 <b>+1 架</b><br>${cur} → ${next} 架（自动索敌辅助射击）`;
       },
     },
     {
@@ -1725,7 +1863,7 @@
     return "tri";
   }
 
-  function spawnEnemy(typeKey, px, py) {
+  function spawnEnemy(typeKey, px, py, noAffix) {
     if (enemies.length >= CFG.LIMITS.ENEMIES) return null;
     const def = CFG.ENEMIES[typeKey];
     if (!def) return null;
@@ -1767,7 +1905,32 @@
       shotCd: rand(1.6, 3.4),   // 小怪首次开火延迟
       isBoss: false,
       dead: false,
+      affixes: [],
     };
+
+    // 第 5 波后：敌人随机获得词缀（精英必带）
+    if (!noAffix && waveNum >= CFG.AFFIX.START_WAVE) {
+      const elite = typeKey === "diamond";
+      const chance = Math.min(
+        CFG.AFFIX.MAX_CHANCE,
+        CFG.AFFIX.BASE_CHANCE + (waveNum - CFG.AFFIX.START_WAVE) * CFG.AFFIX.PER_WAVE
+      );
+      const pool = ["shield", "haste", "split", "boom"];
+      if (elite || Math.random() < chance) {
+        const first = pick(pool);
+        e.affixes.push(first);
+        if (elite && Math.random() < CFG.AFFIX.ELITE_EXTRA) {
+          const rest = pool.filter((a) => a !== first);
+          e.affixes.push(pick(rest));
+        }
+      }
+      if (e.affixes.includes("shield")) {
+        e.hp *= CFG.AFFIX.SHIELD_HP;
+        e.maxHp = e.hp;
+        e.armor = CFG.AFFIX.SHIELD_ARMOR;
+      }
+      if (e.affixes.includes("haste")) e.speed *= CFG.AFFIX.HASTE;
+    }
     enemies.push(e);
     return e;
   }
@@ -1915,7 +2078,7 @@
         const a = (i / count) * TAU;
         let diff = Math.abs(((a - gap + Math.PI) % TAU + TAU) % TAU - Math.PI);
         if (diff < CFG.BOSS.RING_GAP) continue;
-        fireEnemyBullet(b.x, b.y, a, speed, 8 + b.phase * 2, "#ff9f2e", 5);
+        fireEnemyBullet(b.x, b.y, a, speed, 8 + b.phase * 2, "#ff9f2e", 5, true);
       }
       b.ringCd = b.phase === 1 ? 5.5 : b.phase === 2 ? 4.2 : 3.4;
     }
@@ -1928,7 +2091,7 @@
         const arms = b.phase === 2 ? 2 : 3;
         for (let k = 0; k < arms; k++) {
           const ang = b.spin * 2.4 + (k / arms) * TAU;
-          fireEnemyBullet(b.x, b.y, ang, b.phase === 2 ? 170 : 195, 8, "#b06bff", 5);
+          fireEnemyBullet(b.x, b.y, ang, b.phase === 2 ? 170 : 195, 8, "#b06bff", 5, true);
         }
       }
     }
@@ -1963,12 +2126,12 @@
     for (let i = 0; i < count; i++) {
       const t = count === 1 ? 0.5 : i / (count - 1);
       const ang = base + (t - 0.5) * spread;
-      fireEnemyBullet(b.x, b.y, ang, speed, dmg, "#ff4d6d", 6);
+      fireEnemyBullet(b.x, b.y, ang, speed, dmg, "#ff4d6d", 6, true);
     }
     sfxHit();
   }
 
-  function fireEnemyBullet(x, y, ang, speed, dmg, color, r) {
+  function fireEnemyBullet(x, y, ang, speed, dmg, color, r, heavy) {
     if (ebullets.length >= CFG.LIMITS.EBULLETS) return;
     const sp = speed * view.scale;
     ebullets.push({
@@ -1980,6 +2143,7 @@
       color,
       life: 5,
       dead: false,
+      heavy: !!heavy,
     });
   }
 
@@ -2073,22 +2237,36 @@
     player.energy = Math.min(CFG.ULT.MAX, player.energy + v);
   }
 
+  function comboMultiplier() {
+    return Math.min(CFG.COMBO.MAX, 1 + combo * CFG.COMBO.STEP);
+  }
+
   function killEnemy(e) {
     if (e.dead) return;
     e.dead = true;
     kills += 1;
-    score += e.score;
+
+    // 连杀：3 秒内连续击杀提升分数与经验
+    combo += 1;
+    comboTimer = CFG.COMBO.TIME;
+    if (combo > comboBest) comboBest = combo;
+    const mul = comboMultiplier();
+    score += Math.round(e.score * mul);
 
     if (e.isBoss) {
       emit(e.x, e.y, 110, "#ffc857", 420, 6, 1.3);
       emit(e.x, e.y, 60, "#ff4d6d", 340, 5, 1.1);
       shake = Math.max(shake, 26 * CFG.FX.SHAKE);
-      hurtFlash = 0.6;
       sfxExplode(true);
-      for (let i = 0; i < 12; i++) spawnGem(e.x, e.y, e.xp / 12);
       boss = null;
       hideBossBar();
-      endGame(true, "boss");
+      // 击杀特写：慢动作 + 白闪，1.5 秒后再结算
+      slowmo = 1.1;
+      victoryFlash = 1;
+      victoryTimer = 1.5;
+      player.invuln = Math.max(player.invuln, 3);
+      for (let i = 0; i < ebullets.length; i++) ebullets[i].dead = true;
+      for (let i = 0; i < 12; i++) spawnGem(e.x, e.y, e.xp / 12);
       return;
     }
 
@@ -2096,9 +2274,44 @@
     emit(e.x, e.y, e.type === "diamond" ? 22 : 13, e.color, 210, e.type === "diamond" ? 3.4 : 2.6, 0.65);
     shake = Math.max(shake, (e.type === "diamond" ? 6 : 3) * CFG.FX.SHAKE);
     sfxExplode(false);
-    // 风险星域内击杀：经验翻倍
-    const xpVal = e.xp * (inZone(e.x, e.y) ? CFG.EVENTS.ZONE_XP_MUL : 1);
+
+    // 词缀：死亡分裂 / 死亡爆裂
+    const affixes = e.affixes;
+    if (affixes && affixes.length) {
+      for (let i = 0; i < affixes.length; i++) {
+        if (affixes[i] === "split") spawnSplitChildren(e);
+        else if (affixes[i] === "boom") {
+          const n = CFG.AFFIX.BOOM_COUNT;
+          for (let k = 0; k < n; k++) {
+            fireEnemyBullet(e.x, e.y, (k / n) * TAU + Math.random() * 0.2, 170, Math.max(4, e.dmg * 0.45), "#ff9f2e", 4.5);
+          }
+        }
+      }
+    }
+
+    // 风险星域内击杀 + 连杀：经验倍率
+    const xpVal = e.xp * (inZone(e.x, e.y) ? CFG.EVENTS.ZONE_XP_MUL : 1) * mul;
     spawnGem(e.x, e.y, xpVal);
+  }
+
+  // 分裂词缀：死亡后生成两只弱化个体（不带词缀）
+  function spawnSplitChildren(e) {
+    const n = CFG.AFFIX.SPLIT_COUNT;
+    for (let i = 0; i < n; i++) {
+      if (enemies.length >= CFG.LIMITS.ENEMIES) break;
+      const a = Math.random() * TAU;
+      const c = spawnEnemy(e.type, e.x + Math.cos(a) * 26, e.y + Math.sin(a) * 26, true);
+      if (!c) continue;
+      c.maxHp = Math.max(4, e.maxHp * 0.28);
+      c.hp = c.maxHp;
+      c.r = Math.max(5, e.r * 0.72);
+      c.speed *= 1.12;
+      c.xp = e.xp * 0.35;
+      c.score = Math.round(e.score * 0.4);
+      c.affixes = [];
+      c.armor = 0;
+      c.shotCd = 1.6 + Math.random();
+    }
   }
 
   /* =====================================================================
@@ -2179,6 +2392,57 @@
     }
   }
 
+  // 无人机子弹（独立颜色，便于区分）
+  function spawnDroneBullet(x, y, ang) {
+    if (bullets.length >= CFG.LIMITS.BULLETS) return;
+    const sp = stats.bulletSpeed * view.scale * CFG.DRONES.SPEED_MUL;
+    bullets.push({
+      x, y,
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp,
+      r: 3,
+      dmg: stats.damage * CFG.DRONES.DMG_MUL * (1 + (stats.drones - 1) * 0.12),
+      pierce: 0,
+      life: 1.2,
+      dead: false,
+      hit: new Set(),
+      ang,
+      color: "#8dffd6",
+    });
+  }
+
+  // 守护无人机：环绕玩家，自动索敌射击
+  function updateDrones(dt, t) {
+    const n = Math.min(CFG.DRONES.MAX, stats.drones || 0);
+    if (n <= 0) return;
+    const orbit = CFG.DRONES.ORBIT * view.scale;
+    const range = stats.range * view.scale * CFG.DRONES.RANGE_MUL;
+    const range2 = range * range;
+    for (let i = 0; i < n; i++) {
+      if (player.droneCd.length <= i) player.droneCd.push(rand(0.3, 0.8));
+      player.droneCd[i] -= dt;
+      if (player.droneCd[i] > 0) continue;
+      const ang = t * 1.15 + (i / n) * TAU;
+      const dx = player.x + Math.cos(ang) * orbit;
+      const dy = player.y + Math.sin(ang) * orbit;
+      let best = null;
+      let bestD = range2;
+      for (let k = 0; k < enemies.length; k++) {
+        const e = enemies[k];
+        if (e.dead) continue;
+        const d = dist2(e.x, e.y, dx, dy);
+        if (d < bestD) { bestD = d; best = e; }
+      }
+      if (best) {
+        spawnDroneBullet(dx, dy, Math.atan2(best.y - dy, best.x - dx));
+        player.droneCd[i] = CFG.DRONES.FIRE_CD;
+      } else {
+        player.droneCd[i] = 0.2;
+      }
+    }
+  }
+
+
   function nearestEnemy() {
     const range = stats.range * view.scale;
     let best = null;
@@ -2196,7 +2460,7 @@
     const baseAng = Math.atan2(target.y - player.y, target.x - player.x);
     player.facing = baseAng;
     const n = stats.bulletCount;
-    const spread = Math.min(0.8, 0.11 * (n - 1));
+    const spread = Math.min(1.0, 0.11 * (n - 1) + (stats.spread || 0));
 
     for (let i = 0; i < n; i++) {
       if (bullets.length >= CFG.LIMITS.BULLETS) break;
@@ -2219,13 +2483,14 @@
       y: player.y + Math.sin(ang) * (player.r + 4),
       vx: Math.cos(ang) * sp,
       vy: Math.sin(ang) * sp,
-      r: 4,
+      r: stats.bulletR || 4,
       dmg: dmgOverride === undefined ? stats.damage : dmgOverride,
       pierce: stats.pierce,
       life: 1.5,
       dead: false,
       hit: new Set(),
       ang,
+      color: stats.bulletColor || "#3fe5ff",
     });
   }
 
@@ -2249,6 +2514,9 @@
     shake = Math.max(shake, 12 * CFG.FX.SHAKE);
     emit(player.x, player.y, 14, "#ff4d6d", 220, 3, 0.5);
     sfxHurt();
+    // 受击断连杀
+    combo = 0;
+    comboTimer = 0;
 
     if (player.hp <= 0) {
       player.hp = 0;
@@ -2280,6 +2548,7 @@
   // 统一伤害结算：暴击反馈、伤害数字、死亡处理
   function hurtEnemy(e, dmg, crit, silent) {
     if (e.dead) return;
+    if (e.armor) dmg *= 1 - e.armor;
     e.hp -= dmg;
     if (silent) {
       emit(e.x, e.y, 3, "#ffd08a", 140, 2, 0.28);
@@ -2343,6 +2612,22 @@
         }
       }
 
+      // 与小怪弹幕对撞：可击落（Boss 重型弹不可击落）
+      if (!b.dead) {
+        for (let j = ebullets.length - 1; j >= 0; j--) {
+          const eb = ebullets[j];
+          if (eb.dead || eb.heavy) continue;
+          const rr = b.r + eb.r;
+          if (dist2(b.x, b.y, eb.x, eb.y) <= rr * rr) {
+            eb.dead = true;
+            emit(eb.x, eb.y, 5, "#b9f7ff", 150, 2, 0.28);
+            addEnergy(0.6);
+            if (b.pierce > 0) b.pierce -= 1;
+            else { b.dead = true; break; }
+          }
+        }
+      }
+
       // 与能量水晶碰撞（可打碎）
       if (!b.dead) {
         for (let j = 0; j < crystals.length; j++) {
@@ -2389,10 +2674,10 @@
   /* =====================================================================
    * 14. 游戏流程（开始 / 暂停 / 结束 / 重开）
    * ===================================================================*/
-  function startGame() {
+  function startGame(weaponKey) {
+    if (weaponKey && CFG.WEAPONS[weaponKey]) chosenWeapon = weaponKey;
     resetGame();
     hideAllOverlays();
-    document.getElementById("ov-menu").classList.add("hidden");
     document.getElementById("hud").classList.remove("hidden");
 
     // 避免按钮保持焦点后被空格 / 回车重复触发
@@ -2446,6 +2731,7 @@
       <div><span>击杀</span><b>${kills}</b></div>
       <div><span>最高波次</span><b>${waveNum}</b></div>
       <div><span>等级</span><b>LV ${level}</b></div>
+      <div><span>最高连杀</span><b>${comboBest}</b></div>
       <div><span>强化数量</span><b>${Object.values(stacks).reduce((a, b) => a + b, 0)}</b></div>
     `;
 
@@ -2463,7 +2749,7 @@
   }
 
   function hideAllOverlays() {
-    ["ov-menu", "ov-pause", "ov-upgrade", "ov-result"].forEach((id) => {
+    ["ov-menu", "ov-weapon", "ov-pause", "ov-upgrade", "ov-result"].forEach((id) => {
       document.getElementById(id).classList.add("hidden");
     });
   }
@@ -2496,6 +2782,17 @@
     setText(document.getElementById("ui-score"), String(score));
     setText(document.getElementById("ui-kills"), String(kills));
     setText(document.getElementById("ui-wave"), String(waveNum));
+    setText(document.getElementById("ui-weapon"), CFG.WEAPONS[chosenWeapon].name);
+
+    // 连杀
+    const comboEl = document.getElementById("ui-combo");
+    if (combo >= 2 && comboTimer > 0) {
+      comboEl.classList.remove("hidden");
+      setText(document.getElementById("ui-combo-n"), String(combo));
+      setText(document.getElementById("ui-combo-m"), `×${comboMultiplier().toFixed(2)}`);
+    } else {
+      comboEl.classList.add("hidden");
+    }
 
     // 超载能量
     const ePct = clamp(player.energy / CFG.ULT.MAX, 0, 1) * 100;
@@ -2721,9 +3018,32 @@
    * 16. 更新主逻辑
    * ===================================================================*/
   function update(dt) {
+    const rawDt = dt;
+
+    // Boss 击杀特写：慢动作 + 延迟结算
+    if (victoryTimer > 0) {
+      victoryTimer -= rawDt;
+      victoryFlash = Math.max(0, victoryFlash - rawDt * 0.75);
+      if (victoryTimer <= 0) {
+        victoryFlash = 0;
+        endGame(true, "boss");
+        return;
+      }
+    }
+    if (slowmo > 0) {
+      slowmo = Math.max(0, slowmo - rawDt);
+      dt *= 0.3;
+    }
+
     elapsed += dt;
     timeLeft -= dt;
     if (ultTimer > 0) ultTimer = Math.max(0, ultTimer - dt);
+
+    // 连杀保持计时
+    if (comboTimer > 0) {
+      comboTimer -= dt;
+      if (comboTimer <= 0) combo = 0;
+    }
 
     // 进化「虚空回响」：周期环形弹幕
     if (stats.echoBurst) {
@@ -2750,6 +3070,7 @@
     updateCamera(dt);
     if (state !== "playing") return;
 
+    updateDrones(dt, elapsed);
     updateEnemies(dt, elapsed);
     if (state !== "playing") { updateParticles(dt); return; }
 
@@ -2773,7 +3094,7 @@
       refreshHud();
     }
 
-    if (timeLeft <= 0) {
+    if (timeLeft <= 0 && victoryTimer <= 0) {
       timeLeft = 0;
       endGame(true, "time");
     }
@@ -2931,11 +3252,11 @@
     }
     ctx.stroke();
 
-    ctx.fillStyle = "#d8fbff";
     for (let i = 0; i < bullets.length; i++) {
       const b = bullets[i];
       if (b.x < cull.x0 || b.x > cull.x1 || b.y < cull.y0 || b.y > cull.y1) continue;
-      drawGlow("#3fe5ff", b.x, b.y, b.r * 4.2, 0.5);
+      drawGlow(b.color || "#3fe5ff", b.x, b.y, b.r * 4.2, 0.5);
+      ctx.fillStyle = "#eaffff";
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, TAU);
       ctx.fill();
@@ -3066,6 +3387,59 @@
         ctx.fillStyle = e.color;
         ctx.fillRect(-w / 2, -e.r - 10, w * pct, 3.5);
       }
+
+      // 词缀标识：护盾环 + 顶部彩色标记点
+      if (e.affixes && e.affixes.length) {
+        if (e.affixes.includes("shield")) {
+          ctx.strokeStyle = "rgba(126, 240, 255, 0.7)";
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(0, 0, e.r + 6, 0, TAU);
+          ctx.stroke();
+        }
+        const marks = { shield: "#7ef0ff", haste: "#ffd166", split: "#c58bff", boom: "#ff9f2e" };
+        for (let k = 0; k < e.affixes.length; k++) {
+          ctx.fillStyle = marks[e.affixes[k]] || "#fff";
+          ctx.beginPath();
+          ctx.arc(0, -e.r - 15 - k * 6, 2.2, 0, TAU);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+  }
+
+  // 守护无人机
+  function drawDrones(t) {
+    const n = Math.min(CFG.DRONES.MAX, stats.drones || 0);
+    if (!n || !player) return;
+    const orbit = CFG.DRONES.ORBIT * view.scale;
+    ctx.strokeStyle = "rgba(141, 255, 214, 0.10)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, orbit, 0, TAU);
+    ctx.stroke();
+    for (let i = 0; i < n; i++) {
+      const ang = t * 1.15 + (i / n) * TAU;
+      const x = player.x + Math.cos(ang) * orbit;
+      const y = player.y + Math.sin(ang) * orbit;
+      drawGlow("#8dffd6", x, y, 20, 0.55);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(ang);
+      ctx.fillStyle = "rgba(141, 255, 214, 0.22)";
+      ctx.strokeStyle = "#8dffd6";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * TAU;
+        const px = Math.cos(a) * 5;
+        const py = Math.sin(a) * 5;
+        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
       ctx.restore();
     }
   }
@@ -3298,6 +3672,7 @@
       drawBullets();
       drawEnemies(t);
       drawPlayer(t);
+      drawDrones(t);
       drawPulses();
       drawEnemyBullets();
       drawParticles();
@@ -3317,6 +3692,12 @@
       const a = clamp(hurtFlash, 0, 1) * 0.2 * CFG.FX.FLASH;
       ctx.fillStyle = `rgba(255, 40, 70, ${a})`;
       ctx.fillRect(-40, -40, view.w + 80, view.h + 80);
+    }
+
+    // Boss 击杀白闪
+    if (victoryFlash > 0.01) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.45 * victoryFlash})`;
+      ctx.fillRect(0, 0, view.w, view.h);
     }
 
     ctx.restore();
