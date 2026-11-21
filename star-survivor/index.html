@@ -692,6 +692,7 @@
       <li>子弹可以<b>击落小怪弹幕</b>；3 秒内连续击杀叠加<b>连杀倍率</b>（最高 ×2）</li>
       <li><b>无尽远航</b>：每 10 波迎战 Boss，击破后进入更强星域；每 3 波停靠<b>星港</b>用星币补给</li>
       <li><b>悬赏任务</b>：完成限时目标获得星币；精英掉落<b>能量核心</b>，按 <b>B</b> 建造炮塔 / 缓速场</li>
+      <li>满足条件会出现<b>进化卡</b>，三把武器各有两条专属分支</li>
       <li>留意地图上的<b>风险星域</b>（经验翻倍但持续掉血）与<b>补给舱 / 能量水晶</b></li>
       <li>武器自动锁定最近的敌人开火</li>
       <li>手机：左侧摇杆移动，右侧按钮超载 / 冲刺 / 暂停</li>
@@ -1396,6 +1397,10 @@
       enemySpeedMul: 1,       // 敌人移速倍率（诅咒）
       explodeOnHit: false,    // 进化「裂变弹」
       echoBurst: false,       // 进化「虚空回响」
+      twinPulse: false,       // 脉冲分支「双子脉冲」
+      pulseBlast: false,      // 脉冲分支「湮灭脉冲」
+      scatterBlast: false,    // 散射分支「霰爆核心」
+      railShard: false,       // 轨道分支「裂变轨道」
     };
   }
 
@@ -1950,6 +1955,66 @@
         return `每 <b>4 秒</b>自动释放一圈回响弹<br>共 8 发，每发 <b>50%</b> 伤害`;
       },
     },
+    // ===== 武器进化分支：脉冲 =====
+    {
+      id: "evo_twin", name: "双子脉冲", icon: "≋", max: 1, evolution: true, weapon: "pulse",
+      require: (s) => s.bulletCount >= 2,
+      apply(s) { s.twinPulse = true; },
+      desc() {
+        return `<b>每次射击</b>额外发射 2 道侧向脉冲<br>每道造成 <b>70%</b> 伤害`;
+      },
+    },
+    {
+      id: "evo_pulseblast", name: "湮灭脉冲", icon: "✺", max: 1, evolution: true, weapon: "pulse",
+      require: (s) => s.pierce >= 1,
+      apply(s) { s.pulseBlast = true; },
+      desc() {
+        return `脉冲命中引发半径 56 的湮灭爆炸<br>对周围敌人造成 <b>45%</b> 伤害`;
+      },
+    },
+    // ===== 武器进化分支：散射 =====
+    {
+      id: "evo_scatterblast", name: "霰爆核心", icon: "✷", max: 1, evolution: true, weapon: "scatter",
+      require: (s) => s.crit >= 0.2,
+      apply(s) { s.scatterBlast = true; },
+      desc() {
+        return `每颗弹丸命中引发半径 38 的小爆炸<br>造成 <b>35%</b> 伤害，清群更快`;
+      },
+    },
+    {
+      id: "evo_scatterstorm", name: "星霰风暴", icon: "❋", max: 1, evolution: true, weapon: "scatter",
+      require: (s) => s.bulletCount >= 6,
+      apply(s) {
+        s.bulletCount += 3;
+        s.damage *= 0.88;
+        s.spread = (s.spread || 0) + 0.06;
+      },
+      desc() {
+        return `弹丸 <b>+3</b>，散射范围更宽<br>单发伤害 <b>-12%</b>，形成弹幕风暴`;
+      },
+    },
+    // ===== 武器进化分支：轨道 =====
+    {
+      id: "evo_rail_lance", name: "贯穿轨道", icon: "⊹", max: 1, evolution: true, weapon: "rail",
+      require: (s) => s.pierce >= 4,
+      apply(s) {
+        s.pierce += 3;
+        s.damage *= 1.3;
+        s.bulletR += 1.2;
+        s.bulletSpeed *= 1.1;
+      },
+      desc() {
+        return `穿透 <b>+3</b>，伤害 <b>+30%</b><br>弹体更宽、弹速更快，一穿到底`;
+      },
+    },
+    {
+      id: "evo_railshard", name: "裂变轨道", icon: "⁂", max: 1, evolution: true, weapon: "rail",
+      require: (s) => s.damage >= 40,
+      apply(s) { s.railShard = true; },
+      desc() {
+        return `轨道命中后分裂 1 枚碎片<br>自动射向附近敌人，造成 <b>50%</b> 伤害`;
+      },
+    },
   ];
 
   const ALL_DEFS = UPGRADES.concat(EVOLUTIONS);
@@ -1992,7 +2057,10 @@
     const cards = [];
 
     // 1) 进化：满足组合条件时，大概率作为第一张卡出现
-    const evoPool = EVOLUTIONS.filter((d) => (stacks[d.id] || 0) < d.max && d.require(stats));
+    const evoPool = EVOLUTIONS.filter((d) =>
+      (stacks[d.id] || 0) < d.max &&
+      (!d.weapon || d.weapon === chosenWeapon) &&
+      d.require(stats));
     if (evoPool.length && Math.random() < 0.75) {
       const def = pick(evoPool);
       chosen.add(def.id);
@@ -2781,6 +2849,12 @@
       spawnPlayerBullet(ang);
     }
 
+    // 进化「双子脉冲」：每次射击追加两道侧向脉冲
+    if (stats.twinPulse) {
+      spawnPlayerBullet(baseAng - 0.12, stats.damage * 0.7);
+      spawnPlayerBullet(baseAng + 0.12, stats.damage * 0.7);
+    }
+
     // 枪口火花
     emit(player.x + Math.cos(baseAng) * 14, player.y + Math.sin(baseAng) * 14, 2, "#b9f7ff", 90, 2, 0.22);
     sfxShoot();
@@ -2896,9 +2970,9 @@
   }
 
   // 进化「裂变弹」：命中点爆炸
-  function explodeAt(x, y, dmg, source) {
-    const R = 60 * view.scale;
-    emit(x, y, 14, "#ffb238", 240, 3, 0.5);
+  function explodeAt(x, y, dmg, source, radius, color) {
+    const R = (radius || 60) * view.scale;
+    emit(x, y, 14, color || "#ffb238", 240, 3, 0.5);
     for (let i = 0; i < enemies.length; i++) {
       const o = enemies[i];
       if (o.dead || o === source) continue;
@@ -2908,6 +2982,30 @@
         if (state !== "playing") return;
       }
     }
+  }
+
+  // 进化「裂变轨道」：命中后分裂一枚追踪碎片
+  function spawnRailShard(b, hit) {
+    if (bullets.length >= CFG.LIMITS.BULLETS) return;
+    let best = null;
+    let bestD = (340 * view.scale) * (340 * view.scale);
+    for (let i = 0; i < enemies.length; i++) {
+      const o = enemies[i];
+      if (o.dead || o === hit) continue;
+      const d = dist2(b.x, b.y, o.x, o.y);
+      if (d < bestD) { bestD = d; best = o; }
+    }
+    if (!best) return;
+    const ang = Math.atan2(best.y - b.y, best.x - b.x);
+    const sp = stats.bulletSpeed * view.scale * 0.95;
+    bullets.push({
+      x: b.x, y: b.y,
+      vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+      r: 3, dmg: b.dmg * 0.5, pierce: 0, life: 0.9,
+      dead: false, hit: new Set(), ang,
+      color: "#c0a8ff", shard: true,
+    });
+    emit(b.x, b.y, 4, "#c0a8ff", 140, 2, 0.25);
   }
 
   function updateBullets(dt) {
@@ -2934,7 +3032,12 @@
             const crit = Math.random() < stats.crit;
             const dmg = b.dmg * (crit ? stats.critMult : 1);
             hurtEnemy(e, dmg, crit, false);
-            if (stats.explodeOnHit && state === "playing") explodeAt(b.x, b.y, b.dmg * 0.6, e);
+            if (state === "playing") {
+              if (stats.explodeOnHit) explodeAt(b.x, b.y, b.dmg * 0.6, e);
+              if (stats.pulseBlast) explodeAt(b.x, b.y, b.dmg * 0.45, e, 56, "#8be9ff");
+              if (stats.scatterBlast) explodeAt(b.x, b.y, b.dmg * 0.35, e, 38, "#ffc857");
+              if (stats.railShard && !b.shard) spawnRailShard(b, e);
+            }
 
             if (b.pierce > 0) {
               b.pierce -= 1;
