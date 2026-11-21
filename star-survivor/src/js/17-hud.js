@@ -6,17 +6,18 @@
   }
 
   function refreshHud(force) {
-    if (!player) return;
-    const hpPct = clamp(player.hp / player.hpMax, 0, 1) * 100;
-    const shPct = clamp(player.shield / stats.shieldMax, 0, 1) * 100;
+    const me = getLocalPlayer();
+    if (!me) return;
+    const hpPct = clamp(me.hp / me.hpMax, 0, 1) * 100;
+    const shPct = clamp(me.shield / stats.shieldMax, 0, 1) * 100;
     const xpPct = clamp(xp / xpNeed, 0, 1) * 100;
 
     document.getElementById("ui-hp").style.width = hpPct.toFixed(1) + "%";
     document.getElementById("ui-shield").style.width = shPct.toFixed(1) + "%";
     document.getElementById("ui-xp").style.width = xpPct.toFixed(1) + "%";
 
-    setText(document.getElementById("ui-hp-text"), `${Math.ceil(player.hp)} / ${player.hpMax}`);
-    setText(document.getElementById("ui-shield-text"), `${Math.ceil(player.shield)} / ${Math.round(stats.shieldMax)}`);
+    setText(document.getElementById("ui-hp-text"), `${Math.ceil(me.hp)} / ${me.hpMax}`);
+    setText(document.getElementById("ui-shield-text"), `${Math.ceil(me.shield)} / ${Math.round(stats.shieldMax)}`);
     setText(document.getElementById("ui-xp-text"), `${Math.floor(xp)} / ${xpNeed}`);
     setText(document.getElementById("ui-level"), String(level));
     setText(document.getElementById("ui-score"), String(score));
@@ -28,7 +29,7 @@
       `星域 ${chapter} · ${waveNum}/${CFG.RUN.CHAPTER_WAVES}` +
       (chapterMod ? ` · ${chapterMod.name}` : ""));
     document.getElementById("lowhp").classList.toggle(
-      "on", state === "playing" && player.hp / player.hpMax < 0.3);
+      "on", state === "playing" && me.hp / me.hpMax < 0.3);
     document.body.classList.toggle("in-overlay", state !== "playing");
     const power = playerPowerMul();
     setText(document.getElementById("ui-weapon"),
@@ -52,10 +53,10 @@
     }
 
     // 超载能量
-    const ePct = clamp(player.energy / CFG.ULT.MAX, 0, 1) * 100;
+    const ePct = clamp(me.energy / CFG.ULT.MAX, 0, 1) * 100;
     document.getElementById("ui-ult").style.width = ePct.toFixed(1) + "%";
     const ultBar = document.getElementById("ult-bar");
-    const ready = player.energy >= CFG.ULT.MAX;
+    const ready = me.energy >= CFG.ULT.MAX;
     ultBar.classList.toggle("ready", ready);
     document.getElementById("ult-btn").classList.toggle("ready", ready);
     setText(document.getElementById("ui-ult-text"),

@@ -62,6 +62,14 @@
     };
   }
 
+  // 取本地玩家；槽位缺失时回退到 player 别名
+  function getLocalPlayer() {
+    for (let i = 0; i < players.length; i++) {
+      if (players[i].id === localPlayerId) return players[i];
+    }
+    return player;
+  }
+
   function resetGame() {
     stats = makeStats(chosenWeapon);
     localPlayerId = "p1";

@@ -387,19 +387,19 @@
   }
 
   // 守护无人机
-  function drawDrones(t) {
+  function drawDrones(t, p) {
     const n = Math.min(CFG.DRONES.MAX, stats.drones || 0);
-    if (!n || !player) return;
+    if (!n || !p) return;
     const orbit = CFG.DRONES.ORBIT * view.scale;
     ctx.strokeStyle = rgbaOf(THEME.mint, 0.12);
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(player.x, player.y, orbit, 0, TAU);
+    ctx.arc(p.x, p.y, orbit, 0, TAU);
     ctx.stroke();
     for (let i = 0; i < n; i++) {
       const ang = t * 1.15 + (i / n) * TAU;
-      const x = player.x + Math.cos(ang) * orbit;
-      const y = player.y + Math.sin(ang) * orbit;
+      const x = p.x + Math.cos(ang) * orbit;
+      const y = p.y + Math.sin(ang) * orbit;
       drawGlow(THEME.mint, x, y, 20, 0.55);
       ctx.save();
       ctx.translate(x, y);
@@ -421,35 +421,35 @@
     }
   }
 
-  function drawPlayer(t) {
-    if (!player) return;
-    const blink = player.invuln > 0 && Math.floor(t * 18) % 2 === 0;
-    const red = player.hitFlash > 0;
+  function drawPlayer(t, p) {
+    if (!p) return;
+    const blink = p.invuln > 0 && Math.floor(t * 18) % 2 === 0;
+    const red = p.hitFlash > 0;
 
     // 护盾环
-    if (player.shield > 0.5) {
-      ctx.strokeStyle = rgbaOf(THEME.cyan, 0.18 + (player.shield / stats.shieldMax) * 0.25);
+    if (p.shield > 0.5) {
+      ctx.strokeStyle = rgbaOf(THEME.cyan, 0.18 + (p.shield / stats.shieldMax) * 0.25);
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(player.x, player.y, player.r + 7, 0, TAU);
+      ctx.arc(p.x, p.y, p.r + 7, 0, TAU);
       ctx.stroke();
     }
 
     ctx.save();
-    ctx.translate(player.x, player.y);
-    ctx.rotate(player.facing + Math.PI / 2);
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.facing + Math.PI / 2);
 
     // 外发光使用缓存贴图（原先每帧一次 shadowBlur 16）
-    drawGlow(red ? THEME.danger : THEME.cyan, 0, 0, player.r * 3.2, 0.45);
+    drawGlow(red ? THEME.danger : THEME.cyan, 0, 0, p.r * 3.2, 0.45);
     ctx.globalAlpha = blink ? 0.45 : 1;
 
     // 外层三角
     ctx.strokeStyle = red ? rgbaOf(THEME.danger, 0.9) : THEME.cyanSoft;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(0, -player.r - 4);
-    ctx.lineTo(player.r * 0.85, player.r * 0.75);
-    ctx.lineTo(-player.r * 0.85, player.r * 0.75);
+    ctx.moveTo(0, -p.r - 4);
+    ctx.lineTo(p.r * 0.85, p.r * 0.75);
+    ctx.lineTo(-p.r * 0.85, p.r * 0.75);
     ctx.closePath();
     ctx.fillStyle = red ? rgbaOf(THEME.danger, 0.3) : rgbaOf(THEME.cyan, 0.25);
     ctx.fill();
@@ -458,7 +458,7 @@
     // 内核
     ctx.fillStyle = red ? rgbaOf(THEME.danger, 0.35) : THEME.cyanSoft;
     ctx.beginPath();
-    ctx.arc(0, 0, player.r * 0.42, 0, TAU);
+    ctx.arc(0, 0, p.r * 0.42, 0, TAU);
     ctx.fill();
     ctx.restore();
     ctx.globalAlpha = 1;
@@ -737,6 +737,7 @@
   }
 
   function render(t) {
+    const me = getLocalPlayer();
     cull.x0 = camera.x - 120;
     cull.y0 = camera.y - 120;
     cull.x1 = camera.x + view.w + 120;
@@ -749,7 +750,7 @@
 
     drawBackground(t);
 
-    if (player && state !== "menu") {
+    if (me && state !== "menu") {
       ctx.save();
       ctx.translate(-camera.x, -camera.y);
       drawWorldBounds();
@@ -763,8 +764,8 @@
       drawTrader(t);
       drawBullets();
       drawEnemies(t);
-      drawPlayer(t);
-      drawDrones(t);
+      drawPlayer(t, me);
+      drawDrones(t, me);
       drawTurrets(t);
       drawPulses();
       drawEnemyBullets();
