@@ -106,6 +106,11 @@
   .bar.xp { height: 8px; }
   .bar.xp i { background: linear-gradient(90deg, #00d0a8, #8bffdc); box-shadow: 0 0 10px rgba(0, 220, 170, 0.5); }
   .bar.xp span { font-size: 8px; }
+  .bar.ult { height: 10px; }
+  .bar.ult i { background: linear-gradient(90deg, #ff8a1f, #ffe08a); box-shadow: 0 0 12px rgba(255, 180, 60, 0.55); }
+  .bar.ult.ready i { animation: ultPulse 1.1s ease-in-out infinite; }
+  .bar.ult span { font-size: 8px; letter-spacing: 1px; }
+  @keyframes ultPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.45); } }
 
   .hud-right { text-align: right; }
   .timer {
@@ -334,6 +339,14 @@
   .card.rarity-rare .card-rt { color: var(--rarity-rare); }
   .card.rarity-epic .card-rt { color: var(--rarity-epic); }
   .card.rarity-legend .card-rt { color: var(--rarity-legend); }
+  /* 诅咒卡：负面换强力 */
+  .card.curse { border-color: rgba(255, 59, 92, 0.9); box-shadow: 0 0 24px rgba(255, 59, 92, 0.22); background: linear-gradient(180deg, rgba(46, 14, 26, 0.95), rgba(14, 8, 16, 0.98)); }
+  .card.curse .card-ic, .card.curse .card-rt { color: #ff6b86; }
+  /* 进化卡：组合条件解锁 */
+  .card.evo { border-color: rgba(255, 214, 102, 0.95); box-shadow: 0 0 30px rgba(255, 200, 87, 0.32); background: linear-gradient(180deg, rgba(44, 34, 12, 0.92), rgba(12, 14, 24, 0.98)); }
+  .card.evo .card-ic, .card.evo .card-rt { color: #ffd666; }
+  .buff-row.curse .ic, .buff-row.curse .nm { color: #ff8098; }
+  .buff-row.evo .ic, .buff-row.evo .nm { color: #ffd666; }
 
   .card h3 { margin: 0; font-size: 15px; letter-spacing: 1px; font-weight: 600; }
   .card p { margin: 0; font-size: 11.5px; line-height: 1.75; color: #9db6ce; }
@@ -426,12 +439,12 @@
     bottom: max(24px, env(safe-area-inset-bottom));
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     z-index: 10;
   }
   .touch-btns button {
-    width: 66px;
-    height: 66px;
+    width: 58px;
+    height: 58px;
     border-radius: 50%;
     border: 1px solid rgba(63, 229, 255, 0.3);
     background: rgba(10, 24, 44, 0.66);
@@ -443,6 +456,18 @@
   }
   .touch-btns #dash-btn { box-shadow: 0 0 18px rgba(63, 229, 255, 0.15); }
   .touch-btns #pause-btn { width: 46px; height: 46px; align-self: flex-end; font-size: 12px; }
+  .touch-btns #ult-btn {
+    border-color: rgba(255, 176, 60, 0.35);
+    color: #ffc857;
+    box-shadow: 0 0 18px rgba(255, 170, 50, 0.12);
+    opacity: 0.55;
+  }
+  .touch-btns #ult-btn.ready {
+    opacity: 1;
+    border-color: rgba(255, 200, 87, 0.95);
+    background: rgba(70, 44, 8, 0.7);
+    animation: ultPulse 1.1s ease-in-out infinite;
+  }
   body.touch .mute { bottom: auto; top: max(96px, calc(env(safe-area-inset-top) + 88px)); right: max(12px, env(safe-area-inset-right)); width: 34px; height: 34px; font-size: 14px; }
 
   /* ========== 响应式 ========== */
@@ -479,6 +504,7 @@
     </div>
     <div class="bar shield"><i id="ui-shield"></i><span id="ui-shield-text">50 / 50</span></div>
     <div class="bar xp"><i id="ui-xp"></i><span id="ui-xp-text">0 / 8</span></div>
+    <div class="bar ult" id="ult-bar"><i id="ui-ult"></i><span id="ui-ult-text">超载 0%</span></div>
   </div>
   <div class="hud-right">
     <div class="timer" id="ui-timer">10:00</div>
@@ -510,8 +536,10 @@
       <li><b>WASD / 方向键</b> 移动（斜向速度已归一化）</li>
       <li><b>空格 / Shift</b> 冲刺，短暂无敌并带有冷却</li>
       <li><b>ESC</b> 暂停 / 继续（切出窗口会自动暂停）</li>
+      <li><b>E / 超载按钮</b> 能量满时释放：清除弹幕、击退周围敌人、短暂减速战场</li>
+      <li>留意地图上的<b>风险星域</b>（经验翻倍但持续掉血）与<b>补给舱 / 能量水晶</b></li>
       <li>武器自动锁定最近的敌人开火</li>
-      <li>手机：左侧摇杆移动，右侧按钮冲刺 / 暂停</li>
+      <li>手机：左侧摇杆移动，右侧按钮超载 / 冲刺 / 暂停</li>
     </ul>
     <p class="note">音效由 Web Audio 实时合成，点击开始后才会启用</p>
   </div>
@@ -556,6 +584,7 @@
 <div id="touch">
   <div id="joystick"><div id="knob"></div></div>
   <div class="touch-btns">
+    <button id="ult-btn">超载</button>
     <button id="dash-btn">冲刺</button>
     <button id="pause-btn">II</button>
   </div>
@@ -630,6 +659,37 @@
       DASH_WARN: 0.55,       // 冲刺预警时间
       DASH_TIME: 0.32,       // 冲刺持续时间
       RING_GAP: 0.55,        // 环形弹幕安全缺口半角（弧度）
+    },
+    // 终极技能「超载」：击杀充能，满能量后主动释放
+    ULT: {
+      MAX: 100,              // 能量上限
+      GAIN_KILL: 7,          // 普通敌人击杀充能
+      GAIN_ELITE: 18,        // 精英击杀充能
+      RADIUS: 360,           // 爆发伤害半径
+      DAMAGE: 120,           // 爆发伤害
+      SLOW: 0.38,            // 敌人在超载期间的移速/弹速倍率
+      SLOW_TIME: 3.0,        // 减速持续时间
+      INVULN: 1.0,           // 释放时的无敌时间
+      CLEAR_MARGIN: 140,     // 清弹范围：镜头外扩边距
+    },
+    // 大世界随机事件：风险星域 / 能量水晶 / 补给舱
+    EVENTS: {
+      ZONE_INTERVAL: 24,     // 风险星域生成间隔（秒）
+      ZONE_LIFE: 18,         // 风险星域持续
+      ZONE_RADIUS: 150,      // 半径
+      ZONE_DPS: 6,           // 圈内每秒掉血
+      ZONE_XP_MUL: 2,        // 圈内击杀经验倍率
+      MAX_ZONES: 2,
+      CRYSTAL_INTERVAL: 13,  // 能量水晶生成间隔
+      CRYSTAL_HP: 45,
+      CRYSTAL_R: 17,
+      CRYSTAL_GEMS: 4,       // 击碎掉落经验球数量
+      MAX_CRYSTALS: 4,
+      POD_INTERVAL: 30,      // 补给舱生成间隔
+      POD_R: 15,
+      POD_HEAL: 25,          // 拾取回复生命
+      POD_ENERGY: 45,        // 拾取回复超载能量
+      MAX_PODS: 1,
     },
     LIMITS: {
       ENEMIES: 140,               // 同屏敌人上限
@@ -875,6 +935,12 @@
     tone(70, 38, 1.1, "sawtooth", 0.22, 320);
     noiseBurst(0.8, 0.2, 900, 100);
   }
+  function sfxUlt() {
+    if (!audio.ctx || audio.muted) return;
+    tone(180, 720, 0.35, "sawtooth", 0.13, 3000);
+    setTimeout(() => tone(760, 240, 0.35, "sine", 0.11, 4000), 90);
+    noiseBurst(0.3, 0.18, 2400, 200);
+  }
   function sfxWin() {
     [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, f, 0.22, "triangle", 0.16, 5000), i * 120));
   }
@@ -934,6 +1000,10 @@
   let particles = [];
   let texts = [];
   let gems = [];
+  let zones = [];                  // 风险星域
+  let crystals = [];               // 可破坏能量水晶
+  let pods = [];                   // 补给舱
+  let pulses = [];                 // 超载冲击波
   let stacks = {};                 // 已获得的强化堆叠
   let boss = null;
 
@@ -951,8 +1021,14 @@
   let shake = 0;
   let hurtFlash = 0;
   let nextEnemyId = 1;
+  let nextPropId = 1;
   let lastFrame = performance.now();
   let upgradeCards = [];
+  let ultTimer = 0;                // 超载减速剩余时间
+  let echoTimer = 0;               // 进化「虚空回响」计时
+  let zoneTimer = 6;
+  let crystalTimer = 5;
+  let podTimer = 10;
 
   /* =====================================================================
    * 6. 玩家与统计数据
@@ -972,6 +1048,12 @@
       pierce: 0,
       shieldMax: P.SHIELD_MAX,
       shieldRegen: P.SHIELD_REGEN,
+      // 事件 / 进化 / 诅咒修正
+      xpMul: 1,               // 经验获取倍率
+      takenMul: 1,            // 受到伤害倍率（诅咒）
+      enemySpeedMul: 1,       // 敌人移速倍率（诅咒）
+      explodeOnHit: false,    // 进化「裂变弹」
+      echoBurst: false,       // 进化「虚空回响」
     };
   }
 
@@ -995,6 +1077,7 @@
       facing: -Math.PI / 2,
       trailCd: 0,
       hitFlash: 0,
+      energy: 0,                 // 超载能量
     };
 
     bullets = [];
@@ -1003,6 +1086,10 @@
     particles = [];
     texts = [];
     gems = [];
+    zones = [];
+    crystals = [];
+    pods = [];
+    pulses = [];
     stacks = {};
     boss = null;
 
@@ -1020,8 +1107,14 @@
     shake = 0;
     hurtFlash = 0;
     nextEnemyId = 1;
+    nextPropId = 1;
     upgradeCards = [];
     musicTimer = 0;
+    ultTimer = 0;
+    echoTimer = 0;
+    zoneTimer = 7;
+    crystalTimer = 5;
+    podTimer = 12;
 
     hideBossBar();
     snapCamera();
@@ -1048,6 +1141,10 @@
 
     if (code === "Escape") {
       if (state === "playing" || state === "paused") togglePause();
+      return;
+    }
+    if (code === "KeyE") {
+      if (state === "playing") activateUltimate();
       return;
     }
     if (code === "Space" || code === "ShiftLeft" || code === "ShiftRight") {
@@ -1084,6 +1181,7 @@
     const knob = document.getElementById("knob");
     const dashBtn = document.getElementById("dash-btn");
     const pauseBtn = document.getElementById("pause-btn");
+    const ultBtn = document.getElementById("ult-btn");
 
     const RADIUS = 46;
 
@@ -1133,6 +1231,10 @@
     dashBtn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       if (state === "playing") tryDash();
+    });
+    ultBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      if (state === "playing") activateUltimate();
     });
     pauseBtn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
@@ -1255,7 +1357,7 @@
       }
       if (d < collect) {
         gems.splice(i, 1);
-        gainXp(g.value);
+        gainXp(Math.max(1, Math.round(g.value * stats.xpMul)));
         if (state !== "playing") return;   // 升级界面打开后停止本帧后续
       }
     }
@@ -1365,7 +1467,58 @@
         return `攻击范围 <b>+${Math.round(m * 100)}%</b><br>${Math.round(s.range)} → ${Math.round(s.range * (1 + m))}`;
       },
     },
+    /* ---------- 诅咒强化：强力但带代价 ---------- */
+    {
+      id: "curse_blood", name: "血债契约", icon: "☠", max: 2, base: 0.3, curse: true,
+      apply(s, m) { s.damage *= 1 + m; s.takenMul *= 1.12; },
+      desc(s, m) {
+        return `子弹伤害 <b>+${Math.round(m * 100)}%</b><br>代价：受到伤害 <b>+12%</b>`;
+      },
+    },
+    {
+      id: "curse_frenzy", name: "狂乱低语", icon: "☠", max: 1, base: 0.28, curse: true,
+      apply(s, m) { s.fireInterval = Math.max(0.06, s.fireInterval / (1 + m)); s.enemySpeedMul *= 1.12; },
+      desc() {
+        return `射速 <b>+28%</b><br>代价：敌人移速 <b>+12%</b>`;
+      },
+    },
+    {
+      id: "curse_greed", name: "贪欲之眼", icon: "☠", max: 2, base: 0.4, curse: true,
+      apply(s, m) { s.xpMul *= 1 + m; s.takenMul *= 1.12; },
+      desc(s, m) {
+        return `经验获取 <b>+${Math.round(m * 100)}%</b><br>代价：受到伤害 <b>+12%</b>`;
+      },
+    },
+    {
+      id: "curse_glass", name: "易碎核心", icon: "☠", max: 2, base: 0.12, curse: true,
+      apply(s, m) { s.crit = Math.min(0.8, s.crit + m); s.shieldRegen *= 0.45; },
+      desc(s, m) {
+        return `暴击率 <b>+${Math.round(m * 100)}%</b><br>代价：护盾恢复 <b>-55%</b>`;
+      },
+    },
   ];
+
+  // 进化强化：满足组合条件后才会出现在升级选项中（一次性）
+  const EVOLUTIONS = [
+    {
+      id: "evo_fission", name: "裂变弹", icon: "✹", max: 1, evolution: true,
+      require: (s) => s.pierce >= 1 && s.crit >= 0.22,
+      apply(s) { s.explodeOnHit = true; },
+      desc() {
+        return `子弹命中时引发半径 48 的爆炸<br>对周围敌人造成 <b>60%</b> 伤害`;
+      },
+    },
+    {
+      id: "evo_echo", name: "虚空回响", icon: "◉", max: 1, evolution: true,
+      require: (s) => s.bulletCount >= 2 && s.fireInterval <= 0.21,
+      apply(s) { s.echoBurst = true; },
+      desc() {
+        return `每 <b>4 秒</b>自动释放一圈回响弹<br>共 8 发，每发 <b>50%</b> 伤害`;
+      },
+    },
+  ];
+
+  const ALL_DEFS = UPGRADES.concat(EVOLUTIONS);
 
   function gainXp(v) {
     xp += v;
@@ -1390,8 +1543,8 @@
   }
 
   function makeCard(def, rarity) {
-    const m = def.id === "heal" ? def.base * rarity.mult : def.base * rarity.mult;
-    const mult = def.id === "multi" ? 1 : m;
+    // 进化与诅咒不随稀有度放大，数值固定
+    const mult = def.curse || def.evolution ? def.base : def.base * rarity.mult;
     return {
       def,
       rarity,
@@ -1403,13 +1556,32 @@
   function buildCards() {
     const chosen = new Set();
     const cards = [];
-    let guard = 0;
 
-    // 先按稀有度抽取不重复的强化
+    // 1) 进化：满足组合条件时，大概率作为第一张卡出现
+    const evoPool = EVOLUTIONS.filter((d) => (stacks[d.id] || 0) < d.max && d.require(stats));
+    if (evoPool.length && Math.random() < 0.75) {
+      const def = pick(evoPool);
+      chosen.add(def.id);
+      cards.push(makeCard(def, RARITIES[3]));
+    }
+
+    // 2) 诅咒：约 20% 概率占一个位置（每轮最多一张）
+    if (cards.length < 3 && Math.random() < 0.2) {
+      const pool = UPGRADES.filter((d) => d.curse && (stacks[d.id] || 0) < d.max && !chosen.has(d.id));
+      if (pool.length) {
+        const def = pick(pool);
+        chosen.add(def.id);
+        cards.push(makeCard(def, RARITIES[2]));
+      }
+    }
+
+    let guard = 0;
+    // 3) 普通强化：按稀有度抽取不重复项
     while (cards.length < 3 && guard++ < 80) {
       const rarity = rollRarity();
       const rIdx = RARITIES.indexOf(rarity);
       const pool = UPGRADES.filter((d) => {
+        if (d.curse) return false;
         if ((stacks[d.id] || 0) >= d.max) return false;
         if (d.minRarityIndex !== undefined && rIdx < d.minRarityIndex) return false;
         return !chosen.has(d.id);
@@ -1425,6 +1597,7 @@
     while (cards.length < 3 && guard++ < 40) {
       const rIdx = 2;
       const pool = UPGRADES.filter((d) => {
+        if (d.curse) return false;
         if ((stacks[d.id] || 0) >= d.max) return false;
         if (d.minRarityIndex !== undefined && rIdx < d.minRarityIndex) return false;
         return true;
@@ -1457,8 +1630,10 @@
     let html = "";
     for (let i = 0; i < upgradeCards.length; i++) {
       const c = upgradeCards[i];
-      html += `<button class="card rarity-${c.rarity.key}" data-i="${i}">
-        <div class="card-top"><span class="card-ic">${c.def.icon}</span><span class="card-rt">${c.rarity.name}</span></div>
+      const special = c.def.curse ? " curse" : c.def.evolution ? " evo" : "";
+      const label = c.def.curse ? "诅咒" : c.def.evolution ? "进化" : c.rarity.name;
+      html += `<button class="card rarity-${c.rarity.key}${special}" data-i="${i}">
+        <div class="card-top"><span class="card-ic">${c.def.icon}</span><span class="card-rt">${label}</span></div>
         <h3>${c.def.name}</h3>
         <p>${c.text}</p>
       </button>`;
@@ -1663,18 +1838,22 @@
     const dy = player.y - b.y;
     const d = Math.hypot(dx, dy) || 1;
     b.angle = Math.atan2(dy, dx);
-    b.spin += dt * (0.7 + b.phase * 0.35);
+    // 超载期间：Boss 移动、攻击频率与弹幕同步减速
+    const es = ultTimer > 0 ? CFG.ULT.SLOW : 1;
+    const slowDt = dt * es;
+    const spdMul = stats.enemySpeedMul;
+    b.spin += slowDt * (0.7 + b.phase * 0.35);
 
     // ===== 突进机制（二阶段起）：预警蓄力 → 高速冲刺 =====
-    b.dashCd -= dt;
+    b.dashCd -= slowDt;
     if (b.dashTime > 0) {
-      b.dashTime -= dt;
-      const sp = CFG.BOSS.DASH_SPEED * view.scale;
-      b.x += Math.cos(b.dashAng) * sp * dt;
-      b.y += Math.sin(b.dashAng) * sp * dt;
+      b.dashTime -= slowDt;
+      const sp = CFG.BOSS.DASH_SPEED * view.scale * spdMul;
+      b.x += Math.cos(b.dashAng) * sp * slowDt;
+      b.y += Math.sin(b.dashAng) * sp * slowDt;
       emit(b.x, b.y, 2, "#ff3b6b", 90, 4, 0.35);
     } else if (b.warn > 0) {
-      b.warn -= dt;   // 蓄力期间原地不动
+      b.warn -= slowDt;   // 蓄力期间原地不动
       if (b.warn <= 0) {
         b.dashTime = CFG.BOSS.DASH_TIME;
         b.dashAng = Math.atan2(player.y - b.y, player.x - b.x);
@@ -1683,8 +1862,8 @@
       // 常态：与玩家保持距离
       const desired = 250 + Math.sin(t * 0.8) * 40;
       const dirSign = d > desired ? 1 : -0.55;
-      b.x += (dx / d) * b.speed * dirSign * dt;
-      b.y += (dy / d) * b.speed * dirSign * dt;
+      b.x += (dx / d) * b.speed * spdMul * dirSign * slowDt;
+      b.y += (dy / d) * b.speed * spdMul * dirSign * slowDt;
       if (b.phase >= 2 && b.dashCd <= 0 && d < 560 * view.scale) {
         b.dashCd = CFG.BOSS.DASH_CD;
         b.warn = CFG.BOSS.DASH_WARN;
@@ -1694,7 +1873,7 @@
     }
 
     // ===== 瞄准扇形弹幕 =====
-    b.fireCd -= dt;
+    b.fireCd -= slowDt;
     if (b.fireCd <= 0) {
       if (b.phase === 1) { b.fireCd = 2.2; bossVolley(b, 5, 0.55, 205, 9); }
       else if (b.phase === 2) { b.fireCd = 1.7; bossVolley(b, 7, 0.75, 225, 10); }
@@ -1702,7 +1881,7 @@
     }
 
     // ===== 环形弹幕（带缓慢旋转的安全缺口）=====
-    b.ringCd -= dt;
+    b.ringCd -= slowDt;
     if (b.ringCd <= 0) {
       const count = b.phase === 1 ? 12 : b.phase === 2 ? 16 : 22;
       const speed = b.phase === 3 ? 170 : 150;
@@ -1718,7 +1897,7 @@
 
     // ===== 旋转螺旋（二阶段起）=====
     if (b.phase >= 2) {
-      b.burstCd -= dt;
+      b.burstCd -= slowDt;
       if (b.burstCd <= 0) {
         b.burstCd = b.phase === 2 ? 0.15 : 0.11;
         const arms = b.phase === 2 ? 2 : 3;
@@ -1730,7 +1909,7 @@
     }
 
     // ===== 召唤小怪（三阶段召唤精英）=====
-    b.minionCd -= dt;
+    b.minionCd -= slowDt;
     if (b.minionCd <= 0) {
       if (b.phase === 3) {
         b.minionCd = 9;
@@ -1780,6 +1959,9 @@
   }
 
   function updateEnemies(dt, t) {
+    // 超载减速与诅咒（敌人移速）统一在此生效
+    const es = ultTimer > 0 ? CFG.ULT.SLOW : 1;
+    const sdt = dt * es;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (e.dead) continue;
@@ -1798,9 +1980,9 @@
 
       // 菱形精英：周期性突进
       if (e.type === "diamond") {
-        e.dashCd -= dt;
+        e.dashCd -= sdt;
         if (e.dashTime > 0) {
-          e.dashTime -= dt;
+          e.dashTime -= sdt;
           ang = e.dashAng;
         } else if (e.dashCd <= 0) {
           e.dashCd = rand(2.0, 3.2);
@@ -1809,15 +1991,15 @@
         }
       }
 
-      const sp = e.speed * view.scale * (e.dashTime > 0 ? 3.1 : 1);
-      e.x += Math.cos(ang) * sp * dt;
-      e.y += Math.sin(ang) * sp * dt;
+      const sp = e.speed * view.scale * stats.enemySpeedMul * (e.dashTime > 0 ? 3.1 : 1);
+      e.x += Math.cos(ang) * sp * sdt;
+      e.y += Math.sin(ang) * sp * sdt;
       e.angle = ang;
 
       // ===== 小怪远程弹幕（稀疏；三角怪只近战不射击）=====
       const gun = CFG.ENEMY_GUN[e.type];
       if (gun && gun.count > 0) {
-        e.shotCd -= dt;
+        e.shotCd -= sdt;
         if (e.shotCd <= 0) {
           const inView = e.x > camera.x - 16 && e.x < camera.x + view.w + 16 &&
                          e.y > camera.y - 16 && e.y < camera.y + view.h + 16;
@@ -1853,6 +2035,19 @@
     }
   }
 
+  function inZone(x, y) {
+    for (let i = 0; i < zones.length; i++) {
+      const z = zones[i];
+      if (dist2(x, y, z.x, z.y) <= z.r * z.r) return true;
+    }
+    return false;
+  }
+
+  // 超载能量增长
+  function addEnergy(v) {
+    player.energy = Math.min(CFG.ULT.MAX, player.energy + v);
+  }
+
   function killEnemy(e) {
     if (e.dead) return;
     e.dead = true;
@@ -1872,10 +2067,13 @@
       return;
     }
 
+    addEnergy(e.type === "diamond" ? CFG.ULT.GAIN_ELITE : CFG.ULT.GAIN_KILL);
     emit(e.x, e.y, e.type === "diamond" ? 22 : 13, e.color, 210, e.type === "diamond" ? 3.4 : 2.6, 0.65);
     shake = Math.max(shake, (e.type === "diamond" ? 6 : 3) * CFG.FX.SHAKE);
     sfxExplode(false);
-    spawnGem(e.x, e.y, e.xp);
+    // 风险星域内击杀：经验翻倍
+    const xpVal = e.xp * (inZone(e.x, e.y) ? CFG.EVENTS.ZONE_XP_MUL : 1);
+    spawnGem(e.x, e.y, xpVal);
   }
 
   /* =====================================================================
@@ -1979,20 +2177,7 @@
       if (bullets.length >= CFG.LIMITS.BULLETS) break;
       const t = n === 1 ? 0.5 : i / (n - 1);
       const ang = baseAng + (t - 0.5) * spread;
-      const sp = stats.bulletSpeed * view.scale;
-      bullets.push({
-        x: player.x + Math.cos(ang) * (player.r + 4),
-        y: player.y + Math.sin(ang) * (player.r + 4),
-        vx: Math.cos(ang) * sp,
-        vy: Math.sin(ang) * sp,
-        r: 4,
-        dmg: stats.damage,
-        pierce: stats.pierce,
-        life: 1.5,
-        dead: false,
-        hit: new Set(),
-        ang,
-      });
+      spawnPlayerBullet(ang);
     }
 
     // 枪口火花
@@ -2000,11 +2185,30 @@
     sfxShoot();
   }
 
+  // 玩家子弹工厂（供普通射击 / 回响 / 终极使用）
+  function spawnPlayerBullet(ang, dmgOverride, speedMul) {
+    if (bullets.length >= CFG.LIMITS.BULLETS) return;
+    const sp = stats.bulletSpeed * view.scale * (speedMul || 1);
+    bullets.push({
+      x: player.x + Math.cos(ang) * (player.r + 4),
+      y: player.y + Math.sin(ang) * (player.r + 4),
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp,
+      r: 4,
+      dmg: dmgOverride === undefined ? stats.damage : dmgOverride,
+      pierce: stats.pierce,
+      life: 1.5,
+      dead: false,
+      hit: new Set(),
+      ang,
+    });
+  }
+
   function damagePlayer(baseDmg) {
     if (state !== "playing") return;
     if (player.invuln > 0) return;
 
-    const dmg = baseDmg * (1 - stats.armor);
+    const dmg = baseDmg * (1 - stats.armor) * stats.takenMul;
     let remain = dmg;
     if (player.shield > 0) {
       const absorbed = Math.min(player.shield, remain);
@@ -2027,10 +2231,59 @@
     }
   }
 
+  // 风险星域持续伤害：无视无敌帧，先扣护盾
+  function drainPlayer(amount) {
+    if (state !== "playing") return;
+    let remain = amount;
+    if (player.shield > 0) {
+      const a = Math.min(player.shield, remain);
+      player.shield -= a;
+      remain -= a;
+    }
+    if (remain > 0) player.hp -= remain;
+    player.shieldDelay = CFG.PLAYER.SHIELD_DELAY;
+    hurtFlash = Math.max(hurtFlash, 0.1);
+    if (player.hp <= 0) {
+      player.hp = 0;
+      endGame(false, "hp");
+    }
+  }
+
   /* =====================================================================
    * 13. 子弹 / 碰撞
    * ===================================================================*/
+  // 统一伤害结算：暴击反馈、伤害数字、死亡处理
+  function hurtEnemy(e, dmg, crit, silent) {
+    if (e.dead) return;
+    e.hp -= dmg;
+    if (silent) {
+      emit(e.x, e.y, 3, "#ffd08a", 140, 2, 0.28);
+    } else {
+      emit(e.x, e.y, crit ? 10 : 5, crit ? "#ffc857" : "#9ff8ff", crit ? 200 : 130, crit ? 3 : 2.2, 0.4);
+      addText(e.x, e.y - e.r - 4, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#ffc857" : "#cfefff", crit ? 16 : 12);
+      if (crit) shake = Math.max(shake, 3 * CFG.FX.SHAKE);
+      sfxHit();
+    }
+    if (e.hp <= 0) killEnemy(e);
+  }
+
+  // 进化「裂变弹」：命中点爆炸
+  function explodeAt(x, y, dmg, source) {
+    const R = 60 * view.scale;
+    emit(x, y, 14, "#ffb238", 240, 3, 0.5);
+    for (let i = 0; i < enemies.length; i++) {
+      const o = enemies[i];
+      if (o.dead || o === source) continue;
+      const rr = R + o.r;
+      if (dist2(x, y, o.x, o.y) <= rr * rr) {
+        hurtEnemy(o, dmg, false, true);
+        if (state !== "playing") return;
+      }
+    }
+  }
+
   function updateBullets(dt) {
+    const slow = ultTimer > 0 ? CFG.ULT.SLOW : 1;
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
 
@@ -2052,13 +2305,8 @@
             b.hit.add(e.id);
             const crit = Math.random() < stats.crit;
             const dmg = b.dmg * (crit ? stats.critMult : 1);
-            e.hp -= dmg;
-            emit(b.x, b.y, crit ? 10 : 5, crit ? "#ffc857" : "#9ff8ff", crit ? 200 : 130, crit ? 3 : 2.2, 0.4);
-            addText(e.x, e.y - e.r - 4, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#ffc857" : "#cfefff", crit ? 16 : 12);
-            if (crit) shake = Math.max(shake, 3 * CFG.FX.SHAKE);
-            sfxHit();
-
-            if (e.hp <= 0) killEnemy(e);
+            hurtEnemy(e, dmg, crit, false);
+            if (stats.explodeOnHit && state === "playing") explodeAt(b.x, b.y, b.dmg * 0.6, e);
 
             if (b.pierce > 0) {
               b.pierce -= 1;
@@ -2070,15 +2318,34 @@
         }
       }
 
+      // 与能量水晶碰撞（可打碎）
+      if (!b.dead) {
+        for (let j = 0; j < crystals.length; j++) {
+          const c = crystals[j];
+          if (b.hit.has("c" + c.id)) continue;
+          const rr = b.r + c.r;
+          if (dist2(b.x, b.y, c.x, c.y) <= rr * rr) {
+            b.hit.add("c" + c.id);
+            c.hp -= b.dmg;
+            c.flash = 0.18;
+            emit(b.x, b.y, 6, "#8ff6ff", 180, 2.4, 0.4);
+            sfxHit();
+            if (c.hp <= 0) destroyCrystal(c);
+            if (b.pierce > 0) b.pierce -= 1;
+            else { b.dead = true; break; }
+          }
+        }
+      }
+
       if (b.dead || b.life <= 0) bullets.splice(i, 1);
     }
 
-    // 敌方子弹
+    // 敌方子弹（超载期间减速）
     for (let i = ebullets.length - 1; i >= 0; i--) {
       const b = ebullets[i];
-      b.x += b.vx * dt;
-      b.y += b.vy * dt;
-      b.life -= dt;
+      b.x += b.vx * dt * slow;
+      b.y += b.vy * dt * slow;
+      b.life -= dt * slow;
 
       const rr = b.r + player.r;
       if (dist2(b.x, b.y, player.x, player.y) <= rr * rr) {
@@ -2159,7 +2426,7 @@
 
     const list = document.getElementById("res-buffs");
     const entries = Object.keys(stacks).map((id) => {
-      const def = UPGRADES.find((d) => d.id === id);
+      const def = ALL_DEFS.find((d) => d.id === id);
       return `${def ? def.name : id} ×${stacks[id]}`;
     });
     list.innerHTML = entries.length
@@ -2205,6 +2472,17 @@
     setText(document.getElementById("ui-kills"), String(kills));
     setText(document.getElementById("ui-wave"), String(waveNum));
 
+    // 超载能量
+    const ePct = clamp(player.energy / CFG.ULT.MAX, 0, 1) * 100;
+    document.getElementById("ui-ult").style.width = ePct.toFixed(1) + "%";
+    const ultBar = document.getElementById("ult-bar");
+    const ready = player.energy >= CFG.ULT.MAX;
+    ultBar.classList.toggle("ready", ready);
+    document.getElementById("ult-btn").classList.toggle("ready", ready);
+    setText(document.getElementById("ui-ult-text"),
+      ready ? (document.body.classList.contains("touch") ? "超载就绪" : "超载就绪 · E")
+            : `超载 ${Math.floor(ePct)}%`);
+
     const total = Math.max(0, Math.floor(timeLeft));
     const mm = Math.floor(total / 60);
     const ss = total % 60;
@@ -2227,10 +2505,191 @@
     }
     panel.classList.remove("hidden");
     list.innerHTML = ids.map((id) => {
-      const def = UPGRADES.find((d) => d.id === id);
+      const def = ALL_DEFS.find((d) => d.id === id);
       if (!def) return "";
-      return `<div class="buff-row"><span class="ic">${def.icon}</span><span class="nm">${def.name}</span><span class="ct">×${stacks[id]}</span></div>`;
+      const cls = def.curse ? " curse" : def.evolution ? " evo" : "";
+      return `<div class="buff-row${cls}"><span class="ic">${def.icon}</span><span class="nm">${def.name}</span><span class="ct">×${stacks[id]}</span></div>`;
     }).join("");
+  }
+
+  /* =====================================================================
+   * 15.5 大世界事件（风险星域 / 能量水晶 / 补给舱）与终极技能
+   * ===================================================================*/
+  function randomSpotInView(minFromPlayer, margin) {
+    const m = margin === undefined ? 70 : margin;
+    for (let k = 0; k < 24; k++) {
+      const x = rand(camera.x + m, camera.x + view.w - m);
+      const y = rand(camera.y + m, camera.y + view.h - m);
+      if (x < 80 || y < 80 || x > world.w - 80 || y > world.h - 80) continue;
+      if (Math.hypot(x - player.x, y - player.y) < minFromPlayer) continue;
+      return { x, y };
+    }
+    return {
+      x: clamp(player.x + rand(-420, 420), 80, world.w - 80),
+      y: clamp(player.y + rand(-420, 420), 80, world.h - 80),
+    };
+  }
+
+  function spawnZone() {
+    if (zones.length >= CFG.EVENTS.MAX_ZONES) return;
+    const pos = randomSpotInView(230 * view.scale, 100);
+    zones.push({
+      x: pos.x, y: pos.y,
+      r: CFG.EVENTS.ZONE_RADIUS * view.scale,
+      life: CFG.EVENTS.ZONE_LIFE,
+      maxLife: CFG.EVENTS.ZONE_LIFE,
+      seed: Math.random() * TAU,
+    });
+  }
+
+  function spawnCrystal() {
+    if (crystals.length >= CFG.EVENTS.MAX_CRYSTALS) return;
+    const pos = randomSpotInView(140 * view.scale, 80);
+    const hp = CFG.EVENTS.CRYSTAL_HP;
+    crystals.push({
+      id: nextPropId++,
+      x: pos.x, y: pos.y,
+      r: CFG.EVENTS.CRYSTAL_R * view.scale,
+      hp, maxHp: hp,
+      seed: Math.random() * TAU,
+      flash: 0,
+    });
+  }
+
+  function destroyCrystal(c) {
+    const idx = crystals.indexOf(c);
+    if (idx < 0) return;
+    crystals.splice(idx, 1);
+    emit(c.x, c.y, 26, "#8ff6ff", 260, 3.2, 0.7);
+    shake = Math.max(shake, 5 * CFG.FX.SHAKE);
+    sfxExplode(false);
+    score += 15;
+    for (let i = 0; i < CFG.EVENTS.CRYSTAL_GEMS; i++) spawnGem(c.x, c.y, 5);
+    addText(c.x, c.y - 24, "水晶碎裂", "#8ff6ff", 13);
+  }
+
+  function spawnPod() {
+    if (pods.length >= CFG.EVENTS.MAX_PODS) pods.shift();   // 覆盖过期补给，避免长期占用唯一名额
+    const pos = randomSpotInView(260 * view.scale, 90);
+    pods.push({ x: pos.x, y: pos.y, r: CFG.EVENTS.POD_R * view.scale, seed: Math.random() * TAU });
+    addText(pos.x, pos.y - 34, "补给舱已投放", "#8bffdc", 14);
+  }
+
+  function collectPod(p) {
+    player.hp = Math.min(player.hpMax, player.hp + CFG.EVENTS.POD_HEAL);
+    addEnergy(CFG.EVENTS.POD_ENERGY);
+    score += 30;
+    emit(p.x, p.y, 22, "#8bffdc", 240, 3, 0.6);
+    addText(p.x, p.y - 22, `+${CFG.EVENTS.POD_HEAL} HP　能量 +${CFG.EVENTS.POD_ENERGY}`, "#8bffdc", 14);
+    sfxLevelUp();
+  }
+
+  function updateEvents(dt) {
+    zoneTimer -= dt;
+    if (zoneTimer <= 0) {
+      zoneTimer = CFG.EVENTS.ZONE_INTERVAL * rand(0.8, 1.2);
+      spawnZone();
+    }
+    crystalTimer -= dt;
+    if (crystalTimer <= 0) {
+      crystalTimer = CFG.EVENTS.CRYSTAL_INTERVAL * rand(0.8, 1.2);
+      spawnCrystal();
+    }
+    podTimer -= dt;
+    if (podTimer <= 0) {
+      podTimer = CFG.EVENTS.POD_INTERVAL * rand(0.8, 1.2);
+      spawnPod();
+    }
+
+    // 星域生命周期
+    for (let i = zones.length - 1; i >= 0; i--) {
+      zones[i].life -= dt;
+      if (zones[i].life <= 0) zones.splice(i, 1);
+    }
+
+    // 圈内持续掉血
+    let inDanger = false;
+    for (let i = 0; i < zones.length; i++) {
+      const z = zones[i];
+      if (dist2(player.x, player.y, z.x, z.y) <= z.r * z.r) { inDanger = true; break; }
+    }
+    if (inDanger) {
+      drainPlayer(CFG.EVENTS.ZONE_DPS * dt * stats.takenMul);
+      if (state !== "playing") return;
+    }
+
+    for (let i = 0; i < crystals.length; i++) {
+      crystals[i].flash = Math.max(0, crystals[i].flash - dt);
+    }
+
+    // 拾取补给舱
+    for (let i = pods.length - 1; i >= 0; i--) {
+      const p = pods[i];
+      p.seed += dt;
+      const rr = p.r + player.r + 4;
+      if (dist2(p.x, p.y, player.x, player.y) <= rr * rr) {
+        collectPod(p);
+        pods.splice(i, 1);
+      }
+    }
+
+    updatePulses(dt);
+  }
+
+  function updatePulses(dt) {
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      const p = pulses[i];
+      p.life -= dt;
+      p.r += (p.max - p.r) * Math.min(1, dt * 9);
+      if (p.life <= 0) pulses.splice(i, 1);
+    }
+  }
+
+  // 进化「虚空回响」：每 4 秒一圈弹幕
+  function echoBurstFire() {
+    for (let i = 0; i < 8; i++) {
+      spawnPlayerBullet((i / 8) * TAU + Math.random() * 0.12, stats.damage * 0.5, 0.85);
+    }
+    emit(player.x, player.y, 12, "#c58bff", 240, 3, 0.5);
+  }
+
+  // 终极技能「超载」：清弹 + 范围爆发 + 短时减速
+  function activateUltimate() {
+    if (state !== "playing" || player.energy < CFG.ULT.MAX) return;
+    player.energy = 0;
+    ultTimer = CFG.ULT.SLOW_TIME;
+    player.invuln = Math.max(player.invuln, CFG.ULT.INVULN);
+
+    const R = CFG.ULT.RADIUS * view.scale;
+    pulses.push({ x: player.x, y: player.y, r: 24, max: R, life: 0.7, maxLife: 0.7 });
+
+    // 清除镜头范围内的敌方弹幕
+    const m = CFG.ULT.CLEAR_MARGIN;
+    for (let i = ebullets.length - 1; i >= 0; i--) {
+      const b = ebullets[i];
+      if (b.x > camera.x - m && b.x < camera.x + view.w + m &&
+          b.y > camera.y - m && b.y < camera.y + view.h + m) {
+        emit(b.x, b.y, 2, "#b9f7ff", 150, 2, 0.3);
+        ebullets.splice(i, 1);
+      }
+    }
+
+    // 范围伤害
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (e.dead) continue;
+      const rr = R + e.r;
+      if (dist2(player.x, player.y, e.x, e.y) <= rr * rr) {
+        hurtEnemy(e, CFG.ULT.DAMAGE * (e.isBoss ? 0.5 : 1), false, true);
+        if (state !== "playing") break;
+      }
+    }
+
+    emit(player.x, player.y, 40, "#7ef0ff", 380, 4, 0.9);
+    shake = Math.max(shake, 14 * CFG.FX.SHAKE);
+    addText(player.x, player.y - 42, "超载爆发", "#ffd666", 20);
+    sfxUlt();
+    refreshHud(true);
   }
 
   /* =====================================================================
@@ -2239,6 +2698,16 @@
   function update(dt) {
     elapsed += dt;
     timeLeft -= dt;
+    if (ultTimer > 0) ultTimer = Math.max(0, ultTimer - dt);
+
+    // 进化「虚空回响」：周期环形弹幕
+    if (stats.echoBurst) {
+      echoTimer -= dt;
+      if (echoTimer <= 0) {
+        echoTimer = 4;
+        echoBurstFire();
+      }
+    }
 
     // 波次推进
     const newWave = Math.min(CFG.WAVE.BOSS_WAVE, 1 + Math.floor(elapsed / CFG.WAVE.INTERVAL));
@@ -2249,6 +2718,9 @@
     if (!bossSpawned && waveNum >= CFG.WAVE.BOSS_WAVE) spawnBoss();
 
     updateSpawner(dt);
+    updateEvents(dt);
+    if (state !== "playing") { updateParticles(dt); return; }
+
     updatePlayer(dt);
     updateCamera(dt);
     if (state !== "playing") return;
@@ -2608,6 +3080,125 @@
     for (let i = 0; i < gems.length; i++) drawGem(gems[i]);
   }
 
+  // 风险星域：红色虚线警示圈
+  function drawZones(t) {
+    for (let i = 0; i < zones.length; i++) {
+      const z = zones[i];
+      const a = clamp(Math.min(z.life / 1.5, (z.maxLife - z.life) / 1.2), 0, 1);
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.translate(z.x, z.y);
+
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, z.r);
+      g.addColorStop(0, "rgba(255, 40, 80, 0.02)");
+      g.addColorStop(0.72, "rgba(255, 40, 80, 0.05)");
+      g.addColorStop(1, "rgba(255, 70, 100, 0.14)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, z.r, 0, TAU);
+      ctx.fill();
+
+      ctx.rotate(t * 0.18 + z.seed);
+      ctx.setLineDash([16, 12]);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(255, 70, 100, 0.7)";
+      ctx.beginPath();
+      ctx.arc(0, 0, z.r, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(255, 140, 160, 0.3)";
+      ctx.beginPath();
+      ctx.arc(0, 0, z.r * 0.62, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.fillStyle = "#ff9db0";
+      ctx.font = "600 13px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("风险星域 · 经验 ×2", z.x, z.y - z.r - 12);
+      ctx.restore();
+    }
+  }
+
+  // 能量水晶 / 补给舱
+  function drawProps(t) {
+    for (let i = 0; i < crystals.length; i++) {
+      const c = crystals[i];
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.rotate(t * 0.5 + c.seed);
+      ctx.shadowColor = "#6fe9ff";
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * TAU - Math.PI / 2;
+        const px = Math.cos(a) * c.r;
+        const py = Math.sin(a) * c.r * 1.25;
+        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = c.flash > 0 ? "rgba(255,255,255,0.85)" : "rgba(63, 229, 255, 0.2)";
+      ctx.fill();
+      ctx.strokeStyle = c.flash > 0 ? "#ffffff" : "#7ef0ff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(190, 255, 255, 0.8)";
+      ctx.beginPath();
+      ctx.arc(0, 0, 3, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+
+      if (c.hp < c.maxHp) {
+        const w = c.r * 2;
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(c.x - w / 2, c.y - c.r - 12, w, 3.5);
+        ctx.fillStyle = "#7ef0ff";
+        ctx.fillRect(c.x - w / 2, c.y - c.r - 12, w * clamp(c.hp / c.maxHp, 0, 1), 3.5);
+      }
+    }
+
+    for (let i = 0; i < pods.length; i++) {
+      const p = pods[i];
+      const pulse = 1 + Math.sin(p.seed * 3) * 0.08;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(t * 0.8);
+      ctx.shadowColor = "#8bffdc";
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = "#8bffdc";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-p.r * pulse, -p.r * pulse, p.r * 2 * pulse, p.r * 2 * pulse);
+      ctx.shadowBlur = 0;
+      ctx.rotate(-t * 0.8);
+      ctx.fillStyle = "#8bffdc";
+      ctx.fillRect(-p.r * 0.5, -2, p.r, 4);
+      ctx.fillRect(-2, -p.r * 0.5, 4, p.r);
+      ctx.restore();
+    }
+  }
+
+  // 超载冲击波
+  function drawPulses() {
+    for (let i = 0; i < pulses.length; i++) {
+      const p = pulses[i];
+      const k = 1 - p.life / p.maxLife;
+      ctx.save();
+      ctx.globalAlpha = clamp(1 - k, 0, 1);
+      ctx.strokeStyle = "#8ff6ff";
+      ctx.lineWidth = 5 * (1 - k * 0.7);
+      ctx.shadowColor = "#3fe5ff";
+      ctx.shadowBlur = 22;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   function render(t) {
     ctx.save();
     if (state === "playing" && shake > 0) {
@@ -2620,14 +3211,24 @@
       ctx.save();
       ctx.translate(-camera.x, -camera.y);
       drawWorldBounds();
+      drawZones(t);
+      drawProps(t);
       drawGems();
       drawBullets();
       drawEnemies(t);
       drawPlayer(t);
+      drawPulses();
       drawEnemyBullets();
       drawParticles();
       drawTexts();
       ctx.restore();
+    }
+
+    // 超载减速期间的青蓝滤镜
+    if (state === "playing" && ultTimer > 0) {
+      const a = 0.05 + 0.025 * Math.sin(t * 8);
+      ctx.fillStyle = `rgba(80, 220, 255, ${a})`;
+      ctx.fillRect(0, 0, view.w, view.h);
     }
 
     // 受伤红色闪屏
