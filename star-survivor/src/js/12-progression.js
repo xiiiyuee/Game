@@ -254,7 +254,7 @@
       def,
       rarity,
       mult,
-      text: def.desc(stats, mult, player),
+      text: def.desc(player.stats, mult, player),
     };
   }
 
@@ -266,7 +266,7 @@
     const evoPool = EVOLUTIONS.filter((d) =>
       (stacks[d.id] || 0) < d.max &&
       (!d.weapon || d.weapon === chosenWeapon) &&
-      d.require(stats));
+      d.require(player.stats));
     if (evoPool.length && Math.random() < 0.75) {
       const def = pick(evoPool);
       chosen.add(def.id);
@@ -354,7 +354,7 @@
     if (state !== "upgrade") return;
     const card = upgradeCards[idx];
     if (!card) return;
-    card.def.apply(stats, card.mult, player);
+    card.def.apply(player.stats, card.mult, player);
     stacks[card.def.id] = (stacks[card.def.id] || 0) + 1;
     pendingLevels -= 1;
 

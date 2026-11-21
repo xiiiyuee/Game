@@ -27,65 +27,67 @@
     return { x, y };
   }
 
-  function updatePlayer(dt) {
+  function updatePlayer(dt, p) {
+    p = p || player;
     const P = CFG.PLAYER;
-    player.invuln = Math.max(0, player.invuln - dt);
-    player.dashCd = Math.max(0, player.dashCd - dt);
-    player.hitFlash = Math.max(0, player.hitFlash - dt * 2.6);
+    const s = p.stats;
+    p.invuln = Math.max(0, p.invuln - dt);
+    p.dashCd = Math.max(0, p.dashCd - dt);
+    p.hitFlash = Math.max(0, p.hitFlash - dt * 2.6);
 
     // 护盾恢复
-    if (player.shieldDelay > 0) player.shieldDelay -= dt;
-    else player.shield = Math.min(stats.shieldMax, player.shield + stats.shieldRegen * dt);
+    if (p.shieldDelay > 0) p.shieldDelay -= dt;
+    else p.shield = Math.min(s.shieldMax, p.shield + s.shieldRegen * dt);
 
     const v = readMoveInput();
 
-    if (player.dashTime > 0) {
-      player.dashTime -= dt;
+    if (p.dashTime > 0) {
+      p.dashTime -= dt;
       const sp = P.DASH_SPEED * view.scale;
-      player.x += player.dashDir.x * sp * dt;
-      player.y += player.dashDir.y * sp * dt;
+      p.x += p.dashDir.x * sp * dt;
+      p.y += p.dashDir.y * sp * dt;
     } else if (v.x !== 0 || v.y !== 0) {
-      player.lastDir.x = v.x;
-      player.lastDir.y = v.y;
-      const sp = stats.moveSpeed * view.scale;
-      player.x += v.x * sp * dt;
-      player.y += v.y * sp * dt;
+      p.lastDir.x = v.x;
+      p.lastDir.y = v.y;
+      const sp = s.moveSpeed * view.scale;
+      p.x += v.x * sp * dt;
+      p.y += v.y * sp * dt;
     }
 
     // 边界限制（世界边界，而非视口）
-    player.x = clamp(player.x, player.r + 2, world.w - player.r - 2);
-    player.y = clamp(player.y, player.r + 2, world.h - player.r - 2);
+    p.x = clamp(p.x, p.r + 2, world.w - p.r - 2);
+    p.y = clamp(p.y, p.r + 2, world.h - p.r - 2);
 
     // 拖尾
-    player.trailCd -= dt;
-    if (player.trailCd <= 0) {
-      player.trailCd = 0.035;
-      emit(player.x, player.y, 1, player.invuln > 0 ? "#ffffff" : "#28c8ff", 26, 2.6, 0.4);
+    p.trailCd -= dt;
+    if (p.trailCd <= 0) {
+      p.trailCd = 0.035;
+      emit(p.x, p.y, 1, p.invuln > 0 ? "#ffffff" : "#28c8ff", 26, 2.6, 0.4);
     }
 
     // 朝向最近敌人（用于绘制）
-    const target = nearestEnemy();
-    if (target) player.facing = Math.atan2(target.y - player.y, target.x - player.x);
-    else if (v.x !== 0 || v.y !== 0) player.facing = Math.atan2(v.y, v.x);
+    const target = nearestEnemy(p);
+    if (target) p.facing = Math.atan2(target.y - p.y, target.x - p.x);
+    else if (v.x !== 0 || v.y !== 0) p.facing = Math.atan2(v.y, v.x);
 
     // 自动开火
-    player.fireCd -= dt;
-    if (player.fireCd <= 0 && target) {
-      fireAt(target);
-      player.fireCd = stats.fireInterval;
+    p.fireCd -= dt;
+    if (p.fireCd <= 0 && target) {
+      fireAt(target, p);
+      p.fireCd = s.fireInterval;
     }
   }
 
   // 无人机子弹（独立颜色，便于区分）
-  function spawnDroneBullet(x, y, ang) {
+  function spawnDroneBullet(x, y, ang, s) {
     if (bullets.length >= CFG.LIMITS.BULLETS) return;
-    const sp = stats.bulletSpeed * view.scale * CFG.DRONES.SPEED_MUL;
+    const sp = s.bulletSpeed * view.scale * CFG.DRONES.SPEED_MUL;
     bullets.push({
       x, y,
       vx: Math.cos(ang) * sp,
       vy: Math.sin(ang) * sp,
       r: 3,
-      dmg: stats.damage * CFG.DRONES.DMG_MUL * (1 + (stats.drones - 1) * 0.12),
+      dmg: s.damage * CFG.DRONES.DMG_MUL * (1 + (s.drones - 1) * 0.12),
       pierce: 0,
       life: 1.2,
       dead: false,
@@ -96,19 +98,21 @@
   }
 
   // 守护无人机：环绕玩家，自动索敌射击
-  function updateDrones(dt, t) {
-    const n = Math.min(CFG.DRONES.MAX, stats.drones || 0);
+  function updateDrones(dt, t, p) {
+    p = p || player;
+    const s = p.stats;
+    const n = Math.min(CFG.DRONES.MAX, s.drones || 0);
     if (n <= 0) return;
     const orbit = CFG.DRONES.ORBIT * view.scale;
-    const range = stats.range * view.scale * CFG.DRONES.RANGE_MUL;
+    const range = s.range * view.scale * CFG.DRONES.RANGE_MUL;
     const range2 = range * range;
     for (let i = 0; i < n; i++) {
-      if (player.droneCd.length <= i) player.droneCd.push(rand(0.3, 0.8));
-      player.droneCd[i] -= dt;
-      if (player.droneCd[i] > 0) continue;
+      if (p.droneCd.length <= i) p.droneCd.push(rand(0.3, 0.8));
+      p.droneCd[i] -= dt;
+      if (p.droneCd[i] > 0) continue;
       const ang = t * 1.15 + (i / n) * TAU;
-      const dx = player.x + Math.cos(ang) * orbit;
-      const dy = player.y + Math.sin(ang) * orbit;
+      const dx = p.x + Math.cos(ang) * orbit;
+      const dy = p.y + Math.sin(ang) * orbit;
       let best = null;
       let bestD = range2;
       for (let k = 0; k < enemies.length; k++) {
@@ -118,91 +122,99 @@
         if (d < bestD) { bestD = d; best = e; }
       }
       if (best) {
-        spawnDroneBullet(dx, dy, Math.atan2(best.y - dy, best.x - dx));
-        player.droneCd[i] = CFG.DRONES.FIRE_CD;
+        spawnDroneBullet(dx, dy, Math.atan2(best.y - dy, best.x - dx), s);
+        p.droneCd[i] = CFG.DRONES.FIRE_CD;
       } else {
-        player.droneCd[i] = 0.2;
+        p.droneCd[i] = 0.2;
       }
     }
   }
 
 
-  function nearestEnemy() {
-    const range = stats.range * view.scale;
+  function nearestEnemy(p) {
+    p = p || player;
+    const s = p.stats;
+    const range = s.range * view.scale;
     let best = null;
     let bestD = range * range;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (e.dead) continue;
-      const d = dist2(e.x, e.y, player.x, player.y);
+      const d = dist2(e.x, e.y, p.x, p.y);
       if (d < bestD) { bestD = d; best = e; }
     }
     return best;
   }
 
-  function fireAt(target) {
-    const baseAng = Math.atan2(target.y - player.y, target.x - player.x);
-    player.facing = baseAng;
-    const n = stats.bulletCount;
-    const spread = Math.min(1.0, 0.11 * (n - 1) + (stats.spread || 0));
+  function fireAt(target, p) {
+    p = p || player;
+    const s = p.stats;
+    const baseAng = Math.atan2(target.y - p.y, target.x - p.x);
+    p.facing = baseAng;
+    const n = s.bulletCount;
+    const spread = Math.min(1.0, 0.11 * (n - 1) + (s.spread || 0));
 
     for (let i = 0; i < n; i++) {
       if (bullets.length >= CFG.LIMITS.BULLETS) break;
       const t = n === 1 ? 0.5 : i / (n - 1);
       const ang = baseAng + (t - 0.5) * spread;
-      spawnPlayerBullet(ang);
+      spawnPlayerBullet(ang, undefined, undefined, p);
     }
 
     // 进化「双子脉冲」：每次射击追加两道侧向脉冲
-    if (stats.twinPulse) {
-      spawnPlayerBullet(baseAng - 0.12, stats.damage * 0.7);
-      spawnPlayerBullet(baseAng + 0.12, stats.damage * 0.7);
+    if (s.twinPulse) {
+      spawnPlayerBullet(baseAng - 0.12, s.damage * 0.7, undefined, p);
+      spawnPlayerBullet(baseAng + 0.12, s.damage * 0.7, undefined, p);
     }
 
     // 枪口火花
-    emit(player.x + Math.cos(baseAng) * 14, player.y + Math.sin(baseAng) * 14, 2, "#b9f7ff", 90, 2, 0.22);
+    emit(p.x + Math.cos(baseAng) * 14, p.y + Math.sin(baseAng) * 14, 2, "#b9f7ff", 90, 2, 0.22);
     sfxShoot();
   }
 
   // 玩家子弹工厂（供普通射击 / 回响 / 终极使用）
-  function spawnPlayerBullet(ang, dmgOverride, speedMul) {
+  function spawnPlayerBullet(ang, dmgOverride, speedMul, p) {
+    p = p || player;
+    const s = p.stats;
     if (bullets.length >= CFG.LIMITS.BULLETS) return;
-    const sp = stats.bulletSpeed * view.scale * (speedMul || 1);
+    const sp = s.bulletSpeed * view.scale * (speedMul || 1);
     bullets.push({
-      x: player.x + Math.cos(ang) * (player.r + 4),
-      y: player.y + Math.sin(ang) * (player.r + 4),
+      x: p.x + Math.cos(ang) * (p.r + 4),
+      y: p.y + Math.sin(ang) * (p.r + 4),
       vx: Math.cos(ang) * sp,
       vy: Math.sin(ang) * sp,
-      r: stats.bulletR || 4,
-      dmg: dmgOverride === undefined ? stats.damage : dmgOverride,
-      pierce: stats.pierce,
+      r: s.bulletR || 4,
+      dmg: dmgOverride === undefined ? s.damage : dmgOverride,
+      pierce: s.pierce,
       life: 1.5,
       dead: false,
       hit: new Set(),
       ang,
-      color: stats.bulletColor || THEME.cyan,
+      color: s.bulletColor || THEME.cyan,
     });
   }
 
-  function damagePlayer(baseDmg) {
+  function damagePlayer(baseDmg, p) {
+    p = p || player;
+    const s = p.stats;
     if (state !== "playing") return;
-    if (player.invuln > 0) return;
+    if (p.invuln > 0) return;
 
-    const dmg = baseDmg * (1 - stats.armor) * stats.takenMul;
+    const dmg = baseDmg * (1 - s.armor) * s.takenMul;
     let remain = dmg;
-    if (player.shield > 0) {
-      const absorbed = Math.min(player.shield, remain);
-      player.shield -= absorbed;
+    if (p.shield > 0) {
+      const absorbed = Math.min(p.shield, remain);
+      p.shield -= absorbed;
       remain -= absorbed;
     }
-    if (remain > 0) player.hp -= remain;
+    if (remain > 0) p.hp -= remain;
 
-    player.invuln = CFG.PLAYER.INVULN_ON_HURT;
-    player.shieldDelay = CFG.PLAYER.SHIELD_DELAY;
-    player.hitFlash = 1;
+    p.invuln = CFG.PLAYER.INVULN_ON_HURT;
+    p.shieldDelay = CFG.PLAYER.SHIELD_DELAY;
+    p.hitFlash = 1;
     hurtFlash = 1;
     shake = Math.max(shake, 12 * CFG.FX.SHAKE);
-    emit(player.x, player.y, 14, "#ff4d6d", 220, 3, 0.5);
+    emit(p.x, p.y, 14, "#ff4d6d", 220, 3, 0.5);
     sfxHurt();
     hitStop = Math.max(hitStop, 0.025);
     if (document.body.classList.contains("touch") && navigator.vibrate) navigator.vibrate(28);
@@ -210,43 +222,45 @@
     combo = 0;
     comboTimer = 0;
 
-    if (player.hp <= 0) {
-      player.hp = 0;
-      if (!tryRevive()) endGame(false, "hp");
+    if (p.hp <= 0) {
+      p.hp = 0;
+      if (!tryRevive(p)) endGame(false, "hp");
     }
   }
 
   // 风险星域持续伤害：无视无敌帧，先扣护盾
-  function drainPlayer(amount) {
+  function drainPlayer(amount, p) {
+    p = p || player;
     if (state !== "playing") return;
     let remain = amount;
-    if (player.shield > 0) {
-      const a = Math.min(player.shield, remain);
-      player.shield -= a;
+    if (p.shield > 0) {
+      const a = Math.min(p.shield, remain);
+      p.shield -= a;
       remain -= a;
     }
-    if (remain > 0) player.hp -= remain;
-    player.shieldDelay = CFG.PLAYER.SHIELD_DELAY;
+    if (remain > 0) p.hp -= remain;
+    p.shieldDelay = CFG.PLAYER.SHIELD_DELAY;
     hurtFlash = Math.max(hurtFlash, 0.1);
-    if (player.hp <= 0) {
-      player.hp = 0;
-      if (!tryRevive()) endGame(false, "hp");
+    if (p.hp <= 0) {
+      p.hp = 0;
+      if (!tryRevive(p)) endGame(false, "hp");
     }
   }
 
   // 星港应急保险：以 50% 生命复活一次
-  function tryRevive() {
+  function tryRevive(p) {
+    p = p || player;
     if (revives <= 0) return false;
     revives -= 1;
-    player.hp = Math.round(player.hpMax * 0.5);
-    player.shield = 0;
-    player.invuln = 3;
-    player.shieldDelay = 2;
+    p.hp = Math.round(p.hpMax * 0.5);
+    p.shield = 0;
+    p.invuln = 3;
+    p.shieldDelay = 2;
     combo = 0;
     comboTimer = 0;
     for (let i = 0; i < ebullets.length; i++) ebullets[i].dead = true;
-    emit(player.x, player.y, 36, "#8bffdc", 300, 4, 0.9);
-    addText(player.x, player.y - 44, "应急保险启动 · 50% 生命", "#8bffdc", 18);
+    emit(p.x, p.y, 36, "#8bffdc", 300, 4, 0.9);
+    addText(p.x, p.y - 44, "应急保险启动 · 50% 生命", "#8bffdc", 18);
     shake = Math.max(shake, 10 * CFG.FX.SHAKE);
     sfxLevelUp();
     refreshHud(true);

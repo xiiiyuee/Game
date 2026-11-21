@@ -37,15 +37,17 @@
   // 创建一名玩家；id 在整局内保持稳定，联机时由房间槽位分配
   function createPlayer(id, x, y, local) {
     const P = CFG.PLAYER;
+    const st = makeStats(chosenWeapon);
     return {
       id,
       local: !!local,
+      stats: st,                 // 每名玩家独立属性（移速 / 伤害 / 护盾 / 冷却等）
       x,
       y,
       r: P.RADIUS,
       hp: P.HP,
       hpMax: P.HP,
-      shield: stats.shieldMax,
+      shield: st.shieldMax,
       shieldDelay: 0,
       invuln: 0,
       fireCd: 0,
@@ -71,10 +73,10 @@
   }
 
   function resetGame() {
-    stats = makeStats(chosenWeapon);
     localPlayerId = "p1";
     player = createPlayer(localPlayerId, world.w / 2, world.h / 2, true);
     players = [player];
+    stats = player.stats;      // 兼容别名：指向本地玩家属性对象
     applyMeta(stats, player);
 
     bullets = [];

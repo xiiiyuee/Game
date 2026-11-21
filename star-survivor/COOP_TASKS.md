@@ -201,7 +201,7 @@ A 计划的硬限制：
 | P1-01 | 从 `update` 抽出 `simulate(dt)` | 模拟与渲染分离；单机行为不变 | P0-06 | 完成 |
 | P1-02 | 建立玩家集合 | `players[]` + `localPlayerId`；每名玩家有稳定 ID | P1-01 | 完成 |
 | P1-03 | 替换单玩家引用 | `update`/`render`/HUD 不再直接依赖单个 `player`；单机仍可玩 | P1-02 | 完成 |
-| P1-04 | 玩家属性独立 | `stats`、武器、HP、护盾、冷却移入玩家对象；`makeStats` 按玩家创建 | P1-03 | 待办 |
+| P1-04 | 玩家属性独立 | `stats`、武器、HP、护盾、冷却移入玩家对象；`makeStats` 按玩家创建 | P1-03 | 完成 |
 | P1-05 | 升级与芯片独立 | `stacks`、`chips` 按玩家存储；右侧面板只显示本地玩家 | P1-04 | 待办 |
 | P1-06 | 输入抽象为 intent | 键鼠和触屏都输出 `{mx,my,fire,dash,ult,aim}` | P1-03 | 待办 |
 | P1-07 | 本地玩家摄像机 | 摄像机跟随本地玩家；其他玩家正常绘制 | P1-03 | 待办 |
@@ -332,8 +332,8 @@ A 计划的硬限制：
 ## 7. 当前进度
 
 - 当前阶段：**Phase 0 / Phase 1 并行推进**
-- 当前任务：P0-02、P0-06、P1-01、P1-02、P1-03 已完成；P0-04 设计决策仍未拍板
-- 下一步：P1-04 玩家属性独立（`stats`、武器、HP、护盾、冷却移入玩家对象）
+- 当前任务：P0-02、P0-06、P1-01、P1-02、P1-03、P1-04 已完成；P0-04 设计决策仍未拍板
+- 下一步：P1-05 升级与芯片独立（`stacks`、`chips` 按玩家存储；右侧面板只显示本地玩家）
 - 阻塞：D-03 ~ D-09 未确认；P1-05（升级/芯片独立）之前必须先定 D-03 / D-04 / D-05
 
 ---
@@ -344,10 +344,10 @@ A 计划的硬限制：
 
 ```
 日期：2026-11-22
-完成：建立任务清单；确认 A 计划；源码拆分 + 单文件构建；P0-02 单机基线；P1-01 模拟/表现拆分；P1-02 玩家集合；P1-03 本地玩家引用
-当前：08-player.js 新增 getLocalPlayer()；17-hud.js 的 refreshHud 改用 me；21-render.js 的 drawPlayer/drawDrones 接收玩家参数，render 统一通过 getLocalPlayer() 取 me；20-update.js 已无 player 直引用
+完成：建立任务清单；确认 A 计划；源码拆分 + 单文件构建；P0-02 单机基线；P1-01 模拟/表现拆分；P1-02 玩家集合；P1-03 本地玩家引用；P1-04 玩家属性独立
+当前：08-player.js 的 createPlayer 内调用 makeStats 生成 p.stats，护盾上限取 p.stats.shieldMax；resetGame 创建玩家后令全局 stats = player.stats 作为兼容别名；14-player-update.js 的 updatePlayer/updateDrones/nearestEnemy/fireAt/spawnPlayerBullet/damagePlayer/drainPlayer/tryRevive 均改为通过 p.stats 读取属性并支持可选玩家参数；17-hud.js、21-render.js、12-progression.js 改用玩家 stats
 验证：npm test 通过；无头 Chrome 桌面 1280×800 开始/移动/射击/暂停/升级/Boss 通过；手机 390×844 开始通过；0 JS 报错
-下一步：P1-04 把 stats/武器/HP/护盾/冷却移入玩家对象，makeStats 按玩家创建；之后 P1-05 升级与芯片独立（需先定 D-03/D-04/D-05）
+下一步：P1-05 升级与芯片独立（stacks/chips 按玩家存储；右侧面板只显示本地玩家），开工前先确认 D-03/D-04/D-05
 阻塞：D-03 星币、D-04 芯片、D-05 升级暂停、D-06 商店、D-07 中途加入、D-08 重连、D-09 房主平台
 ```
 

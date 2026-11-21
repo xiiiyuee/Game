@@ -388,7 +388,7 @@
 
   // 守护无人机
   function drawDrones(t, p) {
-    const n = Math.min(CFG.DRONES.MAX, stats.drones || 0);
+    const n = Math.min(CFG.DRONES.MAX, (p && p.stats.drones) || 0);
     if (!n || !p) return;
     const orbit = CFG.DRONES.ORBIT * view.scale;
     ctx.strokeStyle = rgbaOf(THEME.mint, 0.12);
@@ -428,7 +428,7 @@
 
     // 护盾环
     if (p.shield > 0.5) {
-      ctx.strokeStyle = rgbaOf(THEME.cyan, 0.18 + (p.shield / stats.shieldMax) * 0.25);
+      ctx.strokeStyle = rgbaOf(THEME.cyan, 0.18 + (p.shield / p.stats.shieldMax) * 0.25);
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r + 7, 0, TAU);

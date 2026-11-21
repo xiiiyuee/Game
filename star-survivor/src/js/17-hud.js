@@ -9,7 +9,7 @@
     const me = getLocalPlayer();
     if (!me) return;
     const hpPct = clamp(me.hp / me.hpMax, 0, 1) * 100;
-    const shPct = clamp(me.shield / stats.shieldMax, 0, 1) * 100;
+    const shPct = clamp(me.shield / me.stats.shieldMax, 0, 1) * 100;
     const xpPct = clamp(xp / xpNeed, 0, 1) * 100;
 
     document.getElementById("ui-hp").style.width = hpPct.toFixed(1) + "%";
@@ -17,7 +17,7 @@
     document.getElementById("ui-xp").style.width = xpPct.toFixed(1) + "%";
 
     setText(document.getElementById("ui-hp-text"), `${Math.ceil(me.hp)} / ${me.hpMax}`);
-    setText(document.getElementById("ui-shield-text"), `${Math.ceil(me.shield)} / ${Math.round(stats.shieldMax)}`);
+    setText(document.getElementById("ui-shield-text"), `${Math.ceil(me.shield)} / ${Math.round(me.stats.shieldMax)}`);
     setText(document.getElementById("ui-xp-text"), `${Math.floor(xp)} / ${xpNeed}`);
     setText(document.getElementById("ui-level"), String(level));
     setText(document.getElementById("ui-score"), String(score));
