@@ -1,0 +1,41 @@
+  /* ========== 基础布局 ========== */
+  :root {
+    --cyan: #3fe5ff;
+    --cyan-soft: #7ef0ff;
+    --red: #ff4d6d;
+    --orange: #ff9f2e;
+    --purple: #b06bff;
+    --gold: #ffc857;
+    --text: #e2f3ff;
+    --muted: #7089a8;
+    --panel: rgba(7, 15, 29, 0.9);
+    --line: rgba(63, 229, 255, 0.18);
+    --glow: rgba(63, 229, 255, 0.42);
+    --ov1: rgba(18, 42, 72, 0.88);
+    --ov2: rgba(3, 6, 13, 0.94);
+    --rarity-common: #9fb3c8;
+    --rarity-rare: #3fb4ff;
+    --rarity-epic: #b06bff;
+    --rarity-legend: #ffc857;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #04060d;
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    user-select: none;
+    touch-action: none;
+    overscroll-behavior: none;
+  }
+
+  canvas#game { position: fixed; inset: 0; display: block; }
+
+  .hidden { display: none !important; }
+

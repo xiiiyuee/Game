@@ -16,7 +16,10 @@
 
 | 项 | 内容 |
 |---|---|
-| 主文件 | `/workspace/star-survivor/index.html`（单文件，HTML + CSS + 原生 JS IIFE + Canvas2D，约 200KB） |
+| 主文件 | `/workspace/star-survivor/index.html`（**构建产物，不要直接改**；源码在 `src/`） |
+| 源码入口 | `src/index.template.html` + `src/manifest.json` |
+| 构建命令 | `npm run build`（生成根 `index.html`，保持单文件、双击即玩） |
+| 校验命令 | `npm run check` |
 | 线上地址 | https://37l3l4w2p1gt5uye81t.traesite.cn/ |
 | 部署站点 ID | `37l3l4w2p1gt5uye81t` |
 | 联机改造前线上 SHA-256 | `d5d3bb1c1b05da88cbd5f0206a68ee50fbe6c266ebad6f07b423ddd94961435e` |
@@ -24,6 +27,29 @@
 | GitHub 镜像 | `/tmp/Game` → `https://github.com/xiiiyuee/Game.git` |
 | GitHub 基线提交 | `e141a0e` |
 | 目标 | 2–4 人 PvE 合作，A 计划：WebRTC 房主权威，无专用游戏服务器 |
+
+### 源码结构（2026-11-22 已拆分）
+
+```text
+star-survivor/
+  index.html              # 构建产物，部署/双击都用它，不要直接编辑
+  package.json            # 无依赖，只有 build / check / test
+  scripts/
+    build.mjs             # 按 manifest 拼接 CSS/JS，回写成单文件
+    check.mjs             # 校验分区、语法、占位符、产物结构
+  src/
+    index.template.html   # HTML 模板 + 两个构建占位符
+    manifest.json         # CSS/JS 的拼接顺序（唯一顺序来源）
+    styles/               # 14 个 CSS 分区
+    js/                   # 23 个 JS 分区，共享同一个 IIFE 作用域
+```
+
+规则：
+
+- 只改 `src/`，然后 `npm run build`。
+- 新增 JS 分区时，必须同时加入 `src/manifest.json`。
+- 分区之间仍然共享同一个作用域，不做 import/export；顺序不能乱。
+- 根 `index.html` 与拆分前基线除一行生成说明外**字节一致**，说明拆分没有改变行为。
 
 ### 已完成的单机功能（不要重做、不要破坏）
 
@@ -59,6 +85,11 @@ python3 -m http.server 3008
 
 # 无头 Chrome CDP（已有进程时）
 curl -s http://127.0.0.1:9222/json/version
+
+# 构建单文件（修改 src/ 后必须先执行）
+cd /workspace/star-survivor
+npm run build
+npm run check
 
 # 部署（源目录内需要 public/index.html）
 D=$(mktemp -d)
@@ -150,11 +181,12 @@ A 计划的硬限制：
 
 | ID | 小任务 | 产出 / 验收 | 依赖 | 状态 |
 |---|---|---|---|---|
-| P0-01 | 通读 `index.html` 的关键锚点 | 能说清单玩家状态、主循环、升级、Boss、芯片、局外成长的位置 | 无 | 待办 |
+| P0-01 | 通读 `index.html` 的关键锚点 | 能说清单玩家状态、主循环、升级、Boss、芯片、局外成长的位置 | 无 | 完成 |
 | P0-02 | 跑通单机基线 | 桌面和 390×844 手机均可开始、移动、射击、选卡、暂停、Boss；0 JS 报错 | P0-01 | 待办 |
-| P0-03 | 记录改造前哈希与提交 | 本文件基线表更新；GitHub 基线提交可查 | P0-02 | 待办 |
+| P0-03 | 记录改造前哈希与提交 | 本文件基线表更新；GitHub 基线提交可查 | P0-01 | 完成 |
 | P0-04 | 确认 D-03 ~ D-09 | 设计决策表全部有结论 | 用户确认 | 待办 |
 | P0-05 | 加联机功能开关 | 单机入口不变；联机入口可通过 `?coop=1` 或菜单按钮隐藏/显示 | P0-04 | 待办 |
+| P0-06 | 源码拆分 + 单文件构建 | `src/` 分区、`npm run build/check` 可用；产物与拆分前基线除生成说明外字节一致；桌面/手机 0 JS 报错 | P0-03 | 完成 |
 
 **Phase 0 完成标准**：单机行为与线上基线一致，联机功能有独立入口，不影响现有玩法。
 
@@ -299,10 +331,10 @@ A 计划的硬限制：
 
 ## 7. 当前进度
 
-- 当前阶段：**Phase 0 未开始**
-- 当前任务：无
-- 下一步：P0-01 通读关键锚点 → P0-02 跑单机基线
-- 阻塞：D-03 ~ D-09 需要用户确认
+- 当前阶段：**Phase 0 进行中**
+- 当前任务：P0-06 已完成（源码拆分 + 单文件构建）
+- 下一步：P0-01 通读关键锚点 → P0-02 跑单机基线 → P0-04 确认设计决策
+- 阻塞：D-03 ~ D-09 需要用户确认（不影响先做 P1-01 模拟层拆分）
 
 ---
 
@@ -312,9 +344,10 @@ A 计划的硬限制：
 
 ```
 日期：2026-11-22
-完成：建立本任务清单；确认采用 A 计划（WebRTC 房主权威）
-当前：尚未开始联机代码改造
-下一步：P0-01 / P0-02
+完成：建立本任务清单；确认 A 计划；完成源码拆分与单文件构建（src/ 14 CSS + 23 JS，npm run build/check）
+当前：根 index.html 已是构建产物；拆分后与基线除一行生成说明外字节一致
+验证：语法检查通过；桌面 1280×800、手机 390×844 启动/移动/射击/暂停/主题/成长档案正常；0 JS 报错
+下一步：P0-01 / P0-02 / P0-04；之后 P1-01
 阻塞：D-03 星币归属、D-04 芯片归属、D-05 升级暂停、D-06 商店、D-08 重连
 ```
 

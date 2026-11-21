@@ -1,0 +1,33 @@
+  /* ========== 结算 ========== */
+  .res-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 14px;
+    margin-top: 18px;
+    font-size: 12px;
+    text-align: left;
+  }
+  .res-grid div {
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 12px;
+    border-radius: 8px;
+    background: rgba(63, 229, 255, 0.05);
+    color: var(--muted);
+  }
+  .res-grid b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .res-buffs {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 11px;
+    line-height: 1.9;
+    color: #a9c4dd;
+    text-align: left;
+    max-height: 112px;
+    overflow-y: auto;
+  }
+  .res-buffs span { color: var(--cyan); }
+

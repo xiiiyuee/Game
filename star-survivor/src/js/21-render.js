@@ -1,0 +1,798 @@
+  /* =====================================================================
+   * 17. 渲染
+   * ===================================================================*/
+  function drawBackground(t) {
+    ctx.fillStyle = bgGrad || "#05070f";
+    ctx.fillRect(0, 0, view.w, view.h);
+
+    // 霓虹星云（多色叠加，随涂装切换）
+    if (nebula) {
+      const drift = t * 0.06;
+      ctx.globalAlpha = lowFx ? 0.45 : 0.8;
+      ctx.drawImage(
+        nebula,
+        -150 + Math.sin(drift) * 18,
+        -150 + Math.cos(drift * 0.8) * 14,
+        view.w + 300,
+        view.h + 300
+      );
+      ctx.globalAlpha = 1;
+    }
+
+    // 星点（视差：随相机轻微反向移动）
+    const ox = (camera.x * 0.12) % view.w;
+    const oy = (camera.y * 0.12) % view.h;
+    for (let i = 0; i < stars.length; i++) {
+      const s = stars[i];
+      const tw = 0.55 + 0.45 * Math.sin(t * 0.9 + s.ph);
+      let px = s.x - ox;
+      let py = s.y - oy;
+      if (px < 0) px += view.w;
+      if (py < 0) py += view.h;
+      ctx.globalAlpha = s.a * tw * 0.5;
+      ctx.fillStyle = i % 7 === 0 ? THEME.starA : THEME.starB;
+      ctx.fillRect(px, py, s.r, s.r);
+    }
+    ctx.globalAlpha = 1;
+
+    // 低对比度网格（随相机滚动，体现大世界移动感）
+    ctx.strokeStyle = THEME.grid;
+    ctx.lineWidth = 1;
+    const gap = 90;
+    const gx = ((camera.x % gap) + gap) % gap;
+    const gy = ((camera.y % gap) + gap) % gap;
+    ctx.beginPath();
+    for (let x = -gx; x < view.w + gap; x += gap) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, view.h);
+    }
+    for (let y = -gy; y < view.h + gap; y += gap) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(view.w, y);
+    }
+    ctx.stroke();
+
+    // 边缘暗角
+    if (vgGrad) {
+      ctx.fillStyle = vgGrad;
+      ctx.fillRect(0, 0, view.w, view.h);
+    }
+  }
+
+  // 世界边界：让玩家感知可活动范围
+  function drawWorldBounds() {
+    ctx.save();
+    // 多层描边模拟柔光：避免对大矩形做 shadowBlur 30
+    const ring = [
+      [14, "rgba(63, 229, 255, 0.05)"],
+      [7, "rgba(63, 229, 255, 0.1)"],
+      [2.5, "rgba(63, 229, 255, 0.36)"],
+    ];
+    for (let i = 0; i < ring.length; i++) {
+      ctx.lineWidth = ring[i][0];
+      ctx.strokeStyle = ring[i][1];
+      ctx.strokeRect(1, 1, world.w - 2, world.h - 2);
+    }
+
+    const L = 70;
+    const corners = [
+      [0, 0, 1, 1], [world.w, 0, -1, 1],
+      [0, world.h, 1, -1], [world.w, world.h, -1, -1],
+    ];
+    ctx.strokeStyle = "rgba(63, 229, 255, 0.38)";
+    ctx.lineWidth = 3;
+    for (let i = 0; i < corners.length; i++) {
+      const c = corners[i];
+      ctx.beginPath();
+      ctx.moveTo(c[0] + c[2] * L, c[1]);
+      ctx.lineTo(c[0], c[1]);
+      ctx.lineTo(c[0], c[1] + c[3] * L);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawGem(g, withGlow) {
+    const a = 0.75 + Math.sin(g.pulse) * 0.25;
+    ctx.save();
+    ctx.translate(g.x, g.y);
+    ctx.rotate(g.pulse * 0.5);
+    if (withGlow) drawGlow("#43ffd0", 0, 0, g.r * 3.6, 0.4 * a);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = "#43ffd0";
+    ctx.beginPath();
+    ctx.moveTo(0, -g.r);
+    ctx.lineTo(g.r, 0);
+    ctx.lineTo(0, g.r);
+    ctx.lineTo(-g.r, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  /* --- 发光贴图缓存：替代逐对象 shadowBlur（后者在高 DPR 下开销极大） --- */
+  const glowCache = new Map();
+  function rgbaOf(hex, a) {
+    if (typeof hex !== "string" || hex[0] !== "#") return `rgba(255,255,255,${a})`;
+    let r, g, b;
+    if (hex.length === 4) {
+      r = parseInt(hex[1] + hex[1], 16);
+      g = parseInt(hex[2] + hex[2], 16);
+      b = parseInt(hex[3] + hex[3], 16);
+    } else {
+      r = parseInt(hex.slice(1, 3), 16);
+      g = parseInt(hex.slice(3, 5), 16);
+      b = parseInt(hex.slice(5, 7), 16);
+    }
+    return `rgba(${r},${g},${b},${a})`;
+  }
+  function glowSprite(color) {
+    let s = glowCache.get(color);
+    if (s) return s;
+    s = document.createElement("canvas");
+    s.width = s.height = 64;
+    const g = s.getContext("2d");
+    const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grd.addColorStop(0, rgbaOf(color, 0.9));
+    grd.addColorStop(0.45, rgbaOf(color, 0.32));
+    grd.addColorStop(1, rgbaOf(color, 0));
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+    glowCache.set(color, s);
+    return s;
+  }
+  function drawGlow(color, x, y, radius, alpha) {
+    const s = glowSprite(color);
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(s, x - radius, y - radius, radius * 2, radius * 2);
+    ctx.globalAlpha = 1;
+  }
+
+  function drawBullets() {
+    // 拖尾合并为一条路径，减少 stroke 次数
+    ctx.strokeStyle = "rgba(126, 240, 255, 0.4)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < bullets.length; i++) {
+      const b = bullets[i];
+      if (b.x < cull.x0 || b.x > cull.x1 || b.y < cull.y0 || b.y > cull.y1) continue;
+      const tx = b.x - Math.cos(b.ang) * 12;
+      const ty = b.y - Math.sin(b.ang) * 12;
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+
+    for (let i = 0; i < bullets.length; i++) {
+      const b = bullets[i];
+      if (b.x < cull.x0 || b.x > cull.x1 || b.y < cull.y0 || b.y > cull.y1) continue;
+      if (!lowFx) drawGlow(b.color || "#3fe5ff", b.x, b.y, b.r * 4.2, 0.5);
+      ctx.fillStyle = "#eaffff";
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, TAU);
+      ctx.fill();
+    }
+  }
+
+  function drawEnemyBullets() {
+    ctx.globalAlpha = 0.95;
+    for (let i = 0; i < ebullets.length; i++) {
+      const b = ebullets[i];
+      if (b.x < cull.x0 || b.x > cull.x1 || b.y < cull.y0 || b.y > cull.y1) continue;
+      if (!lowFx) drawGlow(b.color, b.x, b.y, b.r * 3.6, 0.55);
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawShape(x, y, r, sides, rot, fill, stroke, lw) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    ctx.beginPath();
+    for (let i = 0; i < sides; i++) {
+      const a = -Math.PI / 2 + (i / sides) * TAU;
+      const px = Math.cos(a) * r;
+      const py = Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lw || 1.6;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawEnemies(t) {
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (e.x < cull.x0 || e.x > cull.x1 || e.y < cull.y0 || e.y > cull.y1) continue;
+
+      if (e.isBoss) {
+        // 冲刺预警：虚线指示突进方向
+        if (e.warn > 0) {
+          ctx.save();
+          ctx.setLineDash([12, 9]);
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = rgbaOf(THEME.gold, 0.28 + 0.22 * Math.sin(t * 28));
+          ctx.beginPath();
+          ctx.moveTo(e.x, e.y);
+          ctx.lineTo(e.x + Math.cos(e.dashAng) * 620, e.y + Math.sin(e.dashAng) * 620);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        const bodyFill = ["", rgbaOf(THEME.boss, 0.42), rgbaOf(THEME.magenta, 0.35), rgbaOf(THEME.gold, 0.35)][e.phase];
+        const bodyStroke = ["", THEME.boss, THEME.magenta, THEME.gold][e.phase];
+        const eyeColor = ["", THEME.cyanSoft, THEME.gold, "#ffffff"][e.phase];
+        const pulse = 1 + Math.sin(t * 3) * 0.03;
+
+        ctx.save();
+        ctx.translate(e.x, e.y);
+
+        // 柔和外发光改为缓存贴图，避免大半径 shadowBlur
+        if (!lowFx) drawGlow(THEME.boss, 0, 0, e.r * 2.1, 0.4);
+
+        // 外环：阶段越高层数越多
+        ctx.rotate(e.spin);
+        for (let ring = 0; ring < e.phase; ring++) {
+          ctx.strokeStyle = rgbaOf(THEME.boss, 0.5 - ring * 0.14);
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, e.r * (1.32 + ring * 0.26), 0, TAU);
+          ctx.stroke();
+        }
+
+        // 六边形本体
+        ctx.beginPath();
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * TAU;
+          const px = Math.cos(a) * e.r * pulse;
+          const py = Math.sin(a) * e.r * pulse;
+          if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = bodyFill;
+        ctx.fill();
+        ctx.strokeStyle = bodyStroke;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // 核心之眼
+        ctx.rotate(-e.spin * 2);
+        ctx.fillStyle = eyeColor;
+        ctx.beginPath();
+        ctx.arc(0, 0, e.r * 0.3, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+
+        // ===== 机制表现 =====
+        // 旋转激光
+        if (e.mechanics && e.mechanics.includes("laser") && e.laserTime > 0) {
+          ctx.save();
+          for (let k = 0; k < 2; k++) {
+            const ang = e.laserAng + k * Math.PI;
+            const len = 1200;
+            const ex = e.x + Math.cos(ang) * len;
+            const ey = e.y + Math.sin(ang) * len;
+            ctx.lineCap = "round";
+            ctx.strokeStyle = rgbaOf(THEME.orange, 0.16 + 0.08 * Math.sin(t * 24));
+            ctx.lineWidth = 18;
+            ctx.beginPath();
+            ctx.moveTo(e.x, e.y);
+            ctx.lineTo(ex, ey);
+            ctx.stroke();
+            ctx.strokeStyle = rgbaOf(THEME.orange, 0.85);
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(e.x, e.y);
+            ctx.lineTo(ex, ey);
+            ctx.stroke();
+            ctx.strokeStyle = "rgba(255,255,255,0.9)";
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(e.x, e.y);
+            ctx.lineTo(ex, ey);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+        // 分裂护盾
+        if (e.mechanics && e.mechanics.includes("shield") && e.shield > 0) {
+          ctx.save();
+          ctx.strokeStyle = rgbaOf(THEME.cyanSoft, 0.45 + 0.25 * Math.sin(t * 4));
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, e.r * 1.45, 0, TAU);
+          ctx.stroke();
+          const orbR = e.r * 1.45;
+          for (let k = 0; k < 4; k++) {
+            const a = t * 1.4 + (k / 4) * TAU;
+            const ox = e.x + Math.cos(a) * orbR;
+            const oy = e.y + Math.sin(a) * orbR;
+            drawGlow(THEME.cyanSoft, ox, oy, 14, 0.5);
+            ctx.fillStyle = THEME.cyanSoft;
+            ctx.beginPath();
+            ctx.arc(ox, oy, 4, 0, TAU);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+        // 狂暴光环
+        if (e.rage > 0) {
+          ctx.save();
+          const pr = e.r * (1.5 + Math.sin(t * 9) * 0.08);
+          ctx.strokeStyle = rgbaOf(THEME.danger, 0.6);
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, pr, 0, TAU);
+          ctx.stroke();
+          ctx.restore();
+        }
+        continue;
+      }
+
+      ctx.save();
+      ctx.translate(e.x, e.y);
+      const detail = e.r * view.scale > 7;
+      if (!lowFx) drawGlow(e.color, 0, 0, e.r * (e.type === "diamond" ? 3 : 2.4), e.type === "diamond" ? 0.55 : 0.42);
+
+      if (e.type === "tri") {
+        drawShape(0, 0, e.r, 3, e.angle + Math.PI / 2, rgbaOf(e.color, 0.22), e.color, 2);
+      } else if (e.type === "square") {
+        drawShape(0, 0, e.r, 4, t * 0.9 + e.seed, rgbaOf(e.color, 0.2), e.color, 2);
+      } else if (e.type === "penta") {
+        drawShape(0, 0, e.r, 5, t * 1.4 + e.seed, rgbaOf(e.color, 0.2), e.color, 2);
+      } else {
+        drawShape(0, 0, e.r, 4, e.angle + Math.PI / 4, rgbaOf(e.color, 0.24), e.color, 2.4);
+      }
+      ctx.shadowBlur = 0;
+
+      // 精英血条
+      if (detail && e.type === "diamond") {
+        const w = e.r * 2.1;
+        const pct = clamp(e.hp / e.maxHp, 0, 1);
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(-w / 2, -e.r - 10, w, 3.5);
+        ctx.fillStyle = e.color;
+        ctx.fillRect(-w / 2, -e.r - 10, w * pct, 3.5);
+      }
+
+      // 词缀标识：护盾环 + 顶部彩色标记点
+      if (detail && e.affixes && e.affixes.length) {
+        if (!lowFx && e.affixes.includes("shield")) {
+          ctx.strokeStyle = rgbaOf(THEME.cyanSoft, 0.7);
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(0, 0, e.r + 6, 0, TAU);
+          ctx.stroke();
+        }
+        const marks = { shield: THEME.cyanSoft, haste: THEME.gold, split: THEME.violet, boom: THEME.orange };
+        for (let k = 0; k < e.affixes.length; k++) {
+          ctx.fillStyle = marks[e.affixes[k]] || "#fff";
+          ctx.beginPath();
+          ctx.arc(0, -e.r - 15 - k * 6, 2.2, 0, TAU);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+  }
+
+  // 守护无人机
+  function drawDrones(t) {
+    const n = Math.min(CFG.DRONES.MAX, stats.drones || 0);
+    if (!n || !player) return;
+    const orbit = CFG.DRONES.ORBIT * view.scale;
+    ctx.strokeStyle = rgbaOf(THEME.mint, 0.12);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, orbit, 0, TAU);
+    ctx.stroke();
+    for (let i = 0; i < n; i++) {
+      const ang = t * 1.15 + (i / n) * TAU;
+      const x = player.x + Math.cos(ang) * orbit;
+      const y = player.y + Math.sin(ang) * orbit;
+      drawGlow(THEME.mint, x, y, 20, 0.55);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(ang);
+      ctx.fillStyle = rgbaOf(THEME.mint, 0.22);
+      ctx.strokeStyle = THEME.mint;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * TAU;
+        const px = Math.cos(a) * 5;
+        const py = Math.sin(a) * 5;
+        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawPlayer(t) {
+    if (!player) return;
+    const blink = player.invuln > 0 && Math.floor(t * 18) % 2 === 0;
+    const red = player.hitFlash > 0;
+
+    // 护盾环
+    if (player.shield > 0.5) {
+      ctx.strokeStyle = rgbaOf(THEME.cyan, 0.18 + (player.shield / stats.shieldMax) * 0.25);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.r + 7, 0, TAU);
+      ctx.stroke();
+    }
+
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.facing + Math.PI / 2);
+
+    // 外发光使用缓存贴图（原先每帧一次 shadowBlur 16）
+    drawGlow(red ? THEME.danger : THEME.cyan, 0, 0, player.r * 3.2, 0.45);
+    ctx.globalAlpha = blink ? 0.45 : 1;
+
+    // 外层三角
+    ctx.strokeStyle = red ? rgbaOf(THEME.danger, 0.9) : THEME.cyanSoft;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -player.r - 4);
+    ctx.lineTo(player.r * 0.85, player.r * 0.75);
+    ctx.lineTo(-player.r * 0.85, player.r * 0.75);
+    ctx.closePath();
+    ctx.fillStyle = red ? rgbaOf(THEME.danger, 0.3) : rgbaOf(THEME.cyan, 0.25);
+    ctx.fill();
+    ctx.stroke();
+
+    // 内核
+    ctx.fillStyle = red ? rgbaOf(THEME.danger, 0.35) : THEME.cyanSoft;
+    ctx.beginPath();
+    ctx.arc(0, 0, player.r * 0.42, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawParticles() {
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      if (p.x < cull.x0 || p.x > cull.x1 || p.y < cull.y0 || p.y > cull.y1) continue;
+      const a = clamp(p.life / p.max, 0, 1);
+      ctx.globalAlpha = a * 0.9;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * (0.5 + a * 0.6), 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawTexts() {
+    if (!texts.length) return;
+    ctx.textAlign = "center";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(2, 6, 14, 0.75)";
+    for (let i = 0; i < texts.length; i++) {
+      const t = texts[i];
+      if (t.x < cull.x0 || t.x > cull.x1 || t.y < cull.y0 || t.y > cull.y1) continue;
+      const a = clamp(t.life / 0.75, 0, 1);
+      ctx.globalAlpha = a;
+      ctx.font = `600 ${t.size}px system-ui, -apple-system, sans-serif`;
+      ctx.fillStyle = t.color;
+      // 深色描边替代 shadowBlur，保证可读性且更便宜
+      ctx.strokeText(t.text, t.x, t.y);
+      ctx.fillText(t.text, t.x, t.y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "left";
+  }
+
+  function drawGems() {
+    // 宝石过多时关闭逐个发光，明显降低填充开销
+    const withGlow = gems.length <= 60;
+    for (let i = 0; i < gems.length; i++) {
+      const g = gems[i];
+      if (g.x < cull.x0 || g.x > cull.x1 || g.y < cull.y0 || g.y > cull.y1) continue;
+      drawGem(g, withGlow);
+    }
+  }
+
+  // 能量核心掉落
+  function drawCores(t) {
+    for (let i = 0; i < coreDrops.length; i++) {
+      const c = coreDrops[i];
+      if (c.x < cull.x0 || c.x > cull.x1 || c.y < cull.y0 || c.y > cull.y1) continue;
+      const pulse = 1 + 0.16 * Math.sin(t * 5 + c.seed);
+      const a = c.life < 3 ? 0.4 + 0.6 * Math.abs(Math.sin(t * 6)) : 1;
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.translate(c.x, c.y);
+      ctx.rotate(t * 0.8 + c.seed);
+      drawGlow("#ffd666", 0, 0, 20, 0.5);
+      ctx.fillStyle = "#ffd666";
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const ang = (k / 6) * TAU;
+        const px = Math.cos(ang) * 9 * pulse;
+        const py = Math.sin(ang) * 9 * pulse;
+        k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 248, 214, 0.95)";
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.2, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // 缓速场
+  function drawFields(t) {
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i];
+      if (f.x + f.r < cull.x0 || f.x - f.r > cull.x1 || f.y + f.r < cull.y0 || f.y - f.r > cull.y1) continue;
+      const g = ctx.createRadialGradient(f.x, f.y, f.r * 0.1, f.x, f.y, f.r);
+      g.addColorStop(0, "rgba(80, 235, 255, 0.03)");
+      g.addColorStop(0.75, "rgba(60, 200, 255, 0.07)");
+      g.addColorStop(1, "rgba(120, 245, 255, 0.16)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.r, 0, TAU);
+      ctx.fill();
+
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.rotate(-t * 0.35 + f.seed);
+      ctx.setLineDash([10, 14]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(130, 250, 255, 0.55)";
+      ctx.beginPath();
+      ctx.arc(0, 0, f.r * 0.94, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.rotate(t * 0.8);
+      ctx.strokeStyle = "rgba(160, 255, 255, 0.4)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, f.r * 0.5, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // 自动炮塔
+  function drawTurrets(t) {
+    for (let i = 0; i < turrets.length; i++) {
+      const tu = turrets[i];
+      if (tu.x < cull.x0 || tu.x > cull.x1 || tu.y < cull.y0 || tu.y > cull.y1) continue;
+      ctx.save();
+      ctx.translate(tu.x, tu.y);
+      drawGlow("#ffd666", 0, 0, 26, 0.42);
+
+      // 底座
+      ctx.fillStyle = "rgba(40, 32, 10, 0.95)";
+      ctx.strokeStyle = "rgba(255, 210, 110, 0.85)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const ang = (k / 6) * TAU + tu.seed;
+        const px = Math.cos(ang) * 13;
+        const py = Math.sin(ang) * 13;
+        k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 炮管
+      ctx.rotate(tu.ang);
+      ctx.fillStyle = "#ffd666";
+      ctx.fillRect(4, -3, 17, 6);
+      ctx.fillStyle = "rgba(255, 248, 214, 0.9)";
+      ctx.beginPath();
+      ctx.arc(0, 0, 4.4, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+
+      // 待机指示
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = "#ffd666";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(tu.x, tu.y, 19 + Math.sin(t * 3 + tu.seed) * 1.5, 0, TAU);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // 风险星域：红色虚线警示圈
+  function drawZones(t) {
+    for (let i = 0; i < zones.length; i++) {
+      const z = zones[i];
+      const a = clamp(Math.min(z.life / 1.5, (z.maxLife - z.life) / 1.2), 0, 1);
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.translate(z.x, z.y);
+
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, z.r);
+      g.addColorStop(0, "rgba(255, 40, 80, 0.02)");
+      g.addColorStop(0.72, "rgba(255, 40, 80, 0.05)");
+      g.addColorStop(1, "rgba(255, 70, 100, 0.14)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, z.r, 0, TAU);
+      ctx.fill();
+
+      ctx.rotate(t * 0.18 + z.seed);
+      ctx.setLineDash([16, 12]);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(255, 70, 100, 0.7)";
+      ctx.beginPath();
+      ctx.arc(0, 0, z.r, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(255, 140, 160, 0.3)";
+      ctx.beginPath();
+      ctx.arc(0, 0, z.r * 0.62, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.fillStyle = "#ff9db0";
+      ctx.font = "600 13px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("风险星域 · 经验 ×2", z.x, z.y - z.r - 12);
+      ctx.restore();
+    }
+  }
+
+  // 能量水晶 / 补给舱
+  function drawProps(t) {
+    for (let i = 0; i < crystals.length; i++) {
+      const c = crystals[i];
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.rotate(t * 0.5 + c.seed);
+      ctx.shadowColor = "#6fe9ff";
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * TAU - Math.PI / 2;
+        const px = Math.cos(a) * c.r;
+        const py = Math.sin(a) * c.r * 1.25;
+        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = c.flash > 0 ? "rgba(255,255,255,0.85)" : "rgba(63, 229, 255, 0.2)";
+      ctx.fill();
+      ctx.strokeStyle = c.flash > 0 ? "#ffffff" : "#7ef0ff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(190, 255, 255, 0.8)";
+      ctx.beginPath();
+      ctx.arc(0, 0, 3, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+
+      if (c.hp < c.maxHp) {
+        const w = c.r * 2;
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(c.x - w / 2, c.y - c.r - 12, w, 3.5);
+        ctx.fillStyle = "#7ef0ff";
+        ctx.fillRect(c.x - w / 2, c.y - c.r - 12, w * clamp(c.hp / c.maxHp, 0, 1), 3.5);
+      }
+    }
+
+    for (let i = 0; i < pods.length; i++) {
+      const p = pods[i];
+      const pulse = 1 + Math.sin(p.seed * 3) * 0.08;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(t * 0.8);
+      ctx.shadowColor = "#8bffdc";
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = "#8bffdc";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-p.r * pulse, -p.r * pulse, p.r * 2 * pulse, p.r * 2 * pulse);
+      ctx.shadowBlur = 0;
+      ctx.rotate(-t * 0.8);
+      ctx.fillStyle = "#8bffdc";
+      ctx.fillRect(-p.r * 0.5, -2, p.r, 4);
+      ctx.fillRect(-2, -p.r * 0.5, 4, p.r);
+      ctx.restore();
+    }
+  }
+
+  // 超载冲击波
+  function drawPulses() {
+    for (let i = 0; i < pulses.length; i++) {
+      const p = pulses[i];
+      const k = 1 - p.life / p.maxLife;
+      ctx.save();
+      ctx.globalAlpha = clamp(1 - k, 0, 1);
+      ctx.strokeStyle = "#8ff6ff";
+      ctx.lineWidth = 5 * (1 - k * 0.7);
+      ctx.shadowColor = "#3fe5ff";
+      ctx.shadowBlur = 22;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function render(t) {
+    cull.x0 = camera.x - 120;
+    cull.y0 = camera.y - 120;
+    cull.x1 = camera.x + view.w + 120;
+    cull.y1 = camera.y + view.h + 120;
+    ctx.save();
+    if (state === "playing" && shake > 0) {
+      const s = shake * (lowFx ? 0.35 : 1);
+      ctx.translate(rand(-s, s), rand(-s, s));
+    }
+
+    drawBackground(t);
+
+    if (player && state !== "menu") {
+      ctx.save();
+      ctx.translate(-camera.x, -camera.y);
+      drawWorldBounds();
+      drawFields(t);
+      drawZones(t);
+      drawAsteroids(t);
+      drawProps(t);
+      drawGems();
+      drawChipDrops(t);
+      drawCores(t);
+      drawTrader(t);
+      drawBullets();
+      drawEnemies(t);
+      drawPlayer(t);
+      drawDrones(t);
+      drawTurrets(t);
+      drawPulses();
+      drawEnemyBullets();
+      drawParticles();
+      drawTexts();
+      ctx.restore();
+    }
+
+    // 超载减速期间的青蓝滤镜
+    if (state === "playing" && ultTimer > 0) {
+      const a = 0.05 + 0.025 * Math.sin(t * 8);
+      ctx.fillStyle = `rgba(80, 220, 255, ${a})`;
+      ctx.fillRect(0, 0, view.w, view.h);
+    }
+
+    // 受伤红色闪屏
+    if (hurtFlash > 0.01) {
+      const a = clamp(hurtFlash, 0, 1) * 0.2 * CFG.FX.FLASH;
+      ctx.fillStyle = `rgba(255, 40, 70, ${a})`;
+      ctx.fillRect(-40, -40, view.w + 80, view.h + 80);
+    }
+
+    // Boss 击杀白闪
+    if (victoryFlash > 0.01) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.45 * victoryFlash})`;
+      ctx.fillRect(0, 0, view.w, view.h);
+    }
+
+    ctx.restore();
+  }
+

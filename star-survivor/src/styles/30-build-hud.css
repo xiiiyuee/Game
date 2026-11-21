@@ -1,0 +1,36 @@
+  /* ========== 无尽远航 / 建造 HUD ========== */
+  .chapter-tag {
+    margin-top: 5px;
+    text-align: right;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--gold);
+    opacity: 0.85;
+  }
+  .build-btn {
+    position: fixed;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(66px, calc(env(safe-area-inset-bottom) + 54px));
+    z-index: 12;
+    min-width: 66px;
+    height: 42px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 200, 87, 0.45);
+    background: rgba(28, 22, 8, 0.78);
+    color: #ffd666;
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .build-btn b { font-size: 14px; }
+  .build-btn.ready { box-shadow: 0 0 18px rgba(255, 200, 87, 0.35); }
+  body.touch .build-btn {
+    left: max(150px, calc(env(safe-area-inset-left) + 140px));
+    right: auto;
+    bottom: max(28px, calc(env(safe-area-inset-bottom) + 22px));
+    height: 46px;
+  }
+

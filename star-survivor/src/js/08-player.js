@@ -1,0 +1,129 @@
+  /* =====================================================================
+   * 6. 玩家与统计数据
+   * ===================================================================*/
+  function makeStats(weaponKey) {
+    const P = CFG.PLAYER;
+    const W = CFG.WEAPONS[weaponKey] || CFG.WEAPONS.pulse;
+    return {
+      moveSpeed: P.SPEED,
+      fireInterval: W.interval,
+      damage: W.damage,
+      bulletSpeed: W.speed,
+      range: W.range,
+      crit: P.CRIT,
+      critMult: P.CRIT_MULT,
+      armor: 0,
+      bulletCount: W.count,
+      pierce: W.pierce,
+      spread: W.spread,          // 武器固有扇形（散射）
+      bulletR: W.bulletR,
+      bulletColor: THEME.weapons[weaponKey] || W.color,
+      drones: 0,                 // 守护无人机数量
+      shieldMax: P.SHIELD_MAX,
+      shieldRegen: P.SHIELD_REGEN,
+      // 事件 / 进化 / 诅咒修正
+      xpMul: 1,               // 经验获取倍率
+      takenMul: 1,            // 受到伤害倍率（诅咒）
+      enemySpeedMul: 1,       // 敌人移速倍率（诅咒）
+      explodeOnHit: false,    // 进化「裂变弹」
+      echoBurst: false,       // 进化「虚空回响」
+      twinPulse: false,       // 脉冲分支「双子脉冲」
+      pulseBlast: false,      // 脉冲分支「湮灭脉冲」
+      scatterBlast: false,    // 散射分支「霰爆核心」
+      railShard: false,       // 轨道分支「裂变轨道」
+    };
+  }
+
+  function resetGame() {
+    const P = CFG.PLAYER;
+    stats = makeStats(chosenWeapon);
+    player = {
+      x: world.w / 2,
+      y: world.h / 2,
+      r: P.RADIUS,
+      hp: P.HP,
+      hpMax: P.HP,
+      shield: stats.shieldMax,
+      shieldDelay: 0,
+      invuln: 0,
+      fireCd: 0,
+      dashCd: 0,
+      dashTime: 0,
+      dashDir: { x: 1, y: 0 },
+      lastDir: { x: 0, y: -1 },
+      facing: -Math.PI / 2,
+      trailCd: 0,
+      hitFlash: 0,
+      energy: 0,                 // 超载能量
+      weapon: chosenWeapon,
+      droneCd: [],               // 每架无人机的射击冷却
+    };
+    applyMeta(stats, player);
+
+    bullets = [];
+    enemies = [];
+    ebullets = [];
+    particles = [];
+    texts = [];
+    gems = [];
+    zones = [];
+    crystals = [];
+    pods = [];
+    pulses = [];
+    turrets = [];
+    fields = [];
+    coreDrops = [];
+    stacks = {};
+    boss = null;
+
+    elapsed = 0;
+    chapter = 1;
+    chapterStartElapsed = 0;
+    credits = 0;
+    cores = 0;
+    revives = 0;
+    buildMode = null;
+    lastShopWave = 0;
+    shopCounts = {};
+    waveNum = 1;
+    score = 0;
+    kills = 0;
+    level = 1;
+    xp = 0;
+    xpNeed = CFG.XP.BASE;
+    pendingLevels = 0;
+    bossSpawned = false;
+    spawnTimer = 0.7;
+    shake = 0;
+    hurtFlash = 0;
+    nextEnemyId = 1;
+    nextPropId = 1;
+    upgradeCards = [];
+    chapterMod = pick(CHAPTER_MODS);
+    hitStop = 0;
+    musicTimer = 0;
+    ultTimer = 0;
+    echoTimer = 0;
+    zoneTimer = 7;
+    crystalTimer = 5;
+    podTimer = 12;
+    combo = 0;
+    comboTimer = 0;
+    comboBest = 0;
+    slowmo = 0;
+    victoryTimer = 0;
+    victoryFlash = 0;
+    chips = [];
+    chipDrops = [];
+    asteroids = [];
+    asteroidTimer = 6;
+    trader = null;
+    traderTimer = CFG.TRADER.INTERVAL;
+    traderOffers = [];
+
+    hideBossBar();
+    snapCamera();
+    updateBuffPanel();
+    refreshHud(true);
+  }
+

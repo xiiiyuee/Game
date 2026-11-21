@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<!-- 本文件由 scripts/build.mjs 从 src/ 生成；请修改 src/ 后运行 npm run build -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#05070f" />
+<title>星域幸存者 · Starfield Survivor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23060b18'/%3E%3Cpath d='M16 4 L28 26 L16 21 L4 26 Z' fill='%233fe5ff'/%3E%3C/svg%3E" />
+<style>
+/*__BUILD_STYLES__*/</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- 左上：生命 / 护盾 / 经验；右上：倒计时 / 分数 / 击杀 / 波次 -->
+<div class="hud hidden" id="hud">
+  <div class="hud-left">
+    <div class="bar-row">
+      <span class="lvl">LV <b id="ui-level">1</b></span>
+      <div class="bar hp"><i id="ui-hp"></i><span id="ui-hp-text">100 / 100</span></div>
+    </div>
+    <div class="bar shield"><i id="ui-shield"></i><span id="ui-shield-text">50 / 50</span></div>
+    <div class="bar xp"><i id="ui-xp"></i><span id="ui-xp-text">0 / 8</span></div>
+    <div class="bar ult" id="ult-bar"><i id="ui-ult"></i><span id="ui-ult-text">超载 0%</span></div>
+  </div>
+  <div class="hud-right">
+    <div class="timer" id="ui-timer">0:00</div>
+    <div class="stat-row">
+      <span>分数 <b id="ui-score">0</b></span>
+      <span>击杀 <b id="ui-kills">0</b></span>
+    </div>
+    <div class="stat-row">
+      <span>星币 <b id="ui-credits">0</b></span>
+      <span>核心 <b id="ui-cores">0</b></span>
+    </div>
+    <div class="chapter-tag" id="ui-chapter">星域 1</div>
+    <div class="weapon-tag" id="ui-weapon">脉冲核心</div>
+    <div class="combo hidden" id="ui-combo">连杀 <b id="ui-combo-n">0</b> <span id="ui-combo-m">×1.00</span></div>
+  </div>
+</div>
+
+<div class="boss-wrap hidden" id="boss-wrap">
+  <div class="boss-name" id="ui-boss-name">BOSS</div>
+  <div class="boss-bar"><i id="ui-boss"></i></div>
+</div>
+
+<div class="buffs hidden" id="buffs">
+  <h4>强化</h4>
+  <div id="buff-list"></div>
+</div>
+
+<!-- 开始菜单 -->
+<div class="overlay" id="ov-menu">
+  <div class="panel">
+    <h1>星域幸存者</h1>
+    <p class="sub">STARFIELD SURVIVOR · 几何弹幕肉鸽</p>
+    <button class="btn" data-act="start">开始游戏</button>
+    <button class="btn ghost small" data-act="meta">成长档案</button>
+    <button class="btn ghost small" data-act="theme">涂装 / 配色</button>
+    <ul class="help">
+      <li><b>WASD / 方向键</b> 移动（斜向速度已归一化）</li>
+      <li>开局三选一武器：<b>脉冲 / 散射 / 轨道激光</b></li>
+      <li><b>空格 / Shift</b> 冲刺，短暂无敌并带有冷却</li>
+      <li><b>ESC</b> 暂停 / 继续（切出窗口会自动暂停）</li>
+      <li><b>E / 超载按钮</b> 能量满时释放：清除弹幕、击退周围敌人、短暂减速战场</li>
+      <li>子弹可以<b>击落小怪弹幕</b>；3 秒内连续击杀叠加<b>连杀倍率</b>（最高 ×2）</li>
+      <li><b>无尽远航</b>：每 10 波迎战 Boss，击破后进入更强星域；每 3 波停靠<b>星港</b>用星币补给</li>
+      <li>精英掉落<b>能量核心</b>，按 <b>B</b> 建造炮塔 / 缓速场</li>
+      <li>满足条件会出现<b>进化卡</b>，三把武器各有两条专属分支</li>
+      <li>留意地图上的<b>风险星域</b>（经验翻倍但持续掉血）与<b>补给舱 / 能量水晶</b></li>
+      <li><b>击碎陨石</b>会爆炸并掉落资源；<b>星际游商</b>出现时触碰可用星币三选一交易</li>
+      <li>精英 / Boss 掉落<b>芯片</b>，自动装备 3 槽，满槽会替换最弱的一枚</li>
+      <li>每局结束获得<b>残骸</b>，在菜单「成长档案」购买跨局永久强化</li>
+      <li>武器自动锁定最近的敌人开火</li>
+      <li>手机：左侧摇杆移动，右侧按钮超载 / 冲刺 / 暂停</li>
+    </ul>
+    <p class="note">音效由 Web Audio 实时合成，点击开始后才会启用</p>
+  </div>
+</div>
+
+<!-- 开局武器选择 -->
+<div class="overlay hidden" id="ov-weapon">
+  <div class="panel wide">
+    <h2>选择核心</h2>
+    <p class="sub">三种武器决定本局的攻击节奏 · 之后仍可强化</p>
+    <div class="cards weapon-cards" id="weapon-cards">
+      <button class="card rarity-common weapon" data-weapon="pulse">
+        <div class="card-top"><span class="card-ic">◇</span><span class="card-rt">均衡</span></div>
+        <h3>脉冲核心</h3>
+        <p>单发稳定、射速均衡<br>伤害 <b>10</b> · 间隔 <b>0.26s</b> · 射程 <b>470</b></p>
+      </button>
+      <button class="card rarity-rare weapon" data-weapon="scatter">
+        <div class="card-top"><span class="card-ic">⋔</span><span class="card-rt">近战爆发</span></div>
+        <h3>散射核心</h3>
+        <p>一次 4 发扇形弹<br>单发 <b>6.2</b> · 间隔 <b>0.44s</b> · 射程 <b>380</b></p>
+      </button>
+      <button class="card rarity-epic weapon" data-weapon="rail">
+        <div class="card-top"><span class="card-ic">↟</span><span class="card-rt">远程穿透</span></div>
+        <h3>轨道激光</h3>
+        <p>高伤慢射速，贯穿 2 个敌人<br>伤害 <b>26</b> · 间隔 <b>0.64s</b> · 射程 <b>560</b></p>
+      </button>
+    </div>
+    <p class="note">手机同样适用：点选卡片后进入战斗</p>
+  </div>
+</div>
+
+<!-- 暂停菜单 -->
+<div class="overlay hidden" id="ov-pause">
+  <div class="panel">
+    <h2>已暂停</h2>
+    <p class="sub">PAUSED</p>
+    <div style="margin-top:8px">
+      <button class="btn" data-act="resume">继续游戏</button>
+      <button class="btn ghost" data-act="restart">重新开始</button>
+      <button class="btn ghost" data-act="theme">涂装</button>
+    </div>
+    <p class="note">按 ESC 也可继续</p>
+  </div>
+</div>
+
+<!-- 涂装选择 -->
+<div class="overlay hidden" id="ov-theme">
+  <div class="panel">
+    <h2>霓虹涂装</h2>
+    <p class="sub">即时生效 · 游戏中按 <b>T</b> 快速循环</p>
+    <div class="theme-grid" id="theme-grid"></div>
+    <button class="btn" data-act="theme-close">完成</button>
+  </div>
+</div>
+
+<!-- 局外成长档案（跨局永久强化） -->
+<div class="overlay hidden" id="ov-meta">
+  <div class="panel wide">
+    <h2>成长档案</h2>
+    <p class="sub">跨局永久强化 · 每局结束根据表现获得残骸</p>
+    <div class="shop-head"><span>可用残骸</span><b id="meta-shards">0</b></div>
+    <div class="shop-grid" id="meta-items"></div>
+    <button class="btn" data-act="meta-close">返回</button>
+  </div>
+</div>
+
+<!-- 升级选择 -->
+<div class="overlay hidden" id="ov-upgrade">
+  <div class="panel wide">
+    <h2>等级提升</h2>
+    <p class="sub">选择一项强化 · 当前 <span id="ui-up-level">LV 2</span><span class="kb-hint"> · 按 1 / 2 / 3 快速选择</span></p>
+    <div class="cards" id="cards"></div>
+  </div>
+</div>
+
+<!-- 星港商店（每 3 波及章节补给） -->
+<div class="overlay hidden" id="ov-shop">
+  <div class="panel wide">
+    <h2 id="shop-title">星港补给站</h2>
+    <p class="sub" id="shop-sub">用星币强化本局构筑 · 击败敌人可获得星币</p>
+    <div class="shop-head"><span>当前星币</span><b id="shop-credits">0</b></div>
+    <div class="shop-grid" id="shop-items"></div>
+    <button class="btn" data-act="shop-close">启航</button>
+  </div>
+</div>
+
+<!-- 星际游商：限时三选一交易 -->
+<div class="overlay hidden" id="ov-trader">
+  <div class="panel wide">
+    <h2 id="trader-title">星际游商</h2>
+    <p class="sub" id="trader-sub">机会只有一次 · 用星币换取补给或赌一把</p>
+    <div class="shop-head"><span>当前星币</span><b id="trader-credits">0</b></div>
+    <div class="shop-grid" id="trader-items"></div>
+    <button class="btn ghost" data-act="trader-close" style="margin-left:0">离开</button>
+  </div>
+</div>
+
+<!-- 防线建造 -->
+<div class="overlay hidden" id="ov-build">
+  <div class="panel wide">
+    <h2>防线建造</h2>
+    <p class="sub">消耗能量核心 · 建造后点击战场位置放置</p>
+    <div class="shop-head"><span>可用核心</span><b id="build-cores">0</b></div>
+    <div class="shop-grid" id="build-items"></div>
+    <button class="btn ghost" data-act="build-cancel" style="margin-left:0">取消</button>
+  </div>
+</div>
+
+<!-- 胜利 / 失败结算 -->
+<div class="overlay hidden" id="ov-result">
+  <div class="panel">
+    <h2 id="res-title">胜利</h2>
+    <p class="sub" id="res-sub"></p>
+    <div class="res-grid" id="res-grid"></div>
+    <div class="res-buffs" id="res-buffs"></div>
+    <button class="btn" data-act="restart">再来一局</button>
+  </div>
+</div>
+
+<div class="lowhp" id="lowhp"></div>
+<button class="mute fx-btn" id="fx-btn" aria-label="特效模式">特效</button>
+<button class="mute" id="mute" aria-label="静音切换">🔊</button>
+<button class="build-btn hidden" id="build-btn">建造 <b id="ui-core-btn">0</b></button>
+
+<!-- 移动端虚拟摇杆与按钮 -->
+<div id="touch">
+  <div id="joystick"><div id="knob"></div></div>
+  <div class="touch-btns">
+    <button id="ult-btn">超载</button>
+    <button id="dash-btn">冲刺</button>
+    <button id="pause-btn">II</button>
+  </div>
+</div>
+
+<script>
+/*__BUILD_SCRIPTS__*/</script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+{
+  "styles": [
+    "src/styles/00-base.css",
+    "src/styles/10-hud.css",
+    "src/styles/11-boss.css",
+    "src/styles/12-buffs.css",
+    "src/styles/20-overlays.css",
+    "src/styles/21-cards.css",
+    "src/styles/22-result.css",
+    "src/styles/30-build-hud.css",
+    "src/styles/31-shop.css",
+    "src/styles/32-chips.css",
+    "src/styles/33-mute.css",
+    "src/styles/40-mobile.css",
+    "src/styles/41-theme.css",
+    "src/styles/50-responsive.css"
+  ],
+  "scripts": [
+    "src/js/01-config.js",
+    "src/js/02-theme.js",
+    "src/js/03-utils.js",
+    "src/js/04-viewport.js",
+    "src/js/05-audio.js",
+    "src/js/06-state.js",
+    "src/js/07-meta.js",
+    "src/js/08-player.js",
+    "src/js/09-input.js",
+    "src/js/10-touch.js",
+    "src/js/11-particles.js",
+    "src/js/12-progression.js",
+    "src/js/13-enemies.js",
+    "src/js/14-player-update.js",
+    "src/js/15-bullets.js",
+    "src/js/16-game-flow.js",
+    "src/js/17-hud.js",
+    "src/js/18-events.js",
+    "src/js/19-defenses.js",
+    "src/js/20-update.js",
+    "src/js/21-render.js",
+    "src/js/22-loop.js",
+    "src/js/23-init.js"
+  ]
+}

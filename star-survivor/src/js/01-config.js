@@ -1,0 +1,219 @@
+  /* =====================================================================
+   * 1. 配置区（集中调整游戏参数）
+   * ===================================================================*/
+  const CFG = {
+    // 无尽远航：每章 10 波，Boss 后进入下一星域，难度持续攀升
+    RUN: {
+      CHAPTER_WAVES: 10,          // 每章波数（第 10 波 Boss）
+      BOSS_HP_GROWTH: 1.8,        // 章节 Boss 生命成长
+      BOSS_DMG_GROWTH: 1.18,      // 章节 Boss 伤害成长
+      ENEMY_HP_GROWTH: 1.06,      // 每个等效波次生命成长（跨章节连续，不回落）
+      ENEMY_DMG_GROWTH: 1.16,     // 章节敌人伤害成长
+      ENEMY_ARMOR_PER_CHAPTER: 0.04, // 每章获得减伤
+      ENEMY_ARMOR_MAX: 0.45,      // 敌人减伤上限
+      ENEMY_SPEED_CAP: 1.9,       // 敌人移速成长上限
+      EBULLET_SPEED_PER_CHAPTER: 0.05, // 每章敌方弹速成长
+      EBULLET_SPEED_CAP: 1.6,     // 敌方弹速总上限（含风暴词条）
+      POWER_ADAPT: 0.22,          // 深渊适应指数（越大越克制高伤害）
+      CLEAR_HEAL: 0.25,           // 击破 Boss 后回复生命比例
+      CLEAR_CREDITS: 60,          // 击破 Boss 星币奖励
+      SHOP_WAVE: 3,               // 每 3 波进入星港
+      CREDIT_KILL: 3,             // 普通击杀星币
+      CREDIT_ELITE: 14,           // 精英击杀星币
+      CREDIT_BOSS: 120,           // Boss 击杀星币
+      MAX_TURRETS: 3,
+      MAX_FIELDS: 2,
+      TURRET_COST: 2,             // 建造炮塔消耗核心
+      FIELD_COST: 3,              // 建造缓速场消耗核心
+      TURRET_RANGE: 360,
+      TURRET_CD: 0.7,
+      TURRET_DMG: 9,
+      FIELD_RADIUS: 125,
+      FIELD_SLOW: 0.5,            // 缓速场内敌人移速倍率
+      CORE_MAGNET: 170,
+      CORE_PICKUP: 30,
+    },
+    PLAYER: {
+      HP: 100,                    // 初始生命
+      SHIELD_MAX: 50,             // 初始护盾上限
+      SHIELD_REGEN: 3.5,          // 护盾每秒恢复量
+      SHIELD_DELAY: 3.5,          // 受到伤害后护盾延迟恢复（秒）
+      SPEED: 245,                 // 移动速度（px/s）
+      RADIUS: 11,                 // 碰撞半径
+      DASH_SPEED: 950,            // 冲刺速度（px/s）
+      DASH_TIME: 0.13,            // 冲刺持续时间
+      DASH_CD: 1.5,               // 冲刺冷却
+      DASH_INVULN: 0.34,          // 冲刺无敌时间
+      INVULN_ON_HURT: 0.7,        // 受伤后的无敌时间
+      BASE_DAMAGE: 10,            // 基础子弹伤害
+      FIRE_INTERVAL: 0.26,        // 基础射击间隔（秒）
+      BULLET_SPEED: 640,          // 子弹速度
+      RANGE: 470,                 // 自动索敌范围
+      CRIT: 0.08,                 // 初始暴击率
+      CRIT_MULT: 2.0,             // 暴击倍率
+    },
+    WORLD: {
+      // 实际战场远大于视口，相机跟随玩家滚动
+      WIDTH_FACTOR: 2.2,          // 世界宽度 = max(视口宽, 960) × 该系数
+      HEIGHT_FACTOR: 2.0,         // 世界高度 = max(视口高, 720) × 该系数
+      CAMERA_SMOOTH: 10,          // 相机跟随平滑速度（越大越跟手）
+    },
+    XP: {
+      BASE: 8,                    // 1 级升 2 级所需经验
+      GROWTH: 1.32,               // 每级经验需求成长系数
+      PICKUP: 135,                // 经验吸附范围
+      COLLECT: 24,                // 实际拾取距离
+    },
+    WAVE: {
+      INTERVAL: 30,               // 每波持续时间（秒）
+      ELITE_WAVE: 5,              // 第 5 波后开始出现精英
+      SPAWN_BASE: 1.05,           // 初始刷怪间隔
+      SPAWN_MIN: 0.34,           // 最短刷怪间隔（后期压力）
+    },
+    ENEMIES: {
+      tri:     { name: "疾行者", hp: 16, speed: 96,  dmg: 8,  xp: 3,  score: 10, r: 12,   color: "#ff5252", weight: 42 },
+      square:  { name: "重甲",   hp: 38, speed: 58,  dmg: 12, xp: 5,  score: 16, r: 15,   color: "#4d7cff", weight: 26 },
+      penta:   { name: "游弋者", hp: 26, speed: 80,  dmg: 10, xp: 4,  score: 13, r: 13.5, color: "#b06bff", weight: 20 },
+      diamond: { name: "裂星精英", hp: 82, speed: 108, dmg: 18, xp: 11, score: 40, r: 16,  color: "#ff9f2e", weight: 0 },
+    },
+    // 小怪远程弹幕：间隔范围（秒）、弹速、伤害倍率、每次弹数、扇形角（三角怪不射击）
+    ENEMY_GUN: {
+      square:  { cd: [4.4, 5.8], speed: 165, dmgMul: 0.55, count: 1, spread: 0 },
+      penta:   { cd: [3.2, 4.4], speed: 185, dmgMul: 0.5,  count: 1, spread: 0 },
+      diamond: { cd: [2.9, 4.0], speed: 200, dmgMul: 0.6,  count: 3, spread: 0.4 },
+    },
+    BOSS: {
+      name: "虚空之眼 · 吞噬者",
+      hp: 2400, speed: 62, dmg: 28, xp: 140, score: 800, r: 44, color: "#ff3b6b",
+      PHASE2: 0.66,          // 血量低于 66% 进入二阶段
+      PHASE3: 0.33,          // 血量低于 33% 进入三阶段
+      DASH_SPEED: 620,       // 冲刺速度
+      DASH_CD: 7.5,          // 冲刺冷却
+      DASH_WARN: 0.55,       // 冲刺预警时间
+      DASH_TIME: 0.32,       // 冲刺持续时间
+      RING_GAP: 0.55,        // 环形弹幕安全缺口半角（弧度）
+      // 每场随机 2 个机制变体
+      MECH_NAMES: { laser: "旋转激光", shield: "分裂护盾", summon: "召唤潮汐", rage: "限时狂暴" },
+      SHIELD_PCT: 0.16,      // 分裂护盾：护盾量占最大生命比例
+      SHIELD_CD: 13,         // 护盾重生冷却
+      LASER_CD: 8.5,         // 旋转激光冷却
+      LASER_TIME: 2.4,       // 激光持续
+      LASER_DMG: 0.55,       // 激光接触伤害（Boss 伤害倍率）
+      RAGE_TIME: 5,          // 狂暴持续
+      RAGE_CD: 19,           // 狂暴冷却
+      RAGE_MUL: 1.5,         // 狂暴期速度 / 攻速倍率
+    },
+    // 开局武器：不同弹道 / 节奏决定本局玩法骨架
+    WEAPONS: {
+      pulse: {
+        name: "脉冲核心", icon: "◇", tag: "均衡",
+        desc: "单发稳定、射速均衡，泛用性最强",
+        damage: 10, interval: 0.26, speed: 640, count: 1, pierce: 0, range: 470, spread: 0, bulletR: 4, color: "#3fe5ff",
+      },
+      scatter: {
+        name: "散射核心", icon: "⋔", tag: "近战爆发",
+        desc: "一次 4 发扇形弹，近距离火力极高，射程较短",
+        damage: 6.2, interval: 0.44, speed: 690, count: 4, pierce: 0, range: 380, spread: 0.5, bulletR: 3.4, color: "#9ff8ff",
+      },
+      rail: {
+        name: "轨道激光", icon: "↟", tag: "远程穿透",
+        desc: "单发高伤慢射速，可贯穿 2 个敌人",
+        damage: 26, interval: 0.64, speed: 1320, count: 1, pierce: 2, range: 560, spread: 0, bulletR: 5.5, color: "#7ea8ff",
+      },
+    },
+    // 连杀狂热：短时间连续击杀叠加收益，受击断连
+    COMBO: {
+      TIME: 3.0,              // 连杀保持时间
+      STEP: 0.02,             // 每层连杀增加倍率
+      MAX: 2.0,               // 倍率上限
+    },
+    // 第 5 波后敌人随机获得词缀
+    AFFIX: {
+      START_WAVE: 5,
+      BASE_CHANCE: 0.18,
+      PER_WAVE: 0.015,
+      PER_CHAPTER: 0.06,      // 每章额外词缀概率
+      MAX_CHANCE: 0.85,
+      ELITE_EXTRA: 0.5,       // 精英额外获得第二个词缀的概率
+      SHIELD_HP: 1.4,         // 护盾词缀：生命倍率
+      SHIELD_ARMOR: 0.25,     // 护盾词缀：减伤
+      HASTE: 1.35,            // 迅捷词缀：移速倍率
+      BOOM_COUNT: 8,          // 爆裂词缀：死亡弹幕数量
+      SPLIT_COUNT: 2,         // 分裂词缀：分裂数量
+    },
+    // 守护无人机（召唤流）
+    DRONES: {
+      MAX: 3,
+      ORBIT: 44,              // 环绕半径
+      FIRE_CD: 0.95,          // 单架射击间隔
+      DMG_MUL: 0.45,          // 伤害 = 玩家伤害 × 该系数
+      RANGE_MUL: 0.85,        // 索敌范围倍率
+      SPEED_MUL: 0.95,
+    },
+    ULT: {
+      MAX: 100,              // 能量上限
+      GAIN_KILL: 7,          // 普通敌人击杀充能
+      GAIN_ELITE: 18,        // 精英击杀充能
+      RADIUS: 360,           // 爆发伤害半径
+      DAMAGE: 120,           // 爆发伤害
+      SLOW: 0.38,            // 敌人在超载期间的移速/弹速倍率
+      SLOW_TIME: 3.0,        // 减速持续时间
+      INVULN: 1.0,           // 释放时的无敌时间
+      CLEAR_MARGIN: 140,     // 清弹范围：镜头外扩边距
+    },
+    // 大世界随机事件：风险星域 / 能量水晶 / 补给舱
+    EVENTS: {
+      ZONE_INTERVAL: 24,     // 风险星域生成间隔（秒）
+      ZONE_LIFE: 18,         // 风险星域持续
+      ZONE_RADIUS: 150,      // 半径
+      ZONE_DPS: 6,           // 圈内每秒掉血
+      ZONE_XP_MUL: 2,        // 圈内击杀经验倍率
+      MAX_ZONES: 2,
+      CRYSTAL_INTERVAL: 13,  // 能量水晶生成间隔
+      CRYSTAL_HP: 45,
+      CRYSTAL_R: 17,
+      CRYSTAL_GEMS: 4,       // 击碎掉落经验球数量
+      MAX_CRYSTALS: 4,
+      POD_INTERVAL: 30,      // 补给舱生成间隔
+      POD_R: 15,
+      POD_HEAL: 25,          // 拾取回复生命
+      POD_ENERGY: 45,        // 拾取回复超载能量
+      MAX_PODS: 1,
+    },
+    // 可破坏陨石：挡路但可击碎，碎裂时对周围敌人爆炸并掉落资源
+    ASTEROID: {
+      INTERVAL: 9,            // 生成间隔（秒）
+      MAX: 7,                 // 同屏上限
+      R: 27,                  // 基础半径
+      HP: 110,                // 生命
+      EXPLODE_R: 118,         // 碎裂爆炸半径
+      EXPLODE_DMG: 55,        // 爆炸伤害
+      GEMS: 3,                // 掉落经验球
+      CREDITS: 8,             // 掉落星币
+    },
+    // 星际游商：随机出现，触碰后三选一交易
+    TRADER: {
+      INTERVAL: 48,           // 出现间隔
+      LIFE: 26,               // 停留时间
+      R: 19,
+    },
+
+    LIMITS: {
+      ENEMIES: 140,               // 同屏敌人上限
+      BULLETS: 220,               // 同屏玩家子弹上限
+      EBULLETS: 160,              // 同屏敌方子弹上限
+      PARTICLES: 340,             // 同屏粒子上限
+      GEMS: 100,                  // 经验球上限
+      NUMBERS: 40,                // 飘字上限
+    },
+    FX: {
+      SHAKE: 1.0,                 // 屏幕震动强度倍率
+      FLASH: 1.0,                 // 受伤闪屏强度
+    },
+    AUDIO: {
+      MASTER: 0.55,               // 总音量
+      SFX: 0.7,                   // 音效音量
+      MUSIC: 0.22,                // 背景音音量
+    },
+  };
+

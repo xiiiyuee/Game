@@ -1,0 +1,38 @@
+  /* ========== 右侧强化列表 ========== */
+  .buffs {
+    position: fixed;
+    right: max(12px, env(safe-area-inset-right));
+    top: 45%;
+    transform: translateY(-50%);
+    width: min(168px, 34vw);
+    max-height: 42vh;
+    overflow-y: auto;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(6, 14, 27, 0.55);
+    border: 1px solid rgba(63, 229, 255, 0.12);
+    z-index: 4;
+    pointer-events: auto;
+    font-size: 10.5px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(63, 229, 255, 0.3) transparent;
+  }
+  .buffs h4 {
+    margin: 0 0 6px;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .buff-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+    color: #bcd8ee;
+  }
+  .buff-row .ic { color: var(--cyan); width: 14px; text-align: center; }
+  .buff-row .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .buff-row .ct { color: var(--gold); font-weight: 600; }
+

@@ -1,0 +1,74 @@
+  /* ========== 移动端控件 ========== */
+  #touch { display: none; }
+  body.touch #touch { display: block; }
+
+  #joystick {
+    position: fixed;
+    left: max(18px, env(safe-area-inset-left));
+    bottom: max(20px, env(safe-area-inset-bottom));
+    width: 116px;
+    height: 116px;
+    border-radius: 50%;
+    border: 1px solid rgba(63, 229, 255, 0.22);
+    background: radial-gradient(circle, rgba(63, 229, 255, 0.08), rgba(6, 14, 27, 0.4));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    z-index: 10;
+  }
+  #knob {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #b9f7ff, #28b6d8 70%);
+    box-shadow: 0 0 18px rgba(63, 229, 255, 0.6);
+    transition: transform 0.06s linear;
+  }
+
+  .touch-btns {
+    position: fixed;
+    right: max(18px, env(safe-area-inset-right));
+    bottom: max(24px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 10;
+  }
+  .touch-btns button {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    border: 1px solid rgba(63, 229, 255, 0.3);
+    background: rgba(10, 24, 44, 0.66);
+    color: var(--cyan);
+    font-size: 13px;
+    letter-spacing: 2px;
+    font-family: inherit;
+    touch-action: none;
+  }
+  .touch-btns #dash-btn { box-shadow: 0 0 18px rgba(63, 229, 255, 0.15); }
+  .touch-btns #pause-btn { width: 46px; height: 46px; align-self: flex-end; font-size: 12px; }
+  .touch-btns #ult-btn {
+    border-color: rgba(255, 176, 60, 0.35);
+    color: #ffc857;
+    box-shadow: 0 0 18px rgba(255, 170, 50, 0.12);
+    opacity: 0.55;
+  }
+  .touch-btns #ult-btn.ready {
+    opacity: 1;
+    border-color: rgba(255, 200, 87, 0.95);
+    background: rgba(70, 44, 8, 0.7);
+    animation: ultPulse 1.1s ease-in-out infinite;
+  }
+  body.touch .mute {
+    top: auto;
+    left: max(10px, env(safe-area-inset-left));
+    right: auto;
+    bottom: max(152px, calc(env(safe-area-inset-bottom) + 144px));
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+  }
+  body.touch .fx-btn { bottom: max(192px, calc(env(safe-area-inset-bottom) + 184px)); }
+
