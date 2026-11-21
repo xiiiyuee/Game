@@ -406,6 +406,97 @@
   }
   .res-buffs span { color: var(--cyan); }
 
+  /* ========== 无尽远航 / 悬赏 / 建造 HUD ========== */
+  .chapter-tag {
+    margin-top: 5px;
+    text-align: right;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--gold);
+    opacity: 0.85;
+  }
+  .bounty {
+    margin-top: 3px;
+    text-align: right;
+    font-size: 10.5px;
+    letter-spacing: 0.5px;
+    color: #ffb86b;
+    text-shadow: 0 0 10px rgba(255, 160, 60, 0.35);
+  }
+  .bounty b { color: #ffe0b0; font-weight: 600; }
+  .bounty.hidden { display: none; }
+
+  .build-btn {
+    position: fixed;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(66px, calc(env(safe-area-inset-bottom) + 54px));
+    z-index: 12;
+    min-width: 66px;
+    height: 42px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 200, 87, 0.45);
+    background: rgba(28, 22, 8, 0.78);
+    color: #ffd666;
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .build-btn b { font-size: 14px; }
+  .build-btn.ready { box-shadow: 0 0 18px rgba(255, 200, 87, 0.35); }
+  body.touch .build-btn {
+    left: max(150px, calc(env(safe-area-inset-left) + 140px));
+    right: auto;
+    bottom: max(28px, calc(env(safe-area-inset-bottom) + 22px));
+    height: 46px;
+  }
+
+  /* ========== 星港商店 / 建造选择 ========== */
+  .shop-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-top: 10px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+  .shop-head b { color: var(--gold); font-size: 17px; }
+
+  .shop-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .shop-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 13px;
+    text-align: left;
+    color: var(--text);
+    font-family: inherit;
+    background: linear-gradient(180deg, rgba(30, 26, 14, 0.95), rgba(10, 12, 22, 0.98));
+    border: 1px solid rgba(255, 200, 87, 0.32);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .shop-item:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45); }
+  .shop-item:disabled { opacity: 0.38; cursor: not-allowed; transform: none; box-shadow: none; }
+  .shop-item h3 { margin: 0; font-size: 13.5px; letter-spacing: 1px; }
+  .shop-item p { margin: 0; font-size: 11px; line-height: 1.6; color: #a9c4dd; }
+  .shop-item .cost { font-size: 12px; font-weight: 600; color: var(--gold); }
+  .shop-item .cap { font-size: 10px; color: #7f93a8; }
+
+  @media (max-width: 700px) {
+    .shop-grid { grid-template-columns: 1fr; gap: 8px; max-height: 48vh; overflow-y: auto; }
+    .shop-item { padding: 10px 12px; }
+  }
+
   /* ========== 静音按钮 ========== */
   .mute {
     position: fixed;
@@ -489,7 +580,15 @@
     background: rgba(70, 44, 8, 0.7);
     animation: ultPulse 1.1s ease-in-out infinite;
   }
-  body.touch .mute { bottom: auto; top: max(96px, calc(env(safe-area-inset-top) + 88px)); right: max(12px, env(safe-area-inset-right)); width: 34px; height: 34px; font-size: 14px; }
+  body.touch .mute {
+    top: auto;
+    left: max(10px, env(safe-area-inset-left));
+    right: auto;
+    bottom: max(152px, calc(env(safe-area-inset-bottom) + 144px));
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+  }
 
   /* ========== 响应式 ========== */
   @media (max-width: 700px) {
@@ -528,13 +627,18 @@
     <div class="bar ult" id="ult-bar"><i id="ui-ult"></i><span id="ui-ult-text">超载 0%</span></div>
   </div>
   <div class="hud-right">
-    <div class="timer" id="ui-timer">10:00</div>
+    <div class="timer" id="ui-timer">0:00</div>
     <div class="stat-row">
       <span>分数 <b id="ui-score">0</b></span>
       <span>击杀 <b id="ui-kills">0</b></span>
-      <span>波次 <b id="ui-wave">1</b></span>
     </div>
+    <div class="stat-row">
+      <span>星币 <b id="ui-credits">0</b></span>
+      <span>核心 <b id="ui-cores">0</b></span>
+    </div>
+    <div class="chapter-tag" id="ui-chapter">星域 1</div>
     <div class="weapon-tag" id="ui-weapon">脉冲核心</div>
+    <div class="bounty hidden" id="ui-bounty"></div>
     <div class="combo hidden" id="ui-combo">连杀 <b id="ui-combo-n">0</b> <span id="ui-combo-m">×1.00</span></div>
   </div>
 </div>
@@ -562,6 +666,8 @@
       <li><b>ESC</b> 暂停 / 继续（切出窗口会自动暂停）</li>
       <li><b>E / 超载按钮</b> 能量满时释放：清除弹幕、击退周围敌人、短暂减速战场</li>
       <li>子弹可以<b>击落小怪弹幕</b>；3 秒内连续击杀叠加<b>连杀倍率</b>（最高 ×2）</li>
+      <li><b>无尽远航</b>：每 10 波迎战 Boss，击破后进入更强星域；每 3 波停靠<b>星港</b>用星币补给</li>
+      <li><b>悬赏任务</b>：完成限时目标获得星币；精英掉落<b>能量核心</b>，按 <b>B</b> 建造炮塔 / 缓速场</li>
       <li>留意地图上的<b>风险星域</b>（经验翻倍但持续掉血）与<b>补给舱 / 能量水晶</b></li>
       <li>武器自动锁定最近的敌人开火</li>
       <li>手机：左侧摇杆移动，右侧按钮超载 / 冲刺 / 暂停</li>
@@ -618,6 +724,28 @@
   </div>
 </div>
 
+<!-- 星港商店（每 3 波及章节补给） -->
+<div class="overlay hidden" id="ov-shop">
+  <div class="panel wide">
+    <h2 id="shop-title">星港补给站</h2>
+    <p class="sub" id="shop-sub">用星币强化本局构筑 · 击败敌人与完成悬赏可获得星币</p>
+    <div class="shop-head"><span>当前星币</span><b id="shop-credits">0</b></div>
+    <div class="shop-grid" id="shop-items"></div>
+    <button class="btn" data-act="shop-close">启航</button>
+  </div>
+</div>
+
+<!-- 防线建造 -->
+<div class="overlay hidden" id="ov-build">
+  <div class="panel wide">
+    <h2>防线建造</h2>
+    <p class="sub">消耗能量核心 · 建造后点击战场位置放置</p>
+    <div class="shop-head"><span>可用核心</span><b id="build-cores">0</b></div>
+    <div class="shop-grid" id="build-items"></div>
+    <button class="btn ghost" data-act="build-cancel" style="margin-left:0">取消</button>
+  </div>
+</div>
+
 <!-- 胜利 / 失败结算 -->
 <div class="overlay hidden" id="ov-result">
   <div class="panel">
@@ -630,6 +758,7 @@
 </div>
 
 <button class="mute" id="mute" aria-label="静音切换">🔊</button>
+<button class="build-btn hidden" id="build-btn">建造 <b id="ui-core-btn">0</b></button>
 
 <!-- 移动端虚拟摇杆与按钮 -->
 <div id="touch">
@@ -649,7 +778,38 @@
    * 1. 配置区（集中调整游戏参数）
    * ===================================================================*/
   const CFG = {
-    MATCH_DURATION: 600,          // 单局时长（秒），归零即胜利
+    // 无尽远航：每章 10 波，Boss 后进入下一星域，难度持续攀升
+    RUN: {
+      CHAPTER_WAVES: 10,          // 每章波数（第 10 波 Boss）
+      BOSS_HP_GROWTH: 1.75,       // 章节 Boss 生命成长
+      BOSS_DMG_GROWTH: 1.15,      // 章节 Boss 伤害成长
+      ENEMY_HP_GROWTH: 1.16,      // 章节敌人生命成长
+      ENEMY_DMG_GROWTH: 1.10,     // 章节敌人伤害成长
+      CLEAR_HEAL: 0.25,           // 击破 Boss 后回复生命比例
+      CLEAR_CREDITS: 60,          // 击破 Boss 星币奖励
+      SHOP_WAVE: 3,               // 每 3 波进入星港
+      CREDIT_KILL: 3,             // 普通击杀星币
+      CREDIT_ELITE: 14,           // 精英击杀星币
+      CREDIT_BOSS: 120,           // Boss 击杀星币
+      MAX_TURRETS: 3,
+      MAX_FIELDS: 2,
+      TURRET_COST: 2,             // 建造炮塔消耗核心
+      FIELD_COST: 3,              // 建造缓速场消耗核心
+      TURRET_RANGE: 360,
+      TURRET_CD: 0.7,
+      TURRET_DMG: 9,
+      FIELD_RADIUS: 125,
+      FIELD_SLOW: 0.5,            // 缓速场内敌人移速倍率
+      CORE_MAGNET: 170,
+      CORE_PICKUP: 30,
+    },
+    // 悬赏任务链
+    BOUNTY: {
+      FIRST_DELAY: 20,
+      GAP: 16,
+      BASE_REWARD: 30,
+      FAIL_PENALTY: 10,
+    },
     PLAYER: {
       HP: 100,                    // 初始生命
       SHIELD_MAX: 50,             // 初始护盾上限
@@ -684,7 +844,6 @@
     WAVE: {
       INTERVAL: 30,               // 每波持续时间（秒）
       ELITE_WAVE: 5,              // 第 5 波后开始出现精英
-      BOSS_WAVE: 10,              // 第 10 波出现 Boss
       SPAWN_BASE: 1.05,           // 初始刷怪间隔
       SPAWN_MIN: 0.5,             // 最短刷怪间隔
     },
@@ -1128,7 +1287,19 @@
   let boss = null;
 
   let elapsed = 0;
-  let timeLeft = CFG.MATCH_DURATION;
+  let chapter = 1;                 // 当前星域章节（无尽）
+  let chapterStartElapsed = 0;     // 本章开始时的总存活时间
+  let credits = 0;                 // 星港货币
+  let cores = 0;                   // 建造用能量核心
+  let revives = 0;                 // 应急保险次数
+  let turrets = [];
+  let fields = [];
+  let coreDrops = [];
+  let buildMode = null;            // "turret" / "field" / null
+  let bounty = null;               // 当前悬赏
+  let bountyCd = CFG.BOUNTY.FIRST_DELAY;
+  let lastShopWave = 0;
+  let shopCounts = {};             // 本局商店购买次数（用于涨价）
   let waveNum = 1;
   let score = 0;
   let kills = 0;
@@ -1225,11 +1396,23 @@
     crystals = [];
     pods = [];
     pulses = [];
+    turrets = [];
+    fields = [];
+    coreDrops = [];
     stacks = {};
     boss = null;
 
     elapsed = 0;
-    timeLeft = CFG.MATCH_DURATION;
+    chapter = 1;
+    chapterStartElapsed = 0;
+    credits = 0;
+    cores = 0;
+    revives = 0;
+    buildMode = null;
+    bounty = null;
+    bountyCd = CFG.BOUNTY.FIRST_DELAY;
+    lastShopWave = 0;
+    shopCounts = {};
     waveNum = 1;
     score = 0;
     kills = 0;
@@ -1281,7 +1464,14 @@
     keys[code] = true;
 
     if (code === "Escape") {
-      if (state === "playing" || state === "paused") togglePause();
+      if (state === "shop") closeShop();
+      else if (state === "build") closeBuildMenu();
+      else if (state === "playing" && buildMode) { buildMode = null; refreshHud(true); }
+      else if (state === "playing" || state === "paused") togglePause();
+      return;
+    }
+    if (code === "KeyB") {
+      if (state === "playing") openBuildMenu();
       return;
     }
     if (code === "KeyE") {
@@ -1396,7 +1586,7 @@
     chooseUpgrade(idx);
   });
 
-  // 菜单 / 暂停 / 结算按钮
+  // 菜单 / 暂停 / 结算 / 商店 / 建造按钮
   document.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-act]");
     if (!btn) return;
@@ -1404,6 +1594,33 @@
     if (act === "start") openWeaponSelect();
     else if (act === "resume") togglePause();
     else if (act === "restart") startGame();
+    else if (act === "shop-close") closeShop();
+    else if (act === "build-cancel") closeBuildMenu();
+  });
+
+  // 星港购买
+  document.getElementById("shop-items").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-shop]");
+    if (btn && !btn.disabled) buyShopItem(btn.dataset.shop);
+  });
+
+  // 建造类型选择
+  document.getElementById("build-items").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-build]");
+    if (btn && !btn.disabled) chooseBuild(btn.dataset.build);
+  });
+  document.getElementById("build-btn").addEventListener("click", (e) => {
+    e.preventDefault();
+    if (state === "playing") openBuildMenu();
+  });
+
+  // 建造模式：点击战场放置
+  canvas.addEventListener("pointerdown", (e) => {
+    if (state !== "playing" || !buildMode) return;
+    const rect = canvas.getBoundingClientRect();
+    const wx = clamp(camera.x + (e.clientX - rect.left), 30, world.w - 30);
+    const wy = clamp(camera.y + (e.clientY - rect.top), 30, world.h - 30);
+    placeDefense(buildMode, wx, wy);
   });
 
   // 开局武器选择
@@ -1834,13 +2051,13 @@
    * 11. 敌人 / 波次 / Boss
    * ===================================================================*/
   function waveScaleHp() {
-    return 1 + (waveNum - 1) * 0.17;
+    return (1 + (waveNum - 1) * 0.17) * Math.pow(CFG.RUN.ENEMY_HP_GROWTH, chapter - 1);
   }
   function waveScaleSpeed() {
-    return Math.min(1.6, 1 + (waveNum - 1) * 0.028);
+    return Math.min(1.75, 1 + (waveNum - 1) * 0.028 + (chapter - 1) * 0.04);
   }
   function waveScaleDmg() {
-    return 1 + (waveNum - 1) * 0.045;
+    return (1 + (waveNum - 1) * 0.045) * Math.pow(CFG.RUN.ENEMY_DMG_GROWTH, chapter - 1);
   }
 
   function weightedEnemyType() {
@@ -1949,17 +2166,19 @@
     y = clamp(y, 70, world.h - 70);
 
     const B = CFG.BOSS;
+    const hpMul = Math.pow(CFG.RUN.BOSS_HP_GROWTH, chapter - 1);
+    const dmgMul = Math.pow(CFG.RUN.BOSS_DMG_GROWTH, chapter - 1);
     boss = {
       id: nextEnemyId++,
       type: "boss",
       x, y,
       r: B.r,
-      hp: B.hp,
-      maxHp: B.hp,
-      speed: B.speed,
-      dmg: B.dmg,
-      xp: B.xp,
-      score: B.score,
+      hp: Math.round(B.hp * hpMul),
+      maxHp: Math.round(B.hp * hpMul),
+      speed: B.speed * Math.min(1.5, 1 + (chapter - 1) * 0.08),
+      dmg: B.dmg * dmgMul,
+      xp: Math.round(B.xp * (1 + (chapter - 1) * 0.35)),
+      score: Math.round(B.score * (1 + (chapter - 1) * 0.5)),
       color: B.color,
       angle: 0,
       seed: Math.random() * TAU,
@@ -1978,7 +2197,7 @@
     };
     enemies.push(boss);
 
-    document.getElementById("ui-boss-name").textContent = CFG.BOSS.name + " · 阶段 I";
+    document.getElementById("ui-boss-name").textContent = CFG.BOSS.name + " · 星域 " + chapter + " · 阶段 I";
     document.getElementById("boss-wrap").classList.remove("hidden");
     document.getElementById("ui-boss").style.width = "100%";
     shake = Math.max(shake, 18 * CFG.FX.SHAKE);
@@ -1989,11 +2208,12 @@
 
   function updateSpawner(dt) {
     if (enemies.length >= CFG.LIMITS.ENEMIES) return;   // 达到上限则暂停生成
+    if (boss && !boss.dead) return;                     // Boss 战期间暂停杂兵增援
     spawnTimer -= dt;
     if (spawnTimer > 0) return;
 
     spawnTimer = Math.max(CFG.WAVE.SPAWN_MIN, CFG.WAVE.SPAWN_BASE - (waveNum - 1) * 0.065);
-    const count = 1 + Math.floor(waveNum / 6);
+    const count = 1 + Math.floor(waveNum / 6) + Math.min(2, chapter - 1);
     for (let i = 0; i < count; i++) {
       spawnEnemy(weightedEnemyType());
     }
@@ -2011,7 +2231,7 @@
       b.warn = 0;
       b.dashTime = 0;
       document.getElementById("ui-boss-name").textContent =
-        CFG.BOSS.name + " · 阶段 " + ["", "I", "II", "III"][b.phase];
+        CFG.BOSS.name + " · 星域 " + chapter + " · 阶段 " + ["", "I", "II", "III"][b.phase];
       shake = Math.max(shake, 15 * CFG.FX.SHAKE);
       hurtFlash = 0.35;
       emit(b.x, b.y, 34, "#ffc857", 300, 4.5, 0.9);
@@ -2180,7 +2400,9 @@
         }
       }
 
-      const sp = e.speed * view.scale * stats.enemySpeedMul * (e.dashTime > 0 ? 3.1 : 1);
+      const sp = e.speed * view.scale * stats.enemySpeedMul * (e.dashTime > 0 ? 3.1 : 1) *
+        (e.slowT > 0 ? CFG.RUN.FIELD_SLOW : 1);
+      e.slowT = Math.max(0, (e.slowT || 0) - sdt);
       e.x += Math.cos(ang) * sp * sdt;
       e.y += Math.sin(ang) * sp * sdt;
       e.angle = ang;
@@ -2252,6 +2474,8 @@
     if (combo > comboBest) comboBest = combo;
     const mul = comboMultiplier();
     score += Math.round(e.score * mul);
+    credits += e.isBoss ? CFG.RUN.CREDIT_BOSS : e.type === "diamond" ? CFG.RUN.CREDIT_ELITE : CFG.RUN.CREDIT_KILL;
+    bountyOnKill(e);
 
     if (e.isBoss) {
       emit(e.x, e.y, 110, "#ffc857", 420, 6, 1.3);
@@ -2260,7 +2484,8 @@
       sfxExplode(true);
       boss = null;
       hideBossBar();
-      // 击杀特写：慢动作 + 白闪，1.5 秒后再结算
+      for (let i = 0; i < 3; i++) dropCore(e.x + rand(-24, 24), e.y + rand(-24, 24));
+      // 击杀特写：慢动作 + 白闪，1.5 秒后进入下一星域
       slowmo = 1.1;
       victoryFlash = 1;
       victoryTimer = 1.5;
@@ -2274,6 +2499,7 @@
     emit(e.x, e.y, e.type === "diamond" ? 22 : 13, e.color, 210, e.type === "diamond" ? 3.4 : 2.6, 0.65);
     shake = Math.max(shake, (e.type === "diamond" ? 6 : 3) * CFG.FX.SHAKE);
     sfxExplode(false);
+    if (e.type === "diamond") dropCore(e.x, e.y);
 
     // 词缀：死亡分裂 / 死亡爆裂
     const affixes = e.affixes;
@@ -2329,6 +2555,7 @@
     player.invuln = Math.max(player.invuln, CFG.PLAYER.DASH_INVULN);
     emit(player.x, player.y, 12, "#7ef0ff", 180, 3, 0.45);
     sfxDash();
+    bountyOnDash();
   }
 
   function readMoveInput() {
@@ -2517,10 +2744,11 @@
     // 受击断连杀
     combo = 0;
     comboTimer = 0;
+    bountyOnHurt();
 
     if (player.hp <= 0) {
       player.hp = 0;
-      endGame(false, "hp");
+      if (!tryRevive()) endGame(false, "hp");
     }
   }
 
@@ -2538,8 +2766,27 @@
     hurtFlash = Math.max(hurtFlash, 0.1);
     if (player.hp <= 0) {
       player.hp = 0;
-      endGame(false, "hp");
+      if (!tryRevive()) endGame(false, "hp");
     }
+  }
+
+  // 星港应急保险：以 50% 生命复活一次
+  function tryRevive() {
+    if (revives <= 0) return false;
+    revives -= 1;
+    player.hp = Math.round(player.hpMax * 0.5);
+    player.shield = 0;
+    player.invuln = 3;
+    player.shieldDelay = 2;
+    combo = 0;
+    comboTimer = 0;
+    for (let i = 0; i < ebullets.length; i++) ebullets[i].dead = true;
+    emit(player.x, player.y, 36, "#8bffdc", 300, 4, 0.9);
+    addText(player.x, player.y - 44, "应急保险启动 · 50% 生命", "#8bffdc", 18);
+    shake = Math.max(shake, 10 * CFG.FX.SHAKE);
+    sfxLevelUp();
+    refreshHud(true);
+    return true;
   }
 
   /* =====================================================================
@@ -2719,20 +2966,21 @@
     title.className = win ? "win" : "lose";
     document.getElementById("res-sub").textContent = win
       ? (reason === "boss" ? "你击败了虚空之眼，星域暂时安全" : "你坚持到了最后，成功守住星域")
-      : "你的核心已被摧毁，星域陷入沉寂";
+      : `你在第 ${chapter} 星域的第 ${waveNum} 波倒下，远航止步于此`;
 
-    const survived = clamp(CFG.MATCH_DURATION - timeLeft, 0, CFG.MATCH_DURATION);
+    const survived = elapsed;
     const m = Math.floor(survived / 60);
     const s = Math.floor(survived % 60);
     const grid = document.getElementById("res-grid");
     grid.innerHTML = `
+      <div><span>抵达星域</span><b>第 ${chapter} 星域</b></div>
       <div><span>存活时间</span><b>${m}:${String(s).padStart(2, "0")}</b></div>
       <div><span>分数</span><b>${score}</b></div>
       <div><span>击杀</span><b>${kills}</b></div>
-      <div><span>最高波次</span><b>${waveNum}</b></div>
       <div><span>等级</span><b>LV ${level}</b></div>
       <div><span>最高连杀</span><b>${comboBest}</b></div>
-      <div><span>强化数量</span><b>${Object.values(stacks).reduce((a, b) => a + b, 0)}</b></div>
+      <div><span>星币</span><b>${credits}</b></div>
+      <div><span>防线</span><b>${turrets.length + fields.length}</b></div>
     `;
 
     const list = document.getElementById("res-buffs");
@@ -2749,7 +2997,7 @@
   }
 
   function hideAllOverlays() {
-    ["ov-menu", "ov-weapon", "ov-pause", "ov-upgrade", "ov-result"].forEach((id) => {
+    ["ov-menu", "ov-weapon", "ov-pause", "ov-upgrade", "ov-result", "ov-shop", "ov-build"].forEach((id) => {
       document.getElementById(id).classList.add("hidden");
     });
   }
@@ -2781,8 +3029,28 @@
     setText(document.getElementById("ui-level"), String(level));
     setText(document.getElementById("ui-score"), String(score));
     setText(document.getElementById("ui-kills"), String(kills));
-    setText(document.getElementById("ui-wave"), String(waveNum));
+    setText(document.getElementById("ui-credits"), String(credits));
+    setText(document.getElementById("ui-cores"), String(cores));
+    setText(document.getElementById("ui-core-btn"), String(cores));
+    setText(document.getElementById("ui-chapter"), `星域 ${chapter} · 波次 ${waveNum}/${CFG.RUN.CHAPTER_WAVES}`);
     setText(document.getElementById("ui-weapon"), CFG.WEAPONS[chosenWeapon].name);
+
+    // 悬赏
+    const bountyEl = document.getElementById("ui-bounty");
+    if (bounty) {
+      bountyEl.classList.remove("hidden");
+      const secs = Math.max(0, Math.ceil(bounty.time));
+      const prog = bounty.target > 0 ? `${bounty.progress}/${bounty.target}` : "限时";
+      bountyEl.innerHTML = `悬赏 · ${bounty.label} <b>${prog}</b> · <b>${secs}s</b>`;
+    } else {
+      bountyEl.classList.add("hidden");
+    }
+
+    // 建造入口
+    const buildBtn = document.getElementById("build-btn");
+    const canBuild = state === "playing" && (turrets.length < CFG.RUN.MAX_TURRETS || fields.length < CFG.RUN.MAX_FIELDS);
+    buildBtn.classList.toggle("hidden", !canBuild);
+    buildBtn.classList.toggle("ready", cores >= CFG.RUN.TURRET_COST);
 
     // 连杀
     const comboEl = document.getElementById("ui-combo");
@@ -2805,7 +3073,7 @@
       ready ? (document.body.classList.contains("touch") ? "超载就绪" : "超载就绪 · E")
             : `超载 ${Math.floor(ePct)}%`);
 
-    const total = Math.max(0, Math.floor(timeLeft));
+    const total = Math.max(0, Math.floor(elapsed));
     const mm = Math.floor(total / 60);
     const ss = total % 60;
     setText(document.getElementById("ui-timer"), `${mm}:${String(ss).padStart(2, "0")}`);
@@ -3015,18 +3283,403 @@
   }
 
   /* =====================================================================
+   * 15.7 无尽远航：星港 / 悬赏 / 能量核心与防线
+   * ===================================================================*/
+  const SHOP_ITEMS = [
+    {
+      id: "repair", icon: "✚", name: "舰体修复", base: 35,
+      desc: () => "立即恢复 45% 最大生命",
+      can: () => player.hp < player.hpMax - 1,
+      apply: () => { player.hp = Math.min(player.hpMax, player.hp + player.hpMax * 0.45); },
+    },
+    {
+      id: "shield", icon: "◈", name: "护盾电池", base: 40,
+      desc: () => "护盾上限 +12 并立即充满",
+      can: () => true,
+      apply: () => { stats.shieldMax += 12; player.shield = stats.shieldMax; },
+    },
+    {
+      id: "damage", icon: "↑", name: "武器校准", base: 55,
+      desc: () => "全武器伤害 +12%",
+      can: () => true,
+      apply: () => { stats.damage *= 1.12; },
+    },
+    {
+      id: "drone", icon: "⬢", name: "无人机模块", base: 60,
+      desc: () => "增加 1 架环绕守护无人机",
+      can: () => (stats.drones || 0) < CFG.DRONES.MAX,
+      apply: () => { stats.drones = Math.min(CFG.DRONES.MAX, (stats.drones || 0) + 1); },
+    },
+    {
+      id: "revive", icon: "❖", name: "应急保险", base: 80,
+      desc: () => "死亡时以 50% 生命复活（可叠 2 次）",
+      can: () => revives < 2,
+      apply: () => { revives += 1; },
+    },
+    {
+      id: "core", icon: "⬡", name: "能量核心", base: 45,
+      desc: () => "获得 1 个建造用核心",
+      can: () => true,
+      apply: () => { cores += 1; },
+    },
+    {
+      id: "purge", icon: "✦", name: "净化协议", base: 50,
+      desc: () => "移除 1 层诅咒强化",
+      can: () => Object.keys(stacks).some((id) => {
+        const d = ALL_DEFS.find((x) => x.id === id);
+        return d && d.curse;
+      }),
+      apply: () => {
+        const id = Object.keys(stacks).find((k) => {
+          const d = ALL_DEFS.find((x) => x.id === k);
+          return d && d.curse;
+        });
+        if (!id) return;
+        stacks[id] -= 1;
+        if (stacks[id] <= 0) delete stacks[id];
+        updateBuffPanel();
+      },
+    },
+  ];
+
+  function shopCost(def) {
+    return Math.round(def.base * (1 + (chapter - 1) * 0.18) * (1 + (shopCounts[def.id] || 0) * 0.45));
+  }
+
+  function renderShop() {
+    document.getElementById("shop-credits").textContent = String(credits);
+    const wrap = document.getElementById("shop-items");
+    wrap.innerHTML = SHOP_ITEMS.map((def) => {
+      const cost = shopCost(def);
+      const able = credits >= cost && def.can();
+      return `<button class="shop-item" data-shop="${def.id}" ${able ? "" : "disabled"}>
+        <h3>${def.icon} ${def.name}</h3>
+        <p>${def.desc()}</p>
+        <span class="cost">${cost} 星币</span>
+      </button>`;
+    }).join("");
+  }
+
+  function openShop(title) {
+    state = "shop";
+    clearKeys();
+    shake = 0;
+    buildMode = null;
+    document.getElementById("shop-title").textContent = title || "星港补给站";
+    document.getElementById("shop-sub").textContent =
+      "用星币强化本局构筑 · 击败敌人与完成悬赏可获得星币";
+    renderShop();
+    document.getElementById("ov-shop").classList.remove("hidden");
+    document.getElementById("ov-shop").scrollTop = 0;
+    sfxLevelUp();
+    refreshHud(true);
+  }
+
+  function closeShop() {
+    if (state !== "shop") return;
+    document.getElementById("ov-shop").classList.add("hidden");
+    state = "playing";
+    lastFrame = performance.now();
+    refreshHud(true);
+  }
+
+  function buyShopItem(id) {
+    if (state !== "shop") return;
+    const def = SHOP_ITEMS.find((d) => d.id === id);
+    if (!def) return;
+    const cost = shopCost(def);
+    if (credits < cost || !def.can()) return;
+    credits -= cost;
+    shopCounts[id] = (shopCounts[id] || 0) + 1;
+    def.apply();
+    sfxLevelUp();
+    renderShop();
+    updateBuffPanel();
+    refreshHud(true);
+  }
+
+  // ===== 悬赏任务链 =====
+  function spawnBounty() {
+    const eliteReady = waveNum >= CFG.WAVE.ELITE_WAVE;
+    const roll = Math.random();
+    let b;
+    if (eliteReady && roll < 0.2) {
+      const target = 1 + Math.floor((chapter - 1) / 2);
+      b = {
+        type: "elite", target, progress: 0, time: 38,
+        reward: CFG.BOUNTY.BASE_REWARD + chapter * 12 + 15,
+        label: `击杀 ${target} 名精英`,
+      };
+    } else if (roll < 0.42) {
+      const time = 18 + Math.min(6, chapter);
+      b = {
+        type: "nodash", target: 0, progress: 0, time,
+        reward: CFG.BOUNTY.BASE_REWARD + chapter * 8,
+        label: `${time} 秒内不冲刺`,
+      };
+    } else if (roll < 0.62) {
+      const time = 16 + Math.min(5, chapter);
+      b = {
+        type: "nohit", target: 0, progress: 0, time,
+        reward: CFG.BOUNTY.BASE_REWARD + chapter * 10,
+        label: `${time} 秒内不受伤`,
+      };
+    } else {
+      const target = 10 + chapter * 3 + waveNum * 2;
+      b = {
+        type: "kill", target, progress: 0, time: 26,
+        reward: CFG.BOUNTY.BASE_REWARD + chapter * 9,
+        label: `击杀 ${target} 个敌人`,
+      };
+    }
+    bounty = b;
+    addText(player.x, player.y - 60, "悬赏：" + b.label, "#ffb86b", 15);
+  }
+
+  function bountyOnKill(e) {
+    if (!bounty) return;
+    if (bounty.type === "kill") bounty.progress += 1;
+    else if (bounty.type === "elite" && e.type === "diamond") bounty.progress += 1;
+  }
+
+  function bountyOnDash() {
+    if (bounty && bounty.type === "nodash") failBounty();
+  }
+
+  function bountyOnHurt() {
+    if (bounty && bounty.type === "nohit") failBounty();
+  }
+
+  function completeBounty() {
+    const b = bounty;
+    if (!b) return;
+    credits += b.reward;
+    player.hp = Math.min(player.hpMax, player.hp + player.hpMax * 0.08);
+    addEnergy(12);
+    addText(player.x, player.y - 52, `悬赏完成 +${b.reward} 星币`, "#ffd666", 17);
+    emit(player.x, player.y, 18, "#ffd666", 210, 3, 0.6);
+    sfxLevelUp();
+    bounty = null;
+    bountyCd = CFG.BOUNTY.GAP;
+    refreshHud(true);
+  }
+
+  function failBounty() {
+    if (!bounty) return;
+    const penalty = Math.min(credits, CFG.BOUNTY.FAIL_PENALTY);
+    credits -= penalty;
+    addText(player.x, player.y - 52, penalty ? `悬赏失败 -${penalty} 星币` : "悬赏失败", "#ff8098", 15);
+    bounty = null;
+    bountyCd = CFG.BOUNTY.GAP + 6;
+    refreshHud(true);
+  }
+
+  function updateBounty(dt) {
+    if (!bounty) {
+      bountyCd -= dt;
+      if (bountyCd <= 0) spawnBounty();
+      return;
+    }
+    bounty.time -= dt;
+    if (bounty.type === "kill" || bounty.type === "elite") {
+      if (bounty.progress >= bounty.target) { completeBounty(); return; }
+      if (bounty.time <= 0) { failBounty(); return; }
+    } else if (bounty.time <= 0) {
+      completeBounty();
+    }
+  }
+
+  // ===== 能量核心 =====
+  function dropCore(x, y) {
+    coreDrops.push({ x, y, seed: Math.random() * TAU, life: 30 });
+  }
+
+  function updateCores(dt) {
+    const magnet = CFG.RUN.CORE_MAGNET * view.scale;
+    const pickup = CFG.RUN.CORE_PICKUP;
+    for (let i = coreDrops.length - 1; i >= 0; i--) {
+      const c = coreDrops[i];
+      c.life -= dt;
+      if (c.life <= 0) { coreDrops.splice(i, 1); continue; }
+      const dx = player.x - c.x;
+      const dy = player.y - c.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d < pickup) {
+        coreDrops.splice(i, 1);
+        cores += 1;
+        emit(c.x, c.y, 8, "#ffd666", 160, 2.4, 0.4);
+        addText(c.x, c.y - 18, "+1 核心", "#ffd666", 13);
+        sfxHit();
+        refreshHud(true);
+      } else if (d < magnet) {
+        const sp = 300 * view.scale * (1 - d / magnet + 0.35);
+        c.x += (dx / d) * sp * dt;
+        c.y += (dy / d) * sp * dt;
+      }
+    }
+  }
+
+  // ===== 防线建造 =====
+  function renderBuildMenu() {
+    document.getElementById("build-cores").textContent = String(cores);
+    const wrap = document.getElementById("build-items");
+    const turretAble = cores >= CFG.RUN.TURRET_COST && turrets.length < CFG.RUN.MAX_TURRETS;
+    const fieldAble = cores >= CFG.RUN.FIELD_COST && fields.length < CFG.RUN.MAX_FIELDS;
+    wrap.innerHTML = `
+      <button class="shop-item" data-build="turret" ${turretAble ? "" : "disabled"}>
+        <h3>⬢ 自动炮塔 · ${turrets.length}/${CFG.RUN.MAX_TURRETS}</h3>
+        <p>自动锁定射程内敌人射击，伤害随武器强化</p>
+        <span class="cost">${CFG.RUN.TURRET_COST} 核心</span>
+      </button>
+      <button class="shop-item" data-build="field" ${fieldAble ? "" : "disabled"}>
+        <h3>◎ 缓速场 · ${fields.length}/${CFG.RUN.MAX_FIELDS}</h3>
+        <p>范围内敌人移速降低 50%，适合拉扯与守点</p>
+        <span class="cost">${CFG.RUN.FIELD_COST} 核心</span>
+      </button>`;
+  }
+
+  function openBuildMenu() {
+    if (state !== "playing") return;
+    state = "build";
+    clearKeys();
+    renderBuildMenu();
+    document.getElementById("ov-build").classList.remove("hidden");
+  }
+
+  function closeBuildMenu() {
+    if (state !== "build") return;
+    document.getElementById("ov-build").classList.add("hidden");
+    state = "playing";
+    lastFrame = performance.now();
+    refreshHud(true);
+  }
+
+  function chooseBuild(type) {
+    if (state !== "build") return;
+    const cost = type === "turret" ? CFG.RUN.TURRET_COST : CFG.RUN.FIELD_COST;
+    const atCap = type === "turret"
+      ? turrets.length >= CFG.RUN.MAX_TURRETS
+      : fields.length >= CFG.RUN.MAX_FIELDS;
+    if (cores < cost || atCap) return;
+    buildMode = type;
+    document.getElementById("ov-build").classList.add("hidden");
+    state = "playing";
+    lastFrame = performance.now();
+    addText(player.x, player.y - 46,
+      type === "turret" ? "点击战场放置炮塔" : "点击战场放置缓速场", "#ffd666", 15);
+    refreshHud(true);
+  }
+
+  function placeDefense(type, x, y) {
+    const cost = type === "turret" ? CFG.RUN.TURRET_COST : CFG.RUN.FIELD_COST;
+    if (cores < cost) { buildMode = null; refreshHud(true); return; }
+    if (type === "turret") {
+      if (turrets.length >= CFG.RUN.MAX_TURRETS) { buildMode = null; return; }
+      cores -= cost;
+      turrets.push({ x, y, cd: 0, ang: -Math.PI / 2, seed: Math.random() * TAU });
+      addText(x, y - 26, "炮塔已部署", "#ffd666", 14);
+    } else {
+      if (fields.length >= CFG.RUN.MAX_FIELDS) { buildMode = null; return; }
+      cores -= cost;
+      fields.push({ x, y, r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU });
+      addText(x, y - 26, "缓速场已展开", "#8ff6ff", 14);
+    }
+    emit(x, y, 16, "#ffd666", 200, 3, 0.6);
+    sfxLevelUp();
+    buildMode = null;
+    refreshHud(true);
+  }
+
+  function updateDefenses(dt) {
+    const range = CFG.RUN.TURRET_RANGE * view.scale;
+    for (let i = 0; i < turrets.length; i++) {
+      const t = turrets[i];
+      let best = null;
+      let bestD = range * range;
+      for (let k = 0; k < enemies.length; k++) {
+        const e = enemies[k];
+        if (e.dead) continue;
+        const d = dist2(t.x, t.y, e.x, e.y);
+        if (d < bestD) { bestD = d; best = e; }
+      }
+      if (best) {
+        t.ang = Math.atan2(best.y - t.y, best.x - t.x);
+        t.cd -= dt;
+        if (t.cd <= 0) {
+          t.cd = CFG.RUN.TURRET_CD;
+          if (bullets.length < CFG.LIMITS.BULLETS) {
+            const sp = stats.bulletSpeed * view.scale * 0.9;
+            bullets.push({
+              x: t.x, y: t.y,
+              vx: Math.cos(t.ang) * sp,
+              vy: Math.sin(t.ang) * sp,
+              r: 3.4,
+              dmg: Math.max(6, stats.damage * 0.5),
+              pierce: 0,
+              life: 1.2,
+              dead: false,
+              hit: new Set(),
+              ang: t.ang,
+              color: "#ffd666",
+            });
+          }
+        }
+      }
+    }
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i];
+      const r2 = f.r * f.r;
+      for (let k = 0; k < enemies.length; k++) {
+        const e = enemies[k];
+        if (e.dead || e.isBoss) continue;
+        if (dist2(f.x, f.y, e.x, e.y) <= r2) e.slowT = 0.14;
+      }
+    }
+  }
+
+  // ===== 章节切换（无尽远航）=====
+  function chapterClear() {
+    victoryFlash = 0;
+    slowmo = 0;
+    chapter += 1;
+    chapterStartElapsed = elapsed;
+    waveNum = 1;
+    bossSpawned = false;
+    boss = null;
+    enemies.length = 0;
+    ebullets.length = 0;
+    buildMode = null;
+    spawnTimer = 2.5;
+
+    player.hp = Math.min(player.hpMax, player.hp + player.hpMax * CFG.RUN.CLEAR_HEAL);
+    player.shield = stats.shieldMax;
+    player.invuln = Math.max(player.invuln, 2.5);
+    const bonus = CFG.RUN.CLEAR_CREDITS + chapter * 15;
+    credits += bonus;
+    lastShopWave = 0;
+
+    const cx = camera.x + view.w / 2;
+    const cy = camera.y + view.h * 0.26;
+    addText(cx, cy, "第 " + chapter + " 星域", "#ffd666", 30);
+    addText(cx, cy + 32, `+${bonus} 星币 · 生命修复 25%`, "#8bffdc", 16);
+    emit(player.x, player.y, 34, "#8bffdc", 280, 3.6, 0.9);
+    sfxWin();
+    openShop("第 " + chapter + " 星域 · 星港补给");
+    refreshHud(true);
+  }
+
+  /* =====================================================================
    * 16. 更新主逻辑
    * ===================================================================*/
   function update(dt) {
     const rawDt = dt;
 
-    // Boss 击杀特写：慢动作 + 延迟结算
+    // Boss 击杀特写：慢动作 + 延迟进入下一星域
     if (victoryTimer > 0) {
       victoryTimer -= rawDt;
       victoryFlash = Math.max(0, victoryFlash - rawDt * 0.75);
       if (victoryTimer <= 0) {
-        victoryFlash = 0;
-        endGame(true, "boss");
+        chapterClear();
         return;
       }
     }
@@ -3036,7 +3689,6 @@
     }
 
     elapsed += dt;
-    timeLeft -= dt;
     if (ultTimer > 0) ultTimer = Math.max(0, ultTimer - dt);
 
     // 连杀保持计时
@@ -3054,16 +3706,32 @@
       }
     }
 
-    // 波次推进
-    const newWave = Math.min(CFG.WAVE.BOSS_WAVE, 1 + Math.floor(elapsed / CFG.WAVE.INTERVAL));
+    // 波次推进（每章独立计时）
+    const newWave = Math.min(
+      CFG.RUN.CHAPTER_WAVES,
+      1 + Math.floor((elapsed - chapterStartElapsed) / CFG.WAVE.INTERVAL)
+    );
     if (newWave !== waveNum) {
       waveNum = newWave;
-      addText(camera.x + view.w / 2, camera.y + view.h * 0.28, "第 " + waveNum + " 波", "#7ef0ff", 22);
+      const cx = camera.x + view.w / 2;
+      const cy = camera.y + view.h * 0.28;
+      if (waveNum >= CFG.RUN.CHAPTER_WAVES) {
+        addText(cx, cy, "虚空之眼逼近", "#ff4d6d", 24);
+      } else {
+        addText(cx, cy, "第 " + waveNum + " 波", "#7ef0ff", 22);
+      }
+      if (waveNum % CFG.RUN.SHOP_WAVE === 0 && waveNum !== lastShopWave) {
+        lastShopWave = waveNum;
+        openShop("第 " + chapter + " 星域 · 第 " + waveNum + " 波补给");
+        return;
+      }
     }
-    if (!bossSpawned && waveNum >= CFG.WAVE.BOSS_WAVE) spawnBoss();
+    if (!bossSpawned && waveNum >= CFG.RUN.CHAPTER_WAVES) spawnBoss();
 
     updateSpawner(dt);
     updateEvents(dt);
+    updateBounty(dt);
+    updateCores(dt);
     if (state !== "playing") { updateParticles(dt); return; }
 
     updatePlayer(dt);
@@ -3071,6 +3739,7 @@
     if (state !== "playing") return;
 
     updateDrones(dt, elapsed);
+    updateDefenses(dt);
     updateEnemies(dt, elapsed);
     if (state !== "playing") { updateParticles(dt); return; }
 
@@ -3092,11 +3761,6 @@
     if (hudAcc >= 0.08) {
       hudAcc = 0;
       refreshHud();
-    }
-
-    if (timeLeft <= 0 && victoryTimer <= 0) {
-      timeLeft = 0;
-      endGame(true, "time");
     }
   }
 
@@ -3531,6 +4195,115 @@
     }
   }
 
+  // 能量核心掉落
+  function drawCores(t) {
+    for (let i = 0; i < coreDrops.length; i++) {
+      const c = coreDrops[i];
+      if (c.x < cull.x0 || c.x > cull.x1 || c.y < cull.y0 || c.y > cull.y1) continue;
+      const pulse = 1 + 0.16 * Math.sin(t * 5 + c.seed);
+      const a = c.life < 3 ? 0.4 + 0.6 * Math.abs(Math.sin(t * 6)) : 1;
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.translate(c.x, c.y);
+      ctx.rotate(t * 0.8 + c.seed);
+      drawGlow("#ffd666", 0, 0, 20, 0.5);
+      ctx.fillStyle = "#ffd666";
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const ang = (k / 6) * TAU;
+        const px = Math.cos(ang) * 9 * pulse;
+        const py = Math.sin(ang) * 9 * pulse;
+        k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 248, 214, 0.95)";
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.2, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // 缓速场
+  function drawFields(t) {
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i];
+      if (f.x + f.r < cull.x0 || f.x - f.r > cull.x1 || f.y + f.r < cull.y0 || f.y - f.r > cull.y1) continue;
+      const g = ctx.createRadialGradient(f.x, f.y, f.r * 0.1, f.x, f.y, f.r);
+      g.addColorStop(0, "rgba(80, 235, 255, 0.03)");
+      g.addColorStop(0.75, "rgba(60, 200, 255, 0.07)");
+      g.addColorStop(1, "rgba(120, 245, 255, 0.16)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.r, 0, TAU);
+      ctx.fill();
+
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.rotate(-t * 0.35 + f.seed);
+      ctx.setLineDash([10, 14]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(130, 250, 255, 0.55)";
+      ctx.beginPath();
+      ctx.arc(0, 0, f.r * 0.94, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.rotate(t * 0.8);
+      ctx.strokeStyle = "rgba(160, 255, 255, 0.4)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, f.r * 0.5, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // 自动炮塔
+  function drawTurrets(t) {
+    for (let i = 0; i < turrets.length; i++) {
+      const tu = turrets[i];
+      if (tu.x < cull.x0 || tu.x > cull.x1 || tu.y < cull.y0 || tu.y > cull.y1) continue;
+      ctx.save();
+      ctx.translate(tu.x, tu.y);
+      drawGlow("#ffd666", 0, 0, 26, 0.42);
+
+      // 底座
+      ctx.fillStyle = "rgba(40, 32, 10, 0.95)";
+      ctx.strokeStyle = "rgba(255, 210, 110, 0.85)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const ang = (k / 6) * TAU + tu.seed;
+        const px = Math.cos(ang) * 13;
+        const py = Math.sin(ang) * 13;
+        k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 炮管
+      ctx.rotate(tu.ang);
+      ctx.fillStyle = "#ffd666";
+      ctx.fillRect(4, -3, 17, 6);
+      ctx.fillStyle = "rgba(255, 248, 214, 0.9)";
+      ctx.beginPath();
+      ctx.arc(0, 0, 4.4, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+
+      // 待机指示
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = "#ffd666";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(tu.x, tu.y, 19 + Math.sin(t * 3 + tu.seed) * 1.5, 0, TAU);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
   // 风险星域：红色虚线警示圈
   function drawZones(t) {
     for (let i = 0; i < zones.length; i++) {
@@ -3666,13 +4439,16 @@
       ctx.save();
       ctx.translate(-camera.x, -camera.y);
       drawWorldBounds();
+      drawFields(t);
       drawZones(t);
       drawProps(t);
       drawGems();
+      drawCores(t);
       drawBullets();
       drawEnemies(t);
       drawPlayer(t);
       drawDrones(t);
+      drawTurrets(t);
       drawPulses();
       drawEnemyBullets();
       drawParticles();
