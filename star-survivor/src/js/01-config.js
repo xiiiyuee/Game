@@ -56,6 +56,11 @@
       REVIVE_RADIUS: 80,          // 复活交互半径
       REVIVE_HP: 0.5,             // 复活后生命比例
     },
+    COOP: {
+      ENEMY_HP_PER_EXTRA: 0.55,   // 每多名玩家，敌人生命加成
+      ENEMY_EXTRA_PER_EXTRA: 1,   // 每多名玩家，每组刷怪额外数量
+      BOSS_HP_PER_EXTRA: 0.8,     // 每多名玩家，Boss 生命加成
+    },
     WORLD: {
       // 实际战场远大于视口，相机跟随玩家滚动
       WIDTH_FACTOR: 2.2,          // 世界宽度 = max(视口宽, 960) × 该系数

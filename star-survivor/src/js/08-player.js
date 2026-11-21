@@ -78,6 +78,15 @@
     return player;
   }
 
+  // 人数难度缩放：单机恒为 1，联机按额外人数提升
+  function partyCount() {
+    return Math.max(1, players.length);
+  }
+
+  function partyScale(perExtra) {
+    return 1 + (partyCount() - 1) * perExtra;
+  }
+
   function resetGame() {
     localPlayerId = "p1";
     player = createPlayer(localPlayerId, world.w / 2, world.h / 2, true);

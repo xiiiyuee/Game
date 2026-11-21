@@ -1002,6 +1002,11 @@
       REVIVE_RADIUS: 80,          // 复活交互半径
       REVIVE_HP: 0.5,             // 复活后生命比例
     },
+    COOP: {
+      ENEMY_HP_PER_EXTRA: 0.55,   // 每多名玩家，敌人生命加成
+      ENEMY_EXTRA_PER_EXTRA: 1,   // 每多名玩家，每组刷怪额外数量
+      BOSS_HP_PER_EXTRA: 0.8,     // 每多名玩家，Boss 生命加成
+    },
     WORLD: {
       // 实际战场远大于视口，相机跟随玩家滚动
       WIDTH_FACTOR: 2.2,          // 世界宽度 = max(视口宽, 960) × 该系数
@@ -1878,6 +1883,15 @@
       if (players[i].id === localPlayerId) return players[i];
     }
     return player;
+  }
+
+  // 人数难度缩放：单机恒为 1，联机按额外人数提升
+  function partyCount() {
+    return Math.max(1, players.length);
+  }
+
+  function partyScale(perExtra) {
+    return 1 + (partyCount() - 1) * perExtra;
   }
 
   function resetGame() {
@@ -2790,6 +2804,7 @@
     }
 
     const hp = def.hp * waveScaleHp() * playerPowerMul() *
+      partyScale(CFG.COOP.ENEMY_HP_PER_EXTRA) *
       (chapterMod ? chapterMod.hpMul || 1 : 1);
     const e = {
       id: nextEnemyId++,
@@ -2865,7 +2880,8 @@
     y = clamp(y, 70, world.h - 70);
 
     const B = CFG.BOSS;
-    const hpMul = Math.pow(CFG.RUN.BOSS_HP_GROWTH, chapter - 1) * playerPowerMul();
+    const hpMul = Math.pow(CFG.RUN.BOSS_HP_GROWTH, chapter - 1) * playerPowerMul() *
+      partyScale(CFG.COOP.BOSS_HP_PER_EXTRA);
     const dmgMul = Math.pow(CFG.RUN.BOSS_DMG_GROWTH, chapter - 1);
     boss = {
       id: nextEnemyId++,
@@ -2934,7 +2950,8 @@
     spawnTimer = Math.max(CFG.WAVE.SPAWN_MIN,
       CFG.WAVE.SPAWN_BASE - (waveNum - 1) * 0.065 - (chapter - 1) * 0.06) *
       (chapterMod ? chapterMod.spawnMul || 1 : 1);
-    const count = 1 + Math.floor(waveNum / 6) + Math.floor((chapter - 1) * 0.8);
+    const count = 1 + Math.floor(waveNum / 6) + Math.floor((chapter - 1) * 0.8) +
+      (partyCount() - 1) * CFG.COOP.ENEMY_EXTRA_PER_EXTRA;
     for (let i = 0; i < count; i++) {
       spawnEnemy(weightedEnemyType());
     }

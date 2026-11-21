@@ -66,6 +66,7 @@
     }
 
     const hp = def.hp * waveScaleHp() * playerPowerMul() *
+      partyScale(CFG.COOP.ENEMY_HP_PER_EXTRA) *
       (chapterMod ? chapterMod.hpMul || 1 : 1);
     const e = {
       id: nextEnemyId++,
@@ -141,7 +142,8 @@
     y = clamp(y, 70, world.h - 70);
 
     const B = CFG.BOSS;
-    const hpMul = Math.pow(CFG.RUN.BOSS_HP_GROWTH, chapter - 1) * playerPowerMul();
+    const hpMul = Math.pow(CFG.RUN.BOSS_HP_GROWTH, chapter - 1) * playerPowerMul() *
+      partyScale(CFG.COOP.BOSS_HP_PER_EXTRA);
     const dmgMul = Math.pow(CFG.RUN.BOSS_DMG_GROWTH, chapter - 1);
     boss = {
       id: nextEnemyId++,
@@ -210,7 +212,8 @@
     spawnTimer = Math.max(CFG.WAVE.SPAWN_MIN,
       CFG.WAVE.SPAWN_BASE - (waveNum - 1) * 0.065 - (chapter - 1) * 0.06) *
       (chapterMod ? chapterMod.spawnMul || 1 : 1);
-    const count = 1 + Math.floor(waveNum / 6) + Math.floor((chapter - 1) * 0.8);
+    const count = 1 + Math.floor(waveNum / 6) + Math.floor((chapter - 1) * 0.8) +
+      (partyCount() - 1) * CFG.COOP.ENEMY_EXTRA_PER_EXTRA;
     for (let i = 0; i < count; i++) {
       spawnEnemy(weightedEnemyType());
     }
