@@ -67,7 +67,7 @@
         return false;
       }
     }
-    if (!bossSpawned && waveNum >= CFG.RUN.CHAPTER_WAVES) spawnBoss();
+    if (!bossSpawned && waveNum >= CFG.RUN.CHAPTER_WAVES && !coopIsGuest()) spawnBoss();
 
     updateSpawner(dt);
     updateEvents(dt);

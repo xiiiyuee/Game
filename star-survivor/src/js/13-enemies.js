@@ -204,6 +204,7 @@
   }
 
   function updateSpawner(dt) {
+    if (coopIsGuest()) return;                          // 联机客户端的敌人由房主生成
     if (enemies.length >= CFG.LIMITS.ENEMIES) return;   // 达到上限则暂停生成
     if (boss && !boss.dead) return;                     // Boss 战期间暂停杂兵增援
     spawnTimer -= dt;
@@ -432,6 +433,10 @@
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (e.dead) continue;
+      if (e.synced) {
+        e.hitFlash = Math.max(0, (e.hitFlash || 0) - dt * 2.6);
+        continue;
+      }
 
       if (e.isBoss) {
         updateBoss(e, dt, t);

@@ -481,6 +481,8 @@
       coopApplyInput(data);
     } else if (data.t === "snap") {
       coopApplySnapshot(data);
+    } else if (data.t === "en") {
+      coopApplyEnemies(data);
     } else if (data.t === "p") {
       coopNoteSnapshot(data);
       coopApplyPlayerState(data);
@@ -706,9 +708,74 @@
     }
   }
 
+  /* ===== 敌人同步（P3-06）：房主 15Hz 广播，客户端只做表现 ===== */
+  function coopIsGuest() {
+    return !!roomCode && !coopNet.host;
+  }
+
+  function coopEnemyList() {
+    const arr = [];
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (e.dead || e.synced || e.isBoss) continue;
+      arr.push([
+        e.id, e.type,
+        Math.round(e.x * 10), Math.round(e.y * 10),
+        Math.round(e.hp), Math.round(e.maxHp), Math.round(e.r),
+      ]);
+    }
+    return arr;
+  }
+
+  function coopSendEnemies() {
+    if (!coopNet.host || state !== "playing") return;
+    coopSendState({ t: "en", s: coopSnapSeq, list: coopEnemyList() });
+  }
+
+  function coopSyncedEnemy(id, type, x, y, hp, maxHp, r) {
+    const e = spawnEnemy(type, x, y, true);
+    if (!e) return null;
+    e.id = id;
+    e.synced = true;
+    e.speed = 0;
+    e.hp = hp;
+    e.maxHp = maxHp;
+    if (r) e.r = r;
+    return e;
+  }
+
+  function coopApplyEnemies(d) {
+    if (coopNet.host || !d || state !== "playing") return;
+    const list = d.list || [];
+    const seen = {};
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      if (!s || s.length < 7) continue;
+      const id = s[0];
+      let e = null;
+      for (let j = 0; j < enemies.length; j++) {
+        if (enemies[j].synced && enemies[j].id === id) { e = enemies[j]; break; }
+      }
+      if (!e) e = coopSyncedEnemy(id, s[1], s[2] / 10, s[3] / 10, s[4], s[5], s[6]);
+      if (!e) continue;
+      e.x = s[2] / 10;
+      e.y = s[3] / 10;
+      e.hp = s[4];
+      e.maxHp = s[5];
+      if (s[6]) e.r = s[6];
+      seen[id] = 1;
+    }
+    // 清掉非同步敌人（本地误生成的）以及房主已移除的敌人
+    enemies = enemies.filter((e) => e.synced && seen[e.id]);
+  }
+
   function coopPosTick() {
-    if (coopNet.host) coopSendSnapshot();
-    else coopSendPositions();
+    if (coopNet.host) {
+      coopSendSnapshot();
+      coopSendEnemies();
+    } else {
+      coopSendPositions();
+    }
   }
 
   function coopAddRemote(id, x, y) {
