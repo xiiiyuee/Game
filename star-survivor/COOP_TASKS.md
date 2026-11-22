@@ -291,7 +291,7 @@ A 计划的硬限制：
 |---|---|---|---|---|
 | P5-01 | 自建信令服务 | WSS 地址可配置；公共云可切换 | P4-08 | 待办 |
 | P5-02 | TURN / coturn | TLS 443 可用；对称 NAT 下能连 | P5-01 | 待办 |
-| P5-03 | 配置注入 | 信令/TURN 地址不写死；本地与线上可切换 | P5-02 | 待办 |
+| P5-03 | 配置注入 | 信令/TURN 地址不写死；本地与线上可切换 | P5-02 | 完成（先于 P5-01/02 落地） |
 | P5-04 | 网络矩阵测试 | 局域网、150ms、5% 丢包、移动网络各跑一局 | P5-03 | 待办 |
 | P5-05 | 房主异常测试 | 切后台、刷新、断网、退出；客户端提示正确 | P5-04 | 待办 |
 | P5-06 | 低端房主性能 | 4 人 + Boss 时房主帧率可接受 | P5-04 | 待办 |
@@ -300,6 +300,24 @@ A 计划的硬限制：
 | P5-09 | 文档收尾 | GitHub 推送；本文件状态与交接更新 | P5-08 | 待办 |
 
 **Phase 5 完成标准**：线上可玩，弱网有兜底，单机和联机入口都正常。
+
+**P5-03 配置注入用法**（默认值 → `window.SS_COOP_CONFIG` → URL 参数，后者覆盖前者）：
+
+```js
+// 页面加载前注入，或直接在控制台/宿主页面设置
+window.SS_COOP_CONFIG = {
+  signal: { host: "sig.example.com", port: 443, secure: true, path: "/peerjs" },
+  iceServers: [{ urls: "turn:turn.example.com:3478", username: "u", credential: "p" }],
+  peerSrc: ["https://cdn.example.com/peerjs.min.js"],
+};
+```
+
+```
+?sig=localhost:9000&sigsecure=0&sigpath=/peerjs   // 本地信令
+?sig=wss://sig.example.com/peerjs                  // 线上信令
+?turn=turn:u:p@turn.example.com:3478,turns:turn.example.com:5349
+?peersrc=https://cdn.example.com/peerjs.min.js
+```
 
 ---
 
@@ -336,10 +354,10 @@ A 计划的硬限制：
 
 ## 7. 当前进度
 
-- 当前阶段：**Phase 4 已完成，准备进入 Phase 5**
-- 当前任务：Phase 0 ~ Phase 4 完成；P4-09（断线重连）按 D-08 在 MVP 跳过
-- 下一步：Phase 5 部署、弱网与发布（P5-01 自建信令服务）
-- 阻塞：无（真实双设备公网联机与手机真机仍需你手动验证；TURN 待部署）
+- 当前阶段：**Phase 5 进行中（P5-03 配置注入已完成）**
+- 当前任务：Phase 0 ~ Phase 4 完成；P5-03 完成（信令 / TURN / PeerJS 客户端库均可配置）
+- 下一步：P5-01 自建信令服务（需要确定 WSS 部署位置）；随后 P5-02 TURN/coturn
+- 阻塞：自建信令与 TURN 需要基础设施（域名、证书、服务器），待你确认部署条件；真实双设备公网联机与手机真机仍需手动验证
 
 ---
 
@@ -349,11 +367,11 @@ A 计划的硬限制：
 
 ```
 日期：2026-11-22
-完成：Phase 0/1/2/3；Phase 4 全部（P4-01 ~ P4-08、P4-10；P4-09 按 D-08 跳过）
-当前：Phase 4 收尾。个人升级弹窗（10s 自动选、选卡 3s 无敌、世界继续）；个人商店/游商（12s 或受击关闭、不冻结世界）；房主生成并校验报价（oid/sid 校验、升级/购买 ID 白名单、伪造包计入 coopInBad）；团队共享星币/核心/保险，经验/芯片个人归属；队友 HUD（等级/倒地/配色）+ 屏幕外箭头 + 倒地观战 + 救援进度；团队结算（个人击杀/伤害/等级）；大厅列表/准备/开始/踢人/复制房间码；390×844 手机个人浮层不遮挡下方摇杆（pointer-events:none + panel auto）。
-验证：npm test 通过（单文件 300.4 KB；CSS 27.5 KB / JS 261.7 KB）；无头 Chrome 151 项全 PASS，联机 0 JS 报错
-下一步：Phase 5（P5-01 自建信令服务，需先部署 WSS + TURN）
-阻塞：真实双设备公网联机仍需手动验证（沙箱无公网信令）；手机真机布局建议再肉眼确认
+完成：Phase 0/1/2/3；Phase 4 全部（P4-01 ~ P4-08、P4-10；P4-09 按 D-08 跳过）；P5-03 配置注入
+当前：P5-03 已完成。信令地址、TURN/ICE、PeerJS 客户端库不再写死：优先级为默认值 → `window.SS_COOP_CONFIG` → URL（`?sig=` / `?sigport=` / `?sigpath=` / `?sigsecure=` / `?turn=` / `?peersrc=`）。本地信令示例：`?sig=localhost:9000&sigsecure=0&sigpath=/peerjs`；线上：`?sig=wss://sig.example.com/peerjs`。TURN 支持 `?turn=turn:user:pass@host:3478,turns:host:5349`。
+验证：npm test 通过（单文件 303.4 KB；CSS 27.5 KB / JS 264.8 KB）；无头 Chrome 156 项全 PASS（含 P5-03 默认/全局/URL 覆盖），联机 0 JS 报错
+下一步：P5-01 自建信令服务（需确定 WSS 部署位置），随后 P5-02 TURN/coturn
+阻塞：自建信令/TURN 需要域名、证书与服务器；真实双设备公网联机仍需手动验证
 约束：不提交 Git、不部署
 ```
 

@@ -292,7 +292,90 @@
     "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js",
     "https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js",
   ];
+  const COOP_DEFAULT_SIGNAL = { host: "0.peerjs.com", port: 443, secure: true, path: "/" };
   const PEER_ID_PREFIX = "xysv-";
+
+  /* ===== 配置注入（P5-03）：信令 / TURN / 客户端库都可通过配置或 URL 覆盖 =====
+     window.SS_COOP_CONFIG = {
+       signal: { host, port, secure, path },
+       iceServers: [{ urls, username, credential }],
+       peerSrc: ["https://.../peerjs.min.js"],
+     }
+     URL：?sig=host:port/path | wss://host/path  ?sigport= ?sigpath= ?sigsecure=0/1
+          ?turn=turn:user:pass@host:3478,turns:host:5349  ?peersrc=url1,url2 */
+  function coopConfig() {
+    const g = typeof window !== "undefined" ? window.SS_COOP_CONFIG : null;
+    return g && typeof g === "object" ? g : {};
+  }
+
+  function coopQuery() {
+    try { return new URLSearchParams(location.search); } catch (err) { return null; }
+  }
+
+  function coopSignalConfig() {
+    const out = Object.assign({}, COOP_DEFAULT_SIGNAL);
+    const g = coopConfig();
+    if (g.signal && typeof g.signal === "object") Object.assign(out, g.signal);
+    const q = coopQuery();
+    if (!q) return out;
+    const sig = q.get("sig");
+    if (sig) {
+      if (sig.indexOf("://") >= 0) {
+        try {
+          const u = new URL(sig);
+          out.host = u.hostname;
+          out.secure = u.protocol === "wss:" || u.protocol === "https:";
+          out.port = u.port ? Number(u.port) : (out.secure ? 443 : 80);
+          if (u.pathname && u.pathname !== "/") out.path = u.pathname;
+        } catch (err) {}
+      } else {
+        const m = /^([^\/:]+)(?::(\d+))?(\/.*)?$/.exec(sig);
+        if (m) {
+          out.host = m[1];
+          if (m[2]) out.port = Number(m[2]);
+          if (m[3]) out.path = m[3];
+        }
+      }
+    }
+    const port = Number(q.get("sigport"));
+    if (port > 0) out.port = port;
+    if (q.get("sigpath")) out.path = q.get("sigpath");
+    const secure = q.get("sigsecure");
+    if (secure === "1" || secure === "true") out.secure = true;
+    else if (secure === "0" || secure === "false") out.secure = false;
+    return out;
+  }
+
+  function coopIceServers() {
+    const list = [];
+    const g = coopConfig();
+    if (Array.isArray(g.iceServers)) {
+      for (const s of g.iceServers) if (s && s.urls) list.push(s);
+    }
+    const q = coopQuery();
+    const raw = q ? (q.get("turn") || "") : "";
+    for (const part of raw.split(",")) {
+      const s = part.trim();
+      if (!s) continue;
+      const m = /^(turns?):(?:([^:@\/]+):([^@\/]+)@)?(.+)$/i.exec(s);
+      if (!m) continue;
+      const item = { urls: m[1].toLowerCase() + ":" + m[4] };
+      if (m[2]) item.username = m[2];
+      if (m[3]) item.credential = m[3];
+      list.push(item);
+    }
+    return list;
+  }
+
+  function coopPeerSrc() {
+    const g = coopConfig();
+    if (Array.isArray(g.peerSrc) && g.peerSrc.length) return g.peerSrc.slice();
+    const q = coopQuery();
+    const raw = q ? (q.get("peersrc") || "") : "";
+    const list = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    return list.length ? list : PEER_SRC;
+  }
+
 
   let coopNet = {
     status: "idle",        // idle | loading | waiting | connecting | connected | error
@@ -367,7 +450,8 @@
   function loadPeerLib(i) {
     const idx = i || 0;
     if (window.Peer) return Promise.resolve();
-    if (idx >= PEER_SRC.length) return Promise.reject(new Error("信令库加载失败"));
+    const src = coopPeerSrc();
+    if (idx >= src.length) return Promise.reject(new Error("信令库加载失败"));
     if (peerLoadPromise) return peerLoadPromise;
     peerLoadPromise = new Promise((resolve, reject) => {
       const s = document.createElement("script");
@@ -378,7 +462,7 @@
         peerLoadPromise = null;
         loadPeerLib(idx + 1).then(resolve, reject);
       };
-      s.src = PEER_SRC[idx];
+      s.src = src[idx];
       s.async = true;
       s.onload = () => {
         if (done) return;
@@ -439,7 +523,11 @@
   }
 
   function peerOptions() {
-    return { host: "0.peerjs.com", port: 443, secure: true, path: "/", debug: 0 };
+    const opts = coopSignalConfig();
+    opts.debug = 0;
+    const ice = coopIceServers();
+    if (ice.length) opts.config = { iceServers: ice };
+    return opts;
   }
 
   function onPeerError(err) {
