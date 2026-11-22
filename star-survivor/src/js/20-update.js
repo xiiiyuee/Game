@@ -31,6 +31,7 @@
 
     elapsed += dt;
     if (ultTimer > 0) ultTimer = Math.max(0, ultTimer - dt);
+    coopUpgradeTick(dt);   // 联机个人选卡倒计时（单机自行返回）
 
     // 连杀保持计时
     if (comboTimer > 0) {
@@ -63,8 +64,15 @@
       }
       if (waveNum % CFG.RUN.SHOP_WAVE === 0 && waveNum !== lastShopWave) {
         lastShopWave = waveNum;
-        openShop("第 " + chapter + " 星域 · 第 " + waveNum + " 波补给");
-        return false;
+        if (roomCode) {
+          // 联机：每人收到个人补给，世界继续（P4-02）
+          for (let i = 0; i < players.length; i++) {
+            coopOpenShop(players[i], "第 " + chapter + " 星域 · 第 " + waveNum + " 波补给");
+          }
+        } else {
+          openShop("第 " + chapter + " 星域 · 第 " + waveNum + " 波补给");
+          return false;
+        }
       }
     }
     if (!bossSpawned && waveNum >= CFG.RUN.CHAPTER_WAVES && !coopIsGuest()) spawnBoss();

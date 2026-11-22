@@ -173,7 +173,7 @@
       if (e.dead) continue;
       const rr = R + e.r;
       if (dist2(player.x, player.y, e.x, e.y) <= rr * rr) {
-        hurtEnemy(e, CFG.ULT.DAMAGE * (e.isBoss ? 0.5 : 1), false, true);
+        hurtEnemy(e, CFG.ULT.DAMAGE * (e.isBoss ? 0.5 : 1), false, true, player.id);
         if (state !== "playing") break;
       }
     }

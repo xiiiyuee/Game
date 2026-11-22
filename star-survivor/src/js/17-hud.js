@@ -24,7 +24,7 @@
           ? `倒地 ${Math.max(0, Math.ceil(p.downTimer || 0))}s`
           : `${Math.ceil(p.hp)} / ${p.hpMax}`;
       html += `<div class="team-row${down ? " down" : ""}">
-        <div class="team-top"><span class="team-name">${p.name || String(p.id).toUpperCase()}</span><span class="team-note">${note}</span></div>
+        <div class="team-top"><span class="team-name"><i class="team-dot" style="background:${p.color || "#3fe5ff"}"></i>${p.name || String(p.id).toUpperCase()}</span><span class="team-note">Lv${p.level || 1} · ${note}</span></div>
         <div class="team-bar hp"><i style="width:${hpPct.toFixed(1)}%"></i></div>
         <div class="team-bar sh"><i style="width:${shPct.toFixed(1)}%"></i></div>
       </div>`;
@@ -49,7 +49,8 @@
     if (!me) return;
     const hpPct = clamp(me.hp / me.hpMax, 0, 1) * 100;
     const shPct = clamp(me.shield / me.stats.shieldMax, 0, 1) * 100;
-    const xpPct = clamp(xp / xpNeed, 0, 1) * 100;
+    const myXpNeed = me.xpNeed || xpNeed;
+    const xpPct = clamp((me.xp || 0) / myXpNeed, 0, 1) * 100;
 
     document.getElementById("ui-hp").style.width = hpPct.toFixed(1) + "%";
     document.getElementById("ui-shield").style.width = shPct.toFixed(1) + "%";
@@ -57,10 +58,10 @@
 
     setText(document.getElementById("ui-hp-text"), `${Math.ceil(me.hp)} / ${me.hpMax}`);
     setText(document.getElementById("ui-shield-text"), `${Math.ceil(me.shield)} / ${Math.round(me.stats.shieldMax)}`);
-    setText(document.getElementById("ui-xp-text"), `${Math.floor(xp)} / ${xpNeed}`);
-    setText(document.getElementById("ui-level"), String(level));
+    setText(document.getElementById("ui-xp-text"), `${Math.floor(me.xp || 0)} / ${myXpNeed}`);
+    setText(document.getElementById("ui-level"), String(me.level || 1));
     setText(document.getElementById("ui-score"), String(score));
-    setText(document.getElementById("ui-kills"), String(kills));
+    setText(document.getElementById("ui-kills"), String(me.kills || 0));
     setText(document.getElementById("ui-credits"), String(credits));
     setText(document.getElementById("ui-cores"), String(cores));
     setText(document.getElementById("ui-core-btn"), String(cores));

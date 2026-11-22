@@ -85,6 +85,8 @@
 
   // 菜单 / 暂停 / 结算 / 商店 / 建造按钮
   document.addEventListener("click", (e) => {
+    const kick = e.target.closest("[data-kick]");
+    if (kick) { coopKickGuest(kick.dataset.kick); return; }
     const btn = e.target.closest("[data-act]");
     if (!btn) return;
     const act = btn.dataset.act;
@@ -103,6 +105,10 @@
     else if (act === "coop-new") newRoom();
     else if (act === "coop-retry") coopRetry();
     else if (act === "coop-back") coopBackToMenu();
+    else if (act === "lobby-start") coopStartFromLobby();
+    else if (act === "lobby-ready") coopToggleReady();
+    else if (act === "lobby-copy") copyRoom();
+    else if (act === "lobby-leave") coopLeaveLobby();
   });
 
   // 成长档案购买

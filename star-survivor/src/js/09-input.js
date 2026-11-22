@@ -50,7 +50,7 @@
       else if (state === "playing" || state === "paused") togglePause();
       return;
     }
-    if (state === "upgrade") {
+    if (state === "upgrade" || coopUpgradeOpen()) {
       const pick = /^(?:Digit|Numpad)([1-3])$/.exec(code);
       if (pick) { chooseUpgrade(Number(pick[1]) - 1); return; }
     }

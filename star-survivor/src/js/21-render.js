@@ -736,6 +736,78 @@
     }
   }
 
+  // 联机倒地提示（P4-06）：倒计时环 + 救援进度
+  function drawDownState(p) {
+    if (!p.down || p.eliminated) return;
+    const revT = CFG.PLAYER.REVIVE_TIME;
+    const prog = clamp((p.reviveProgress || 0) / revT, 0, 1);
+    const left = clamp((p.downTimer || 0) / CFG.PLAYER.DOWN_TIMEOUT, 0, 1);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.fillStyle = "rgba(255,77,109,0.16)";
+    ctx.beginPath();
+    ctx.arc(0, 0, p.r + 17, 0, TAU);
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255,77,109,0.75)";
+    ctx.beginPath();
+    ctx.arc(0, 0, p.r + 17, -Math.PI / 2, -Math.PI / 2 + TAU * left);
+    ctx.stroke();
+    if (prog > 0) {
+      ctx.strokeStyle = "#8bffdc";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, p.r + 24, -Math.PI / 2, -Math.PI / 2 + TAU * prog);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.font = "600 12px system-ui, -apple-system, sans-serif";
+    ctx.fillStyle = prog > 0 ? "#8bffdc" : "#ffd0d8";
+    ctx.fillText(
+      prog > 0 ? `救援 ${Math.min(99, Math.round(prog * 100))}%` : `倒地 ${Math.ceil(p.downTimer || 0)}s`,
+      p.x, p.y - p.r - 26);
+    ctx.restore();
+  }
+
+  // 队友屏幕外指示箭头（P4-05）
+  function drawTeamArrows() {
+    const me = getLocalPlayer();
+    if (!me || state !== "playing" || players.length <= 1) return;
+    const m = 46;
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (p === me || p.eliminated) continue;
+      const sx = p.x - camera.x;
+      const sy = p.y - camera.y;
+      if (sx >= m && sx <= view.w - m && sy >= m && sy <= view.h - m) continue;
+      const ang = Math.atan2(sy - view.h / 2, sx - view.w / 2);
+      const ex = clamp(sx, m, view.w - m);
+      const ey = clamp(sy, m, view.h - m);
+      ctx.save();
+      ctx.translate(ex, ey);
+      ctx.rotate(ang);
+      ctx.fillStyle = p.color || "#3fe5ff";
+      ctx.globalAlpha = p.down ? 0.55 : 0.9;
+      ctx.beginPath();
+      ctx.moveTo(10, 0);
+      ctx.lineTo(-6, -7);
+      ctx.lineTo(-6, 7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.font = "600 10px system-ui, -apple-system, sans-serif";
+      ctx.fillStyle = p.color || "#3fe5ff";
+      ctx.globalAlpha = p.down ? 0.6 : 0.92;
+      const dist = Math.round(Math.hypot(p.x - me.x, p.y - me.y) / 10);
+      ctx.fillText(`${p.down ? "倒地 " : ""}${dist}m`, ex, ey + 18);
+      ctx.restore();
+    }
+  }
+
   function render(t) {
     const me = getLocalPlayer();
     cull.x0 = camera.x - 120;
@@ -773,12 +845,16 @@
         if (players[i] !== me) drawDrones(t, players[i]);
       }
       drawDrones(t, me);
+      for (let i = 0; i < players.length; i++) {
+        if (players[i] !== me) drawDownState(players[i]);
+      }
       drawTurrets(t);
       drawPulses();
       drawEnemyBullets();
       drawParticles();
       drawTexts();
       ctx.restore();
+      drawTeamArrows();
     }
 
     // 超载减速期间的青蓝滤镜

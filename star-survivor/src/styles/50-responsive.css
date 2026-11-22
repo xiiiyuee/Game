@@ -18,3 +18,49 @@
     .help { display: none; }
     .cards { max-height: 46vh; }
   }
+
+  /* ===== 联机 + 触屏：个人选卡 / 商店作为顶部浮层，不遮挡下方操作区（P4-10） ===== */
+  body.coop.touch .overlay.peek {
+    align-items: flex-start;
+    justify-content: center;
+    padding: 8vh 8px 0;
+    pointer-events: none;
+  }
+  body.coop.touch .overlay.peek .panel {
+    pointer-events: auto;
+    width: min(520px, 96vw);
+    max-height: 58vh;
+    overflow-y: auto;
+    padding: 14px 14px 16px;
+  }
+  body.coop.touch .overlay.peek .cards {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    max-height: none;
+    overflow: visible;
+  }
+  body.coop.touch .overlay.peek .card {
+    min-height: 0;
+    padding: 10px 12px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+  }
+  body.coop.touch .overlay.peek .card-top { width: 100%; }
+  body.coop.touch .overlay.peek .card h3 { font-size: 13px; }
+  body.coop.touch .overlay.peek .card p { width: 100%; font-size: 11px; }
+  body.coop.touch .overlay.peek .shop-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  body.coop.touch .overlay.peek .shop-item { padding: 9px 10px; }
+  body.coop.touch .overlay.peek .shop-item h3 { font-size: 12px; }
+  body.coop.touch .overlay.peek .shop-item p { font-size: 10px; }
+
+  /* 多人 HUD 在手机上压缩，避免遮挡视野 */
+  body.coop.touch .team-list { gap: 3px; }
+  body.coop.touch .team-row { padding: 3px 5px; }
+  body.coop.touch .team-row .team-bar { height: 4px; }
+  body.coop.touch .team-top { font-size: 8.5px; margin-bottom: 2px; }
+
+  body.coop.touch .lobby { max-width: 94vw; padding: 10px; }
+  body.coop.touch .lobby-row { font-size: 11px; padding: 6px 8px; }
+  body.coop.touch .lobby-actions .btn { flex: 1 1 40%; padding: 9px 10px; font-size: 11.5px; }

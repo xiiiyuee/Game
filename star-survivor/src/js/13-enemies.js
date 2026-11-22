@@ -534,6 +534,8 @@
     if (e.dead) return;
     e.dead = true;
     kills += 1;
+    const killer = coopPlayerById(e.lastHit);
+    if (killer) killer.kills += 1;
 
     // 连杀：3 秒内连续击杀提升分数与经验
     combo += 1;

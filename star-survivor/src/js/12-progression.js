@@ -226,14 +226,34 @@
   const ALL_DEFS = UPGRADES.concat(EVOLUTIONS);
 
   function gainXp(v) {
-    xp += v;
-    while (xp >= xpNeed) {
-      xp -= xpNeed;
-      level += 1;
-      xpNeed = Math.round(xpNeed * CFG.XP.GROWTH);
-      pendingLevels += 1;
+    gainXpFor(getLocalPlayer() || player, v);
+  }
+
+  // 个人经验结算（P4-01）：联机时每名玩家独立成长
+  function gainXpFor(p, v) {
+    if (!p || coopIsGuest()) return;      // 客户端经验由房主裁决
+    p.xp += v;
+    while (p.xp >= p.xpNeed) {
+      p.xp -= p.xpNeed;
+      p.level += 1;
+      p.xpNeed = Math.round(p.xpNeed * CFG.XP.GROWTH);
+      p.pendingLevels += 1;
     }
-    if (pendingLevels > 0 && state === "playing") openUpgrade();
+    const lp = getLocalPlayer() || player;
+    if (p === lp) syncProgressGlobals(p);
+    if (p.pendingLevels > 0 && state === "playing") {
+      if (roomCode) coopOfferUpgrade(p);   // 联机：个人弹窗 + 房主报价
+      else openUpgrade();
+    }
+  }
+
+  // 兼容旧逻辑：全局 xp/level 始终镜像本地玩家
+  function syncProgressGlobals(p) {
+    if (!p) return;
+    xp = p.xp;
+    level = p.level;
+    xpNeed = p.xpNeed;
+    pendingLevels = p.pendingLevels;
   }
 
   function rollRarity() {
@@ -247,33 +267,33 @@
     return RARITIES[0];
   }
 
-  function makeCard(def, rarity) {
+  function makeCard(def, rarity, lp) {
     // 进化与诅咒不随稀有度放大，数值固定
     const mult = def.curse || def.evolution ? def.base : def.base * rarity.mult;
-    const lp = getLocalPlayer() || player;
+    const owner = lp || getLocalPlayer() || player;
     return {
       def,
       rarity,
       mult,
-      text: def.desc(lp.stats, mult, lp),
+      text: def.desc(owner.stats, mult, owner),
     };
   }
 
-  function buildCards() {
-    const lp = getLocalPlayer() || player;
-    const stacks = lp.stacks;   // 升级选项只看本地玩家的堆叠
+  function buildCards(owner) {
+    const lp = owner || getLocalPlayer() || player;
+    const stacks = lp.stacks;   // 升级选项只看该玩家的堆叠
     const chosen = new Set();
     const cards = [];
 
     // 1) 进化：满足组合条件时，大概率作为第一张卡出现
     const evoPool = EVOLUTIONS.filter((d) =>
       (stacks[d.id] || 0) < d.max &&
-      (!d.weapon || d.weapon === chosenWeapon) &&
+      (!d.weapon || d.weapon === lp.weapon) &&
       d.require(lp.stats));
     if (evoPool.length && Math.random() < 0.75) {
       const def = pick(evoPool);
       chosen.add(def.id);
-      cards.push(makeCard(def, RARITIES[3]));
+      cards.push(makeCard(def, RARITIES[3], lp));
     }
 
     // 2) 诅咒：约 20% 概率占一个位置（每轮最多一张）
@@ -282,7 +302,7 @@
       if (pool.length) {
         const def = pick(pool);
         chosen.add(def.id);
-        cards.push(makeCard(def, RARITIES[2]));
+        cards.push(makeCard(def, RARITIES[2], lp));
       }
     }
 
@@ -300,7 +320,7 @@
       if (!pool.length) continue;
       const def = pick(pool);
       chosen.add(def.id);
-      cards.push(makeCard(def, rarity));
+      cards.push(makeCard(def, rarity, lp));
     }
 
     // 候选不足时允许重复补充（仍保证有效）
@@ -316,15 +336,16 @@
       if (!pool.length) break;
       const def = pick(pool);
       const rarity = RARITIES[Math.min(3, rIdx + randInt(2))];
-      cards.push(makeCard(def, rarity));
+      cards.push(makeCard(def, rarity, lp));
     }
 
     // 极端情况下至少提供治疗卡
-    while (cards.length < 3) cards.push(makeCard(UPGRADES.find((d) => d.id === "heal"), RARITIES[0]));
+    while (cards.length < 3) cards.push(makeCard(UPGRADES.find((d) => d.id === "heal"), RARITIES[0], lp));
     return cards;
   }
 
   function openUpgrade() {
+    if (roomCode) { coopOfferUpgrade(getLocalPlayer() || player); return; }
     state = "upgrade";
     clearKeys();
     shake = 0;
@@ -336,11 +357,12 @@
     refreshHud();
   }
 
-  function renderCards() {
+  function renderCards(cards) {
+    const list = cards || upgradeCards;
     const wrap = document.getElementById("cards");
     let html = "";
-    for (let i = 0; i < upgradeCards.length; i++) {
-      const c = upgradeCards[i];
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
       const special = c.def.curse ? " curse" : c.def.evolution ? " evo" : "";
       const label = c.def.curse ? "诅咒" : c.def.evolution ? "进化" : c.rarity.name;
       html += `<button class="card rarity-${c.rarity.key}${special}" data-i="${i}">
@@ -354,6 +376,7 @@
   }
 
   function chooseUpgrade(idx) {
+    if (roomCode) { coopPickUpgrade(idx); return; }
     if (state !== "upgrade") return;
     const card = upgradeCards[idx];
     if (!card) return;

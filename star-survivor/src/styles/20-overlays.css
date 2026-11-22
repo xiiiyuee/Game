@@ -127,6 +127,65 @@
   .coop-status.ok { color: var(--cyan); text-shadow: 0 0 10px rgba(63, 229, 255, 0.35); }
   .coop-status.err { color: #ff6b8b; }
 
+  /* 联机大厅 */
+  .lobby {
+    margin: 12px auto 0;
+    max-width: 460px;
+    padding: 12px 14px;
+    border: 1px solid rgba(63, 229, 255, 0.16);
+    border-radius: 12px;
+    background: rgba(6, 14, 26, 0.55);
+  }
+  .lobby.hidden { display: none; }
+  .lobby-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .lobby-head b { color: var(--cyan); letter-spacing: 2px; }
+  .lobby-list { display: flex; flex-direction: column; gap: 6px; }
+  .lobby-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 12px;
+  }
+  .lobby-row span { flex: 1; text-align: left; color: var(--text); }
+  .lobby-row em {
+    font-style: normal;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+  .lobby-row em.ok { color: #8bffdc; }
+  .lobby-kick {
+    border: 0;
+    background: rgba(255, 77, 109, 0.14);
+    color: #ff8fa3;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+  }
+  .lobby-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .lobby-actions .btn { margin-top: 0; padding: 8px 12px; font-size: 12px; }
+  .lobby-actions .btn.hidden { display: none; }
+  .lobby .sub.small { font-size: 10.5px; margin: 8px 0 0; }
+
   .coop-debug {
     position: fixed;
     right: 10px;

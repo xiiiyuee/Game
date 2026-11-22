@@ -67,6 +67,17 @@
       <button class="btn ghost small" data-act="coop-new">换一个</button>
       <span class="coop-status" id="coop-status">未连接</span>
     </div>
+    <div class="lobby hidden" id="lobby">
+      <div class="lobby-head"><span>联机大厅</span><b id="lobby-count">1 / 4</b></div>
+      <div class="lobby-list" id="lobby-list"></div>
+      <div class="lobby-actions">
+        <button class="btn small" data-act="lobby-start">选择武器并开始</button>
+        <button class="btn ghost small hidden" data-act="lobby-ready">准备</button>
+        <button class="btn ghost small" data-act="lobby-copy">复制邀请链接</button>
+        <button class="btn ghost small" data-act="lobby-leave">离开</button>
+      </div>
+      <p class="sub small" id="lobby-hint">等待队友加入…</p>
+    </div>
     <ul class="help">
       <li><b>WASD / 方向键</b> 移动（斜向速度已归一化）</li>
       <li>开局三选一武器：<b>脉冲 / 散射 / 轨道激光</b></li>
@@ -162,7 +173,7 @@
 </div>
 
 <!-- 升级选择 -->
-<div class="overlay hidden" id="ov-upgrade">
+<div class="overlay hidden peek" id="ov-upgrade">
   <div class="panel wide">
     <h2>等级提升</h2>
     <p class="sub">选择一项强化 · 当前 <span id="ui-up-level">LV 2</span><span class="kb-hint"> · 按 1 / 2 / 3 快速选择</span></p>
@@ -171,7 +182,7 @@
 </div>
 
 <!-- 星港商店（每 3 波及章节补给） -->
-<div class="overlay hidden" id="ov-shop">
+<div class="overlay hidden peek" id="ov-shop">
   <div class="panel wide">
     <h2 id="shop-title">星港补给站</h2>
     <p class="sub" id="shop-sub">用星币强化本局构筑 · 击败敌人可获得星币</p>
@@ -182,7 +193,7 @@
 </div>
 
 <!-- 星际游商：限时三选一交易 -->
-<div class="overlay hidden" id="ov-trader">
+<div class="overlay hidden peek" id="ov-trader">
   <div class="panel wide">
     <h2 id="trader-title">星际游商</h2>
     <p class="sub" id="trader-sub">机会只有一次 · 用星币换取补给或赌一把</p>

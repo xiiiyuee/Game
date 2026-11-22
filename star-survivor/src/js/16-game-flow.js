@@ -34,9 +34,22 @@
     }
   }
 
-  function endGame(win, reason) {
+  function coopTeamStats() {
+    return players.map((p) => ({
+      id: p.id,
+      n: p.name || String(p.id).toUpperCase(),
+      k: p.kills || 0,
+      d: Math.round(p.damage || 0),
+      lv: p.level || 1,
+      out: !!p.eliminated,
+      c: p.color || "#3fe5ff",
+    }));
+  }
+
+  function endGame(win, reason, team) {
     if (state === "over") return;
-    if (coopNet.host) coopSendEvent("over", { win: !!win, reason });
+    const teamStats = team || (roomCode ? coopTeamStats() : null);
+    if (coopNet.host) coopSendEvent("over", { win: !!win, reason, team: teamStats });
     coopStopPosLoop();
     state = "over";
     clearKeys();
@@ -58,12 +71,23 @@
     meta.shards += shardGain;
     saveMeta();
     const grid = document.getElementById("res-grid");
-    grid.innerHTML = `
+    const me = getLocalPlayer() || player;
+    const myKills = me && typeof me.kills === "number" ? me.kills : kills;
+    const myLevel = me && typeof me.level === "number" ? me.level : level;
+    let teamHtml = "";
+    if (teamStats && teamStats.length > 1) {
+      teamHtml = `<div class="res-team-head"><span>队友战绩</span><b>击杀 · 伤害 · 等级</b></div>` +
+        teamStats.map((q) => `<div class="res-team-row${q.out ? " out" : ""}">
+          <span><i class="team-dot" style="background:${q.c}"></i>${q.n}${q.out ? "（淘汰）" : ""}</span>
+          <b>${q.k} · ${q.d} · LV${q.lv}</b>
+        </div>`).join("");
+    }
+    grid.innerHTML = teamHtml + `
       <div><span>抵达星域</span><b>第 ${chapter} 星域</b></div>
       <div><span>存活时间</span><b>${m}:${String(s).padStart(2, "0")}</b></div>
       <div><span>分数</span><b>${score}</b></div>
-      <div><span>击杀</span><b>${kills}</b></div>
-      <div><span>等级</span><b>LV ${level}</b></div>
+      <div><span>击杀</span><b>${myKills}</b></div>
+      <div><span>等级</span><b>LV ${myLevel}</b></div>
       <div><span>最高连杀</span><b>${comboBest}</b></div>
       <div><span>星币</span><b>${credits}</b></div>
       <div><span>防线</span><b>${turrets.length + fields.length}</b></div>
@@ -123,6 +147,106 @@
     const copy = row.querySelector('[data-act="coop-copy"]');
     if (copy) copy.textContent = roomHost ? "复制邀请链接" : "复制房间号";
     refreshCoopDebug();
+    refreshLobby();
+  }
+
+  // ===== 联机大厅（P4-08）：列表 / 准备 / 开始 / 踢人 =====
+  let coopSelfReady = false;
+  let coopLobbyCache = [];
+
+  function coopLobbyDataHost() {
+    const list = [{ id: localPlayerId, n: "房主", host: true, ready: true }];
+    for (const pid in coopGuests) {
+      const g = coopGuests[pid];
+      if (!g || !g.id) continue;
+      list.push({
+        id: g.id,
+        n: g.name || ("队友 " + g.id.replace(/\D/g, "")),
+        host: false,
+        ready: !!g.ready,
+      });
+    }
+    return list;
+  }
+
+  function refreshLobby(data) {
+    const wrap = document.getElementById("lobby");
+    if (!wrap) return;
+    const show = !!roomCode && state === "menu";
+    wrap.classList.toggle("hidden", !show);
+    if (!show) return;
+    const list = data || (coopNet.host ? coopLobbyDataHost() : coopLobbyCache);
+    document.getElementById("lobby-count").textContent = list.length + " / 4";
+    document.getElementById("lobby-list").innerHTML = list.map((q) => `
+      <div class="lobby-row">
+        <span><i class="team-dot" style="background:${q.host ? "#ffd666" : "#3fe5ff"}"></i>${q.n}</span>
+        <em class="${q.ready ? "ok" : ""}">${q.host ? "房主" : (q.ready ? "已准备" : "未准备")}</em>
+        ${coopNet.host && !q.host ? `<button class="lobby-kick" data-kick="${q.id}" title="移出房间">✕</button>` : ""}
+      </div>`).join("");
+    const startBtn = document.querySelector('[data-act="lobby-start"]');
+    if (startBtn) startBtn.classList.toggle("hidden", !coopNet.host);
+    const readyBtn = document.querySelector('[data-act="lobby-ready"]');
+    if (readyBtn) {
+      readyBtn.classList.toggle("hidden", !!coopNet.host);
+      readyBtn.textContent = coopSelfReady ? "取消准备" : "准备";
+    }
+    const hint = document.getElementById("lobby-hint");
+    if (hint) {
+      hint.textContent = coopNet.host
+        ? (list.length > 1 ? "队友已就位，选择武器即可开始" : "等待队友加入…（可复制邀请链接）")
+        : (coopSelfReady ? "已准备，等待房主开始…" : "点击准备，等待房主开始…");
+    }
+  }
+
+  function coopBroadcastLobby() {
+    if (!coopNet.host) return;
+    coopBroadcastCtrl({ t: "lobby", list: coopLobbyDataHost() });
+    refreshLobby();
+  }
+
+  function coopToggleReady() {
+    if (coopNet.host || !roomCode) return;
+    coopSelfReady = !coopSelfReady;
+    coopSendCtrl({ t: "ready", v: coopSelfReady });
+    refreshLobby();
+  }
+
+  function coopStartFromLobby() {
+    if (!coopNet.host) return;
+    document.getElementById("lobby").classList.add("hidden");
+    openWeaponSelect();
+  }
+
+  function coopLeaveLobby() {
+    if (coopNet.host && coopNet.ctrl) {
+      coopBroadcastCtrl({ t: "bye", reason: "房主已离开房间" });
+    } else if (roomCode && !coopNet.host && coopNet.ctrl) {
+      coopSendCtrl({ t: "left", id: coopSelf ? coopSelf.id : "" });
+    }
+    coopReset();
+    roomCode = null;
+    roomHost = false;
+    coopSelfReady = false;
+    coopLobbyCache = [];
+    setCoopStatus("idle", "未连接");
+    refreshRoomPanel();
+    refreshLobby();
+  }
+
+  function coopKickGuest(id) {
+    if (!coopNet.host || !id) return;
+    const pid = coopFindPeerOf(id);
+    if (!pid) return;
+    const g = coopGuests[pid];
+    coopSendEventTo(pid, "kick", {});
+    coopBroadcastCtrl({ t: "left", id });
+    if (g && g.id) coopRoster = coopRoster.filter((q) => q.id !== g.id);
+    delete coopGuests[pid];
+    setTimeout(() => {
+      try { if (g && g.ctrl) g.ctrl.close(); if (g && g.peer) g.peer.close(); } catch (err) {}
+    }, 200);
+    coopBroadcastLobby();
+    refreshRoomPanel();
   }
 
   function newRoom() {
@@ -481,6 +605,7 @@
         roster: coopRosterList(),
       });
       refreshChannelStatus();
+      coopBroadcastLobby();
     } else if (data.t === "welcome") {
       if (coopNet.host) return;
       if (data.v !== COOP_VERSION) {
@@ -492,11 +617,25 @@
       coopSeed = data.seed | 0;
       coopRoster = Array.isArray(data.roster) ? data.roster : [];
       setCoopStatus("connected", "已连接 · " + String(coopSelf.id).toUpperCase());
+      refreshLobby();
+    } else if (data.t === "lobby") {
+      if (coopNet.host) return;
+      coopLobbyCache = Array.isArray(data.list) ? data.list : [];
+      refreshLobby(coopLobbyCache);
+    } else if (data.t === "ready") {
+      if (!coopNet.host || !conn) return;
+      const g = coopGuests[conn.peer];
+      if (g) { g.ready = !!data.v; coopBroadcastLobby(); }
+    } else if (data.t === "kick") {
+      if (!coopNet.host) {
+        coopFatal("已被移出房间", "房主将你移出房间，请返回菜单或重新加入");
+      }
     } else if (data.t === "reject") {
       coopNet.error = data.reason || "被拒绝";
       setCoopStatus("error", "连接失败：" + coopNet.error);
     } else if (data.t === "left") {
       coopRoster = coopRoster.filter((p) => p.id !== data.id);
+      if (coopNet.host) coopBroadcastLobby();
     } else if (data.t === "start") {
       coopStartGuestGame();
     } else if (data.t === "pause") {
@@ -521,7 +660,8 @@
       coopNoteSnapshot(data);
       coopApplyPlayerState(data);
     } else if (data.t === "ev") {
-      coopOnEvent(data);
+      if (coopNet.host) coopOnHostEvent(conn, data);
+      else coopOnEvent(data);
     }
   }
 
@@ -648,13 +788,14 @@
     const arr = [];
     for (let i = 0; i < players.length; i++) {
       const p = players[i];
-      if (p.eliminated) continue;
       arr.push([
         p.id,
         Math.round(p.x * 10), Math.round(p.y * 10),
         Math.round(p.facing * 100),
         Math.round(p.hp), Math.round(p.hpMax),
         Math.round(p.shield), Math.round(p.stats.shieldMax),
+        p.down ? 1 : 0, Math.round(p.downTimer || 0), p.eliminated ? 1 : 0,
+        p.level || 1, p.kills || 0,
       ]);
     }
     return arr;
@@ -663,7 +804,10 @@
   function coopSendSnapshot() {
     if (!coopNet.host || state !== "playing") return;
     coopSnapSeq += 1;
-    coopSendState({ t: "snap", v: COOP_SNAP_VER, s: coopSnapSeq, pl: coopSnapshotList() });
+    coopSendState({
+      t: "snap", v: COOP_SNAP_VER, s: coopSnapSeq, pl: coopSnapshotList(),
+      cr: Math.round(credits), co: cores, rv: revives,
+    });
   }
 
   function coopApplySnapshot(d) {
@@ -688,8 +832,22 @@
         p.shield = e[6];
         p.stats.shieldMax = e[7];
       }
+      if (e.length >= 10) {
+        p.down = !!e[8];
+        p.downTimer = e[9] || 0;
+        p.eliminated = !!e[10];
+      }
+      if (e.length >= 13) {
+        p.level = e[11] || 1;
+        p.kills = e[12] || 0;
+      }
       coopInterpPush(id, p.x, p.y, p.facing);
     }
+    // 团队共享资源（D-03）：星币 / 核心 / 保险由房主同步
+    if (typeof d.cr === "number" && d.cr !== credits) credits = d.cr;
+    if (typeof d.co === "number" && d.co !== cores) cores = d.co;
+    if (typeof d.rv === "number" && d.rv !== revives) revives = d.rv;
+    refreshHud();
   }
 
   /* ===== 本地预测与校正（P3-05）：房主快照逐步纠偏，不做瞬移 ===== */
@@ -700,6 +858,29 @@
     if (!player) return;
     const ax = e[1] / 10;
     const ay = e[2] / 10;
+    // 生命 / 护盾 / 倒地状态以房主为准（P4-04）
+    const hpBefore = player.hp;
+    if (e.length >= 8) {
+      player.hp = e[4];
+      player.hpMax = e[5];
+      player.shield = e[6];
+      player.stats.shieldMax = e[7];
+    }
+    if (e.length >= 10) {
+      player.down = !!e[8];
+      player.downTimer = e[9] || 0;
+      player.eliminated = !!e[10];
+    }
+    if (e.length >= 13) {
+      player.level = e[11] || player.level;
+      player.kills = e[12] || 0;
+      syncProgressGlobals(player);
+    }
+    if (player.hp < hpBefore - 0.5) {
+      if (coopGuestShop) coopCloseShopUI();     // 受击关闭个人商店
+      if (coopGuestTrade) coopCloseTradeUI();
+    }
+    if (player.eliminated) return;
     const dx = ax - player.x;
     const dy = ay - player.y;
     const d = Math.hypot(dx, dy);
@@ -1535,6 +1716,420 @@
   }
 
   /* ===== 可靠事件通道（P3-12）：关键事件走 ctrl，不随状态包丢失 ===== */
+  // ===== 个人升级（P4-01 / P4-03）：房主生成报价，玩家各自选择 =====
+  const COOP_UPGRADE_TIME = 10;
+  let coopOfferSeq = 0;
+  let coopGuestOffer = null;     // 加入方：当前个人升级报价
+  let coopHostOfferP = null;     // 房主：当前正在选卡的本地玩家
+
+  function coopPlayerById(id) {
+    if (!id) return null;
+    for (let i = 0; i < players.length; i++) if (players[i].id === id) return players[i];
+    return null;
+  }
+
+  function coopFindPeerOf(id) {
+    for (const pid in coopGuests) if (coopGuests[pid].id === id) return pid;
+    return null;
+  }
+
+  function coopSendTo(pid, msg) {
+    const g = coopGuests[pid];
+    const c = g && g.ctrl;
+    if (c && c.open) { c.send(msg); coopCountSent(msg); }
+  }
+
+  function coopSendEventTo(pid, kind, data) {
+    if (!pid) return;
+    coopEventSeq += 1;
+    coopSendTo(pid, { t: "ev", id: coopEventSeq, k: kind, d: data || null });
+  }
+
+  function coopOfferUpgrade(p) {
+    if (!p || p.pendingLevels <= 0 || p.upOffer) return;
+    const cards = buildCards(p).map((c) => ({
+      defId: c.def.id, mult: c.mult,
+      rarityKey: c.rarity.key, rarityName: c.rarity.name,
+      name: c.def.name, icon: c.def.icon, text: c.text,
+      curse: !!c.def.curse, evo: !!c.def.evolution,
+    }));
+    p.upOffer = { oid: ++coopOfferSeq, cards };
+    p.upgradeTimer = COOP_UPGRADE_TIME;
+    p.invuln = Math.max(p.invuln, 3);      // 选卡期间 3 秒无敌
+
+    if (p.local) {
+      coopHostOfferP = p;
+      coopShowUpgradeOffer(p, p.upOffer);
+      return;
+    }
+    if (!coopNet.host) return;
+    const pid = coopFindPeerOf(p.id);
+    if (pid) {
+      coopSendEventTo(pid, "up-offer", {
+        oid: p.upOffer.oid, lv: p.level, t: COOP_UPGRADE_TIME, cards,
+      });
+    } else {
+      coopApplyPick(p, 0);                 // 队友已断开：自动选，避免卡住
+    }
+  }
+
+  function coopShowUpgradeOffer(p, offer) {
+    const cards = offer.cards.map((c) => ({
+      def: { id: c.defId, name: c.name, icon: c.icon, curse: c.curse, evolution: c.evo },
+      rarity: { key: c.rarityKey, name: c.rarityName },
+      text: c.text,
+    }));
+    upgradeCards = cards;
+    renderCards(cards);
+    document.getElementById("ui-up-level").textContent =
+      "LV " + p.level + " · " + Math.ceil(p.upgradeTimer) + "s";
+    document.getElementById("ov-upgrade").classList.remove("hidden");
+    sfxLevelUp();
+    refreshHud();
+  }
+
+  function coopCloseUpgradeUI() {
+    document.getElementById("ov-upgrade").classList.add("hidden");
+    coopHostOfferP = null;
+    coopGuestOffer = null;
+  }
+
+  // 房主裁决：按报价里的卡牌应用，客户端不能自选任意 ID
+  function coopApplyPick(p, idx) {
+    if (!p || !p.upOffer) return;
+    const offer = p.upOffer;
+    const c = offer.cards[idx] || offer.cards[0];
+    const def = c ? ALL_DEFS.find((d) => d.id === c.defId) : null;
+    p.upOffer = null;
+    p.upgradeTimer = 0;
+    if (!def || !c) return;
+
+    def.apply(p.stats, c.mult, p);
+    p.stacks[def.id] = (p.stacks[def.id] || 0) + 1;
+    p.pendingLevels = Math.max(0, p.pendingLevels - 1);
+    p.invuln = Math.max(p.invuln, 3);
+    emit(p.x, p.y, 18, "#7ef0ff", 240, 3, 0.6);
+    addText(p.x, p.y - 52, `${def.name} · ${def.curse ? "诅咒" : "强化"}`, "#7ef0ff", 14);
+
+    if (p.local) {
+      syncProgressGlobals(p);
+      coopCloseUpgradeUI();
+      updateBuffPanel();
+      refreshHud(true);
+    } else if (coopNet.host) {
+      const pid = coopFindPeerOf(p.id);
+      if (pid) {
+        coopSendEventTo(pid, "up-close", { oid: offer.oid });
+        coopSendEventTo(pid, "own", coopOwnState(p));
+      }
+    }
+    if (p.pendingLevels > 0) coopOfferUpgrade(p);
+  }
+
+  // 本地点击：房主直接裁决，客户端上报选择
+  function coopPickUpgrade(idx) {
+    const lp = getLocalPlayer() || player;
+    if (coopNet.host) {
+      if (lp && lp.upOffer) coopApplyPick(lp, idx);
+      return;
+    }
+    const offer = coopGuestOffer;
+    if (!offer || offer.locked) return;
+    offer.locked = true;
+    coopEventSeq += 1;
+    coopSendCtrl({ t: "ev", id: coopEventSeq, k: "up-pick", d: { oid: offer.oid, i: idx } });
+    coopCloseUpgradeUI();
+  }
+
+  function coopUpgradeOpen() {
+    const el = document.getElementById("ov-upgrade");
+    return !!(el && !el.classList.contains("hidden") && (coopHostOfferP || coopGuestOffer));
+  }
+
+  // 房主推进选卡倒计时，超时自动选第一张
+  function coopUpgradeTick(dt) {
+    if (!coopNet.host) return;
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (!p.upOffer) continue;
+      p.upgradeTimer = Math.max(0, p.upgradeTimer - dt);
+      if (p.upgradeTimer <= 0) coopApplyPick(p, 0);
+    }
+    if (coopHostOfferP && coopHostOfferP.upOffer) {
+      document.getElementById("ui-up-level").textContent =
+        "LV " + coopHostOfferP.level + " · " + Math.ceil(coopHostOfferP.upgradeTimer) + "s";
+    }
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (p.shopOpen) {
+        p.shopTimer = Math.max(0, p.shopTimer - dt);
+        if (p.shopTimer <= 0) coopCloseShop(p);
+        else if (p.local && coopHostShopP === p) {
+          document.getElementById("shop-sub").textContent =
+            "个人补给 · " + Math.ceil(p.shopTimer) + "s 或受击关闭";
+        }
+      }
+      if (p.tradeCooldown > 0) p.tradeCooldown = Math.max(0, p.tradeCooldown - dt);
+      if (p.tradeOffer) {
+        p.tradeTimer = Math.max(0, p.tradeTimer - dt);
+        if (p.tradeTimer <= 0) coopCloseTrade(p);
+      }
+    }
+  }
+
+  // 加入方推进自己的 UI 倒计时
+  function coopGuestTick(dt) {
+    if (coopNet.host) return;
+    const offer = coopGuestOffer;
+    if (offer) {
+      offer.timer = Math.max(0, offer.timer - dt);
+      document.getElementById("ui-up-level").textContent =
+        "LV " + offer.lv + " · " + Math.ceil(offer.timer) + "s";
+      if (offer.timer <= 0) coopPickUpgrade(0);
+    }
+    if (coopGuestShop) {
+      coopGuestShop.timer = Math.max(0, coopGuestShop.timer - dt);
+      const el = document.getElementById("shop-sub");
+      if (el) el.textContent = "个人补给 · " + Math.ceil(coopGuestShop.timer) + "s 或受击关闭";
+      if (coopGuestShop.timer <= 0) coopCloseShopUI();
+    }
+    if (coopGuestTrade) {
+      coopGuestTrade.timer = Math.max(0, coopGuestTrade.timer - dt);
+      if (coopGuestTrade.timer <= 0) {
+        coopEventSeq += 1;
+        coopSendCtrl({ t: "ev", id: coopEventSeq, k: "trade-bye", d: { sid: coopGuestTrade.sid } });
+        coopCloseTradeUI();
+      }
+    }
+  }
+
+  // 个人成长同步（房主 -> 对应队友）：属性 / 芯片 / 堆叠 / 等级
+  function coopOwnState(p) {
+    const s = p.stats;
+    return {
+      id: p.id, lv: p.level, xp: Math.round(p.xp), xpn: p.xpNeed, pl: p.pendingLevels,
+      st: {
+        damage: s.damage, fireInterval: s.fireInterval, crit: s.crit, pierce: s.pierce,
+        moveSpeed: s.moveSpeed, shieldMax: s.shieldMax, shieldRegen: s.shieldRegen,
+        armor: s.armor, range: s.range, bulletCount: s.bulletCount, bulletSpeed: s.bulletSpeed,
+        bulletR: s.bulletR, drones: s.drones || 0,
+        explodeOnHit: !!s.explodeOnHit, echoBurst: !!s.echoBurst, twinPulse: !!s.twinPulse,
+        pulseBlast: !!s.pulseBlast, scatterBlast: !!s.scatterBlast, railShard: !!s.railShard,
+      },
+      chips: p.chips.map((c) => ({ kind: c.kind, name: c.name, icon: c.icon, tier: c.tier, value: c.value, score: c.score })),
+      stacks: Object.assign({}, p.stacks),
+    };
+  }
+
+  function coopSyncOwn(p) {
+    if (!coopNet.host || !p || p.local) return;
+    const pid = coopFindPeerOf(p.id);
+    if (pid) coopSendEventTo(pid, "own", coopOwnState(p));
+  }
+
+  function coopApplyOwn(d) {
+    if (coopNet.host || !d) return;
+    const p = getLocalPlayer();
+    if (!p || d.id !== p.id) return;
+    if (typeof d.lv === "number") p.level = d.lv;
+    if (typeof d.xp === "number") p.xp = d.xp;
+    if (typeof d.xpn === "number") p.xpNeed = d.xpn;
+    if (typeof d.pl === "number") p.pendingLevels = d.pl;
+    if (d.st) Object.assign(p.stats, d.st);
+    if (Array.isArray(d.chips)) p.chips = d.chips;
+    if (d.stacks) p.stacks = d.stacks;
+    syncProgressGlobals(p);
+    updateBuffPanel();
+    refreshHud(true);
+  }
+
+  // ===== 个人商店（P4-02 / P4-03）：世界继续，价格由房主裁决 =====
+  const COOP_SHOP_TIME = 12;
+  let coopShopSeq = 0;
+  let coopHostShopP = null;
+  let coopGuestShop = null;
+  let coopGuestTrade = null;
+
+  function coopOpenShop(p, title) {
+    if (!p) return;
+    p.shopOpen = true;
+    p.shopTimer = COOP_SHOP_TIME;
+    p.shopSid = ++coopShopSeq;
+    const items = shopOfferFor(p);
+    if (p.local) {
+      coopHostShopP = p;
+      document.getElementById("shop-title").textContent = title || "星港补给站";
+      renderShopOffer(items, credits, "个人补给 · " + COOP_SHOP_TIME + "s 或受击关闭");
+      document.getElementById("ov-shop").classList.remove("hidden");
+      document.getElementById("ov-shop").scrollTop = 0;
+      sfxLevelUp();
+      refreshHud(true);
+      return;
+    }
+    if (!coopNet.host) return;
+    const pid = coopFindPeerOf(p.id);
+    if (pid) {
+      coopSendEventTo(pid, "shop-offer", {
+        sid: p.shopSid, t: COOP_SHOP_TIME, items, credits: Math.round(credits),
+      });
+    } else {
+      p.shopOpen = false;
+    }
+  }
+
+  function coopCloseShop(p) {
+    if (!p) return;
+    const sid = p.shopSid;
+    p.shopOpen = false;
+    p.shopTimer = 0;
+    if (p.local) {
+      document.getElementById("ov-shop").classList.add("hidden");
+      coopHostShopP = null;
+      refreshHud(true);
+      return;
+    }
+    if (!coopNet.host) return;
+    const pid = coopFindPeerOf(p.id);
+    if (pid) coopSendEventTo(pid, "shop-close", { sid });
+  }
+
+  function coopCloseShopUI() {
+    document.getElementById("ov-shop").classList.add("hidden");
+    coopHostShopP = null;
+    coopGuestShop = null;
+  }
+
+  function coopBuyShopLocal(id) {
+    if (coopNet.host) { coopBuyShop(getLocalPlayer() || player, id); return; }
+    const sh = coopGuestShop;
+    if (!sh) return;
+    coopEventSeq += 1;
+    coopSendCtrl({ t: "ev", id: coopEventSeq, k: "shop-buy", d: { sid: sh.sid, item: id } });
+  }
+
+  // 房主校验：会话、物品白名单、共享星币余量、该玩家可购状态
+  function coopBuyShop(p, id) {
+    if (!p || !p.shopOpen) return;
+    const def = SHOP_ITEMS.find((d) => d.id === id);
+    if (!def) { coopInReject(); return; }
+    const cost = shopCost(def);
+    if (credits < cost || !def.can(p)) return;
+    credits -= cost;
+    shopCounts[id] = (shopCounts[id] || 0) + 1;
+    def.apply(p);
+    sfxLevelUp();
+    const items = shopOfferFor(p);
+    if (p.local) {
+      coopHostShopP = p;
+      renderShopOffer(items, credits, "个人补给 · " + Math.ceil(p.shopTimer) + "s 或受击关闭");
+      updateBuffPanel();
+      refreshHud(true);
+    } else if (coopNet.host) {
+      const pid = coopFindPeerOf(p.id);
+      if (pid) {
+        coopSendEventTo(pid, "shop-update", { sid: p.shopSid, items, credits: Math.round(credits) });
+        coopSendEventTo(pid, "own", coopOwnState(p));
+      }
+    }
+  }
+
+  function coopShowGuestShop(p) {
+    coopGuestShop = { sid: p.sid, timer: p.t || COOP_SHOP_TIME, items: p.items || [] };
+    document.getElementById("shop-title").textContent = "星港补给站 · 个人";
+    renderShopOffer(p.items || [], p.credits != null ? p.credits : credits,
+      "个人补给 · " + Math.ceil(coopGuestShop.timer) + "s 或受击关闭");
+    document.getElementById("ov-shop").classList.remove("hidden");
+    document.getElementById("ov-shop").scrollTop = 0;
+    sfxLevelUp();
+  }
+
+  // ===== 个人游商（P4-02）：同样不冻结世界，由房主裁决 =====
+  const COOP_TRADE_TIME = 12;
+  let coopTradeSeq = 0;
+  let coopHostTradeP = null;
+
+  function coopOpenTrade(p) {
+    if (!p || !trader || p.tradeOffer) return;
+    const sid = ++coopTradeSeq;
+    const items = traderOffersFor(p);
+    p.tradeOffer = { sid, items, defs: items.map((it) => it.def), t: COOP_TRADE_TIME };
+    p.tradeTimer = COOP_TRADE_TIME;
+    p.tradeCooldown = COOP_TRADE_TIME + 6;
+    if (p.local) {
+      coopHostTradeP = p;
+      document.getElementById("trader-title").textContent = "星际游商 · 第 " + chapter + " 星域";
+      renderTradeOffer(items, credits);
+      document.getElementById("ov-trader").classList.remove("hidden");
+      document.getElementById("ov-trader").scrollTop = 0;
+      sfxLevelUp();
+      return;
+    }
+    if (!coopNet.host) return;
+    const pid = coopFindPeerOf(p.id);
+    if (pid) {
+      coopSendEventTo(pid, "trade-offer", {
+        sid, t: COOP_TRADE_TIME, items, credits: Math.round(credits),
+      });
+    }
+  }
+
+  function coopShowGuestTrade(p) {
+    coopGuestTrade = { sid: p.sid, timer: p.t || COOP_TRADE_TIME, items: p.items || [] };
+    document.getElementById("trader-title").textContent = "星际游商 · 个人";
+    renderTradeOffer(p.items || [], p.credits != null ? p.credits : credits);
+    document.getElementById("ov-trader").classList.remove("hidden");
+    document.getElementById("ov-trader").scrollTop = 0;
+    sfxLevelUp();
+  }
+
+  function coopCloseTradeUI() {
+    document.getElementById("ov-trader").classList.add("hidden");
+    coopHostTradeP = null;
+    coopGuestTrade = null;
+  }
+
+  function coopCloseTrade(p) {
+    if (!p) return;
+    const sid = p.tradeOffer ? p.tradeOffer.sid : null;
+    p.tradeOffer = null;
+    p.tradeTimer = 0;
+    if (p.local) {
+      coopCloseTradeUI();
+      return;
+    }
+    if (!coopNet.host) return;
+    const pid = coopFindPeerOf(p.id);
+    if (pid) coopSendEventTo(pid, "trade-close", { sid });
+  }
+
+  // 买走后游商全队消失（一次交易）
+  function coopEndTradeAll() {
+    for (let i = 0; i < players.length; i++) {
+      if (players[i].tradeOffer) players[i].tradeOffer = null;
+      players[i].tradeTimer = 0;
+    }
+    if (coopNet.host) coopSendEvent("trade-close", null);
+    coopCloseTradeUI();
+  }
+
+  function coopBuyTrade(p, q) {
+    if (!p || !p.tradeOffer || !trader) return;
+    if (!q || q.sid !== p.tradeOffer.sid) { coopInReject(); return; }
+    const idx = Math.round(q.i);
+    const it = p.tradeOffer.items[idx];
+    if (!it || !(idx >= 0 && idx < 3)) { coopInReject(); return; }
+    const cost = it.cost;
+    if (credits < cost || !it.can) return;
+    credits -= cost;
+    it.def.apply(p);
+    sfxLevelUp();
+    trader = null;
+    coopEndTradeAll();
+    coopSyncOwn(p);
+    updateBuffPanel();
+    refreshHud(true);
+  }
+
   function coopSendEvent(kind, data, exceptPid) {
     if (!roomCode || !kind) return;
     coopEventSeq += 1;
@@ -1550,10 +2145,69 @@
     coopSendCtrl(msg);
   }
 
+  // 房主处理队友上报的可靠请求（P4-03）：只接受该连接自己的玩家
+  function coopOnHostEvent(conn, d) {
+    if (!d || !d.k || !conn || !conn.peer) return;
+    const g = coopGuests[conn.peer];
+    if (!g || !g.id) return;
+    const p = (function () {
+      for (let i = 0; i < players.length; i++) if (players[i].id === g.id) return players[i];
+      return null;
+    })();
+    if (!p) return;
+    const q = d.d || {};
+    if (d.k === "up-pick") {
+      if (!p.upOffer || q.oid !== p.upOffer.oid) { coopInReject(); return; }
+      const idx = Math.round(q.i);
+      if (!(idx >= 0 && idx < 3)) { coopInReject(); return; }
+      coopApplyPick(p, idx);
+    } else if (d.k === "shop-buy") {
+      if (!p.shopOpen || q.sid !== p.shopSid) { coopInReject(); return; }
+      if (typeof q.item !== "string" || q.item.length > 24) { coopInReject(); return; }
+      coopBuyShop(p, q.item);
+    } else if (d.k === "shop-bye") {
+      if (p.shopOpen && q.sid === p.shopSid) coopCloseShop(p);
+    } else if (d.k === "trade-buy") {
+      coopBuyTrade(p, q);
+    } else if (d.k === "trade-bye") {
+      if (p.tradeOffer && q.sid === p.tradeOffer.sid) coopCloseTrade(p);
+    }
+  }
+
   function coopOnEvent(d) {
     if (!d || !d.k || coopNet.host) return;   // 事件由房主下发
     const p = d.d || {};
-    if (d.k === "boss-spawn") {
+    if (d.k === "up-offer") {
+      const cards = (p.cards || []).map((c) => ({
+        def: { id: c.defId, name: c.name, icon: c.icon, curse: c.curse, evolution: c.evo },
+        rarity: { key: c.rarityKey, name: c.rarityName },
+        text: c.text,
+      }));
+      coopGuestOffer = { oid: p.oid, lv: p.lv || 1, timer: p.t || COOP_UPGRADE_TIME, cards, locked: false };
+      upgradeCards = cards;
+      renderCards(cards);
+      document.getElementById("ui-up-level").textContent =
+        "LV " + (p.lv || 1) + " · " + Math.ceil(coopGuestOffer.timer) + "s";
+      document.getElementById("ov-upgrade").classList.remove("hidden");
+      sfxLevelUp();
+    } else if (d.k === "up-close") {
+      if (coopGuestOffer && p.oid === coopGuestOffer.oid) coopCloseUpgradeUI();
+    } else if (d.k === "own") {
+      coopApplyOwn(p);
+    } else if (d.k === "shop-offer") {
+      coopShowGuestShop(p);
+    } else if (d.k === "shop-update") {
+      if (coopGuestShop && p.sid === coopGuestShop.sid) {
+        coopGuestShop.items = p.items || [];
+        renderShopOffer(p.items || [], p.credits != null ? p.credits : credits);
+      }
+    } else if (d.k === "shop-close") {
+      if (!coopGuestShop || p.sid === coopGuestShop.sid) coopCloseShopUI();
+    } else if (d.k === "trade-offer") {
+      coopShowGuestTrade(p);
+    } else if (d.k === "trade-close") {
+      coopCloseTradeUI();
+    } else if (d.k === "boss-spawn") {
       addText(player.x, player.y - 64, "虚空之眼降临", "#ff4d6d", 20);
       shake = Math.max(shake, 12 * CFG.FX.SHAKE);
     } else if (d.k === "boss-phase") {
@@ -1578,7 +2232,7 @@
       addText(player.x, player.y - 64, "第 " + chapter + " 星域", "#ffd666", 24);
       refreshHud(true);
     } else if (d.k === "over") {
-      if (state !== "over") endGame(!!p.win, p.reason);
+      if (state !== "over") endGame(!!p.win, p.reason, p.team);
     }
   }
 

@@ -4,6 +4,7 @@
   /* ===== 房主固定步长（P3-03）：30Hz 累加器，渲染与模拟解耦 ===== */
   const COOP_SIM_STEP = 1 / 30;
   let coopSimAcc = 0;
+  let lobbyAcc = 0;
 
   function coopResetSimClock() {
     coopSimAcc = 0;
@@ -38,6 +39,7 @@
     if (state === "playing") {
       if (roomCode && coopNet.host) coopTickSim(dt);
       else update(dt);
+      if (roomCode && !coopNet.host) coopGuestTick(dt);
 
       // 帧率采样（每 2 秒一次），低于目标时下调渲染倍率
       perfAcc += dt;
@@ -70,6 +72,10 @@
     }
     updateStars(dt, t);
     if (state === "playing") coopInterpTick();
+    if (state === "menu" && roomCode) {
+      lobbyAcc += dt;
+      if (lobbyAcc >= 0.4) { lobbyAcc = 0; refreshLobby(); }
+    }
 
     // 暂停/升级/结算时画面静止，降低绘制频率，避免选卡界面卡顿
     if (state === "playing" || state === "menu") {

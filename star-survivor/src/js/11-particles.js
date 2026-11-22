@@ -70,10 +70,20 @@
     for (let i = gems.length - 1; i >= 0; i--) {
       const g = gems[i];
       g.pulse += dt * 4;
-      const d = Math.hypot(player.x - g.x, player.y - g.y);
+      // 个人拾取（P4-04）：每颗球归最近的可行动玩家
+      let target = null;
+      let best = Infinity;
+      for (let k = 0; k < players.length; k++) {
+        const q = players[k];
+        if (q.eliminated) continue;
+        const dd = dist2(q.x, q.y, g.x, g.y);
+        if (dd < best) { best = dd; target = q; }
+      }
+      if (!target) continue;
+      const d = Math.sqrt(best);
       if (d < pickup) {
         const pull = 420 + (pickup - d) * 3.2;
-        const ang = Math.atan2(player.y - g.y, player.x - g.x);
+        const ang = Math.atan2(target.y - g.y, target.x - g.x);
         g.x += Math.cos(ang) * pull * dt;
         g.y += Math.sin(ang) * pull * dt;
       } else {
@@ -84,8 +94,8 @@
       }
       if (d < collect) {
         gems.splice(i, 1);
-        gainXp(Math.max(1, Math.round(g.value * stats.xpMul)));
-        if (state !== "playing") return;   // 升级界面打开后停止本帧后续
+        gainXpFor(target, Math.max(1, Math.round(g.value * target.stats.xpMul)));
+        if (state !== "playing" && !roomCode) return;   // 单机升级界面打开后停止本帧后续
       }
     }
   }

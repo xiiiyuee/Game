@@ -5,26 +5,26 @@
     {
       id: "repair", icon: "✚", name: "舰体修复", base: 35,
       desc: () => "立即恢复 45% 最大生命",
-      can: () => player.hp < player.hpMax - 1,
-      apply: () => { player.hp = Math.min(player.hpMax, player.hp + player.hpMax * 0.45); },
+      can: (p) => p.hp < p.hpMax - 1,
+      apply: (p) => { p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.45); },
     },
     {
       id: "shield", icon: "◈", name: "护盾电池", base: 40,
       desc: () => "护盾上限 +12 并立即充满",
       can: () => true,
-      apply: () => { stats.shieldMax += 12; player.shield = stats.shieldMax; },
+      apply: (p) => { p.stats.shieldMax += 12; p.shield = p.stats.shieldMax; },
     },
     {
       id: "damage", icon: "↑", name: "武器校准", base: 55,
       desc: () => "全武器伤害 +12%",
       can: () => true,
-      apply: () => { stats.damage *= 1.12; },
+      apply: (p) => { p.stats.damage *= 1.12; },
     },
     {
       id: "drone", icon: "⬢", name: "无人机模块", base: 60,
       desc: () => "增加 1 架环绕守护无人机",
-      can: () => (stats.drones || 0) < CFG.DRONES.MAX,
-      apply: () => { stats.drones = Math.min(CFG.DRONES.MAX, (stats.drones || 0) + 1); },
+      can: (p) => (p.stats.drones || 0) < CFG.DRONES.MAX,
+      apply: (p) => { p.stats.drones = Math.min(CFG.DRONES.MAX, (p.stats.drones || 0) + 1); },
     },
     {
       id: "revive", icon: "❖", name: "应急保险", base: 80,
@@ -41,36 +41,32 @@
     {
       id: "purge", icon: "✦", name: "净化协议", base: 50,
       desc: () => "移除 1 层诅咒强化",
-      can: () => {
-        const lp = getLocalPlayer() || player;
-        return Object.keys(lp.stacks).some((id) => {
-          const d = ALL_DEFS.find((x) => x.id === id);
-          return d && d.curse;
-        });
-      },
-      apply: () => {
-        const lp = getLocalPlayer() || player;
-        const id = Object.keys(lp.stacks).find((k) => {
+      can: (p) => Object.keys(p.stacks).some((id) => {
+        const d = ALL_DEFS.find((x) => x.id === id);
+        return d && d.curse;
+      }),
+      apply: (p) => {
+        const id = Object.keys(p.stacks).find((k) => {
           const d = ALL_DEFS.find((x) => x.id === k);
           return d && d.curse;
         });
         if (!id) return;
-        lp.stacks[id] -= 1;
-        if (lp.stacks[id] <= 0) delete lp.stacks[id];
+        p.stacks[id] -= 1;
+        if (p.stacks[id] <= 0) delete p.stacks[id];
         updateBuffPanel();
       },
     },
     {
       id: "multishot", icon: "⋔", name: "弹道扩展", base: 85,
       desc: () => "本武器弹道 +1（上限 8）",
-      can: () => stats.bulletCount < 8,
-      apply: () => { stats.bulletCount += 1; },
+      can: (p) => p.stats.bulletCount < 8,
+      apply: (p) => { p.stats.bulletCount += 1; },
     },
     {
       id: "pierce", icon: "→", name: "穿透镀层", base: 80,
       desc: () => "弹道穿透 +1（上限 7）",
-      can: () => stats.pierce < 7,
-      apply: () => { stats.pierce += 1; },
+      can: (p) => p.stats.pierce < 7,
+      apply: (p) => { p.stats.pierce += 1; },
     },
   ];
 
@@ -85,21 +81,35 @@
     return Math.round(def.base * (1 + (chapter - 1) * 0.18) * (1 + (shopCounts[def.id] || 0) * 0.45));
   }
 
-  function renderShop() {
-    document.getElementById("shop-credits").textContent = String(credits);
+  function shopOfferFor(p) {
+    const owner = p || getLocalPlayer() || player;
+    return SHOP_ITEMS.map((def) => ({
+      id: def.id, icon: def.icon, name: def.name,
+      desc: def.desc(), cost: shopCost(def), can: !!def.can(owner),
+    }));
+  }
+
+  // 商店列表：房主本地与客户端共用同一渲染，价格 / 可购状态由房主下发
+  function renderShopOffer(items, creditVal, subText) {
+    document.getElementById("shop-credits").textContent = String(creditVal);
+    if (subText !== undefined) document.getElementById("shop-sub").textContent = subText;
     const wrap = document.getElementById("shop-items");
-    wrap.innerHTML = SHOP_ITEMS.map((def) => {
-      const cost = shopCost(def);
-      const able = credits >= cost && def.can();
-      return `<button class="shop-item" data-shop="${def.id}" ${able ? "" : "disabled"}>
-        <h3>${def.icon} ${def.name}</h3>
-        <p>${def.desc()}</p>
-        <span class="cost">${cost} 星币</span>
+    wrap.innerHTML = (items || []).map((it) => {
+      const able = creditVal >= it.cost && it.can;
+      return `<button class="shop-item" data-shop="${it.id}" ${able ? "" : "disabled"}>
+        <h3>${it.icon} ${it.name}</h3>
+        <p>${it.desc}</p>
+        <span class="cost">${it.cost} 星币</span>
       </button>`;
     }).join("");
   }
 
+  function renderShop() {
+    renderShopOffer(shopOfferFor(getLocalPlayer() || player), credits);
+  }
+
   function openShop(title) {
+    if (roomCode) { coopOpenShop(getLocalPlayer() || player, title); return; }
     state = "shop";
     clearKeys();
     shake = 0;
@@ -115,6 +125,20 @@
   }
 
   function closeShop() {
+    if (roomCode) {
+      const lp = getLocalPlayer() || player;
+      if (coopNet.host) {
+        if (lp && lp.shopOpen) coopCloseShop(lp);
+        else document.getElementById("ov-shop").classList.add("hidden");
+      } else {
+        if (coopGuestShop) {
+          coopEventSeq += 1;
+          coopSendCtrl({ t: "ev", id: coopEventSeq, k: "shop-bye", d: { sid: coopGuestShop.sid } });
+        }
+        coopCloseShopUI();
+      }
+      return;
+    }
     if (state !== "shop") return;
     document.getElementById("ov-shop").classList.add("hidden");
     state = "playing";
@@ -123,6 +147,7 @@
   }
 
   function buyShopItem(id) {
+    if (roomCode) { coopBuyShopLocal(id); return; }
     if (state !== "shop") return;
     const def = SHOP_ITEMS.find((d) => d.id === id);
     if (!def) return;
@@ -150,9 +175,19 @@
       const c = coreDrops[i];
       c.life -= dt;
       if (c.life <= 0) { coreDrops.splice(i, 1); continue; }
-      const dx = player.x - c.x;
-      const dy = player.y - c.y;
-      const d = Math.hypot(dx, dy) || 1;
+      // 团队共享核心（D-03）：任意队友靠近都能拾取
+      let target = null;
+      let best = Infinity;
+      for (let k = 0; k < players.length; k++) {
+        const q = players[k];
+        if (q.eliminated) continue;
+        const dd = dist2(q.x, q.y, c.x, c.y);
+        if (dd < best) { best = dd; target = q; }
+      }
+      if (!target) continue;
+      const dx = target.x - c.x;
+      const dy = target.y - c.y;
+      const d = Math.sqrt(best) || 1;
       if (d < pickup) {
         coreDrops.splice(i, 1);
         cores += 1;
@@ -254,8 +289,8 @@
     }
   }
 
-  function equipChip(chip) {
-    const owner = getLocalPlayer() || player;
+  function equipChip(chip, p) {
+    const owner = p || getLocalPlayer() || player;
     const chips = owner.chips;
     let replaced = null;
     if (chips.length >= 3) {
@@ -276,6 +311,7 @@
     sfxLevelUp();
     updateBuffPanel();
     refreshHud(true);
+    coopSyncOwn(owner);       // 房主把个人构筑同步给该队友
   }
 
   function updateChipDrops(dt) {
@@ -287,12 +323,22 @@
       d.life -= dt;
       d.seed += dt;
       if (d.life <= 0) { chipDrops.splice(i, 1); continue; }
-      const dx = player.x - d.x;
-      const dy = player.y - d.y;
-      const dist = Math.hypot(dx, dy) || 1;
+      // 个人拾取（P4-04）：芯片归最近的可行动玩家
+      let target = null;
+      let best = Infinity;
+      for (let k = 0; k < players.length; k++) {
+        const q = players[k];
+        if (q.eliminated) continue;
+        const dd = dist2(q.x, q.y, d.x, d.y);
+        if (dd < best) { best = dd; target = q; }
+      }
+      if (!target) continue;
+      const dx = target.x - d.x;
+      const dy = target.y - d.y;
+      const dist = Math.sqrt(best) || 1;
       if (dist < pickup) {
         chipDrops.splice(i, 1);
-        equipChip(d.chip);
+        equipChip(d.chip, target);
       } else if (dist < magnet) {
         const sp = 320 * view.scale * (1 - dist / magnet + 0.35);
         d.x += (dx / dist) * sp * dt;
@@ -431,23 +477,23 @@
 
   // ===== 星际游商 =====
   const TRADER_OFFERS = [
-    { id: "heal", icon: "✚", name: "应急修复", base: 34, desc: () => "立即恢复 45% 最大生命", can: () => player.hp < player.hpMax - 1,
-      apply: () => { player.hp = Math.min(player.hpMax, player.hp + player.hpMax * 0.45); } },
+    { id: "heal", icon: "✚", name: "应急修复", base: 34, desc: () => "立即恢复 45% 最大生命", can: (p) => p.hp < p.hpMax - 1,
+      apply: (p) => { p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.45); } },
     { id: "shield", icon: "◈", name: "护盾充能", base: 38, desc: () => "护盾上限 +10 并立即充满", can: () => true,
-      apply: () => { stats.shieldMax += 10; player.shield = stats.shieldMax; } },
+      apply: (p) => { p.stats.shieldMax += 10; p.shield = p.stats.shieldMax; } },
     { id: "damage", icon: "✦", name: "黑市校准", base: 52, desc: () => "全武器伤害 +14%", can: () => true,
-      apply: () => { stats.damage *= 1.14; } },
+      apply: (p) => { p.stats.damage *= 1.14; } },
     { id: "core", icon: "⬡", name: "核心箱", base: 40, desc: () => "获得 2 个建造用核心", can: () => true,
       apply: () => { cores += 2; } },
     { id: "gamble", icon: "?", name: "风险赌注", base: 30, risky: true,
       desc: () => "50% 获得 90 星币，50% 血本无归", can: () => true,
-      apply: () => {
+      apply: (p) => {
         if (Math.random() < 0.5) {
           credits += 90;
-          addText(player.x, player.y - 46, "赌注成功 +90 星币", "#ffd666", 17);
+          addText(p.x, p.y - 46, "赌注成功 +90 星币", "#ffd666", 17);
           sfxLevelUp();
         } else {
-          addText(player.x, player.y - 46, "赌注失败……", "#ff5f7a", 17);
+          addText(p.x, p.y - 46, "赌注失败……", "#ff5f7a", 17);
           sfxHurt();
         }
       } },
@@ -479,23 +525,55 @@
     }
     trader.life -= dt;
     trader.seed += dt;
-    if (trader.life <= 0) { trader = null; return; }
-    const rr = trader.r + player.r + 6;
-    if (dist2(trader.x, trader.y, player.x, player.y) <= rr * rr) openTrader();
+    if (trader.life <= 0) {
+      trader = null;
+      coopCloseTradeUI();
+      return;
+    }
+    if (!roomCode) {
+      const rr = trader.r + player.r + 6;
+      if (dist2(trader.x, trader.y, player.x, player.y) <= rr * rr) openTrader();
+      return;
+    }
+    // 联机：每名玩家各自触发个人游商（P4-02），不冻结世界
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (p.eliminated || p.tradeOffer || p.tradeCooldown > 0) continue;
+      const rr = trader.r + p.r + 6;
+      if (dist2(trader.x, trader.y, p.x, p.y) <= rr * rr) coopOpenTrade(p);
+    }
+  }
+
+  function traderOffersFor(p) {
+    const pool = TRADER_OFFERS.slice();
+    const out = [];
+    for (let i = 0; i < 3 && pool.length; i++) {
+      const idx = randInt(pool.length);
+      out.push(pool.splice(idx, 1)[0]);
+    }
+    return out.map((def, i) => ({
+      i, icon: def.icon, name: def.name, desc: def.desc(),
+      cost: traderCost(def), can: !!def.can(p), def,
+    }));
+  }
+
+  function renderTradeOffer(items, creditVal) {
+    document.getElementById("trader-credits").textContent = String(creditVal);
+    document.getElementById("trader-items").innerHTML = (items || []).map((it) => {
+      const able = creditVal >= it.cost && it.can;
+      return `<button class="shop-item" data-trade="${it.i}" ${able ? "" : "disabled"}>
+        <h3>${it.icon} ${it.name}</h3>
+        <p>${it.desc}</p>
+        <span class="cost">${it.cost} 星币</span>
+      </button>`;
+    }).join("");
   }
 
   function renderTrader() {
-    document.getElementById("trader-credits").textContent = String(credits);
-    const wrap = document.getElementById("trader-items");
-    wrap.innerHTML = traderOffers.map((def, i) => {
-      const cost = traderCost(def);
-      const able = credits >= cost && def.can();
-      return `<button class="shop-item" data-trade="${i}" ${able ? "" : "disabled"}>
-        <h3>${def.icon} ${def.name}</h3>
-        <p>${def.desc()}</p>
-        <span class="cost">${cost} 星币</span>
-      </button>`;
-    }).join("");
+    renderTradeOffer(traderOffers.map((def, i) => ({
+      i, icon: def.icon, name: def.name, desc: def.desc(),
+      cost: traderCost(def), can: !!def.can(player),
+    })), credits);
   }
 
   function openTrader() {
@@ -520,6 +598,19 @@
   }
 
   function closeTrader() {
+    if (roomCode) {
+      if (coopNet.host) {
+        if (coopHostTradeP) coopCloseTrade(coopHostTradeP);
+        else coopCloseTradeUI();
+      } else {
+        if (coopGuestTrade) {
+          coopEventSeq += 1;
+          coopSendCtrl({ t: "ev", id: coopEventSeq, k: "trade-bye", d: { sid: coopGuestTrade.sid } });
+        }
+        coopCloseTradeUI();
+      }
+      return;
+    }
     if (state !== "trader") return;
     document.getElementById("ov-trader").classList.add("hidden");
     trader = null;
@@ -529,13 +620,24 @@
   }
 
   function buyTrade(idx) {
+    if (roomCode) {
+      if (coopNet.host) {
+        if (coopHostTradeP && coopHostTradeP.tradeOffer) {
+          coopBuyTrade(coopHostTradeP, { sid: coopHostTradeP.tradeOffer.sid, i: idx });
+        }
+      } else if (coopGuestTrade) {
+        coopEventSeq += 1;
+        coopSendCtrl({ t: "ev", id: coopEventSeq, k: "trade-buy", d: { sid: coopGuestTrade.sid, i: idx } });
+      }
+      return;
+    }
     if (state !== "trader") return;
     const def = traderOffers[idx];
     if (!def) return;
     const cost = traderCost(def);
-    if (credits < cost || !def.can()) return;
+    if (credits < cost || !def.can(player)) return;
     credits -= cost;
-    def.apply();
+    def.apply(player);
     sfxLevelUp();
     trader = null;
     closeTrader();

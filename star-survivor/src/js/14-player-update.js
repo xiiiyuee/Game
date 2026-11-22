@@ -220,6 +220,10 @@
     // 受击断连杀
     combo = 0;
     comboTimer = 0;
+    if (roomCode) {                        // P4-02：受击立即关闭个人商店/游商
+      if (p.shopOpen) coopCloseShop(p);
+      if (p.tradeOffer) coopCloseTrade(p);
+    }
 
     if (p.hp <= 0) {
       p.hp = 0;

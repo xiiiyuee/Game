@@ -16,6 +16,27 @@
     color: var(--muted);
   }
   .res-grid b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .res-team-head {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 2px 0;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+  }
+  .res-team-head b { font-weight: 500; font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+  .res-team-row {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+    color: var(--text);
+  }
+  .res-team-row.out { opacity: 0.55; }
+  .res-team-row b { color: var(--cyan-soft); font-variant-numeric: tabular-nums; }
   .res-buffs {
     margin-top: 14px;
     padding: 10px 12px;

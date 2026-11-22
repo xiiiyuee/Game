@@ -61,6 +61,16 @@
       trailCd: 0,
       hitFlash: 0,
       energy: 0,                 // 超载能量
+      xp: 0,                     // 个人经验 / 等级（联机各自成长，P4-01）
+      level: 1,
+      xpNeed: CFG.XP.BASE,
+      pendingLevels: 0,          // 待选升级次数
+      upOffer: null,             // 房主侧：该玩家的待选报价 { oid, cards }
+      upgradeTimer: 0,           // 选卡倒计时（秒）
+      kills: 0,                  // 个人击杀（P4-07）
+      damage: 0,                 // 个人造成伤害
+      shopOpen: false,           // 个人商店是否打开（P4-02）
+      shopTimer: 0,
       weapon: chosenWeapon,
       intent: { mx: 0, my: 0 },  // 非本地玩家的移动意图（联机时由输入包写入）
       droneCd: [],               // 每架无人机的射击冷却
@@ -68,6 +78,12 @@
       downTimer: 0,              // 倒地剩余倒计时（秒）
       reviveProgress: 0,         // 队友救援进度（秒）
       eliminated: false,         // 倒计时结束，已淘汰
+      tradeOffer: null,          // 个人游商报价（P4-02）
+      tradeTimer: 0,
+      tradeCooldown: 0,
+      color: ["#3fe5ff", "#ffd666", "#ff6bd6", "#8bffdc"][
+        Math.max(0, (parseInt(String(id).replace(/\D/g, ""), 10) || 1) - 1) % 4
+      ],
     };
   }
 

@@ -2,7 +2,7 @@
    * 13. 子弹 / 碰撞
    * ===================================================================*/
   // 统一伤害结算：暴击反馈、伤害数字、死亡处理
-  function hurtEnemy(e, dmg, crit, silent) {
+  function hurtEnemy(e, dmg, crit, silent, ownerId) {
     if (e.dead) return;
     // Boss「分裂护盾」：先消耗护盾层
     if (e.isBoss && e.shield > 0) {
@@ -19,6 +19,11 @@
     }
     if (e.armor) dmg *= 1 - e.armor;
     e.hp -= dmg;
+    if (ownerId) {
+      e.lastHit = ownerId;                 // 个人伤害 / 击杀归属（P4-07）
+      const op = coopPlayerById(ownerId);
+      if (op) op.damage += Math.max(0, dmg);
+    }
     if (silent) {
       emit(e.x, e.y, 3, "#ffd08a", 140, 2, 0.28);
     } else {
@@ -31,7 +36,7 @@
   }
 
   // 进化「裂变弹」：命中点爆炸
-  function explodeAt(x, y, dmg, source, radius, color) {
+  function explodeAt(x, y, dmg, source, radius, color, ownerId) {
     const R = (radius || 60) * view.scale;
     emit(x, y, 14, color || THEME.gold, 240, 3, 0.5);
     for (let i = 0; i < enemies.length; i++) {
@@ -39,7 +44,7 @@
       if (o.dead || o === source) continue;
       const rr = R + o.r;
       if (dist2(x, y, o.x, o.y) <= rr * rr) {
-        hurtEnemy(o, dmg, false, true);
+        hurtEnemy(o, dmg, false, true, ownerId);
         if (state !== "playing") return;
       }
     }
@@ -102,11 +107,11 @@
             b.hit.add(e.id);
             const crit = Math.random() < stats.crit;
             const dmg = b.dmg * (crit ? stats.critMult : 1);
-            hurtEnemy(e, dmg, crit, false);
+            hurtEnemy(e, dmg, crit, false, b.owner);
             if (state === "playing") {
-              if (stats.explodeOnHit) explodeAt(b.x, b.y, b.dmg * 0.6, e);
-              if (stats.pulseBlast) explodeAt(b.x, b.y, b.dmg * 0.45, e, 56, THEME.cyanSoft);
-              if (stats.scatterBlast) explodeAt(b.x, b.y, b.dmg * 0.35, e, 38, THEME.gold);
+              if (stats.explodeOnHit) explodeAt(b.x, b.y, b.dmg * 0.6, e, undefined, undefined, b.owner);
+              if (stats.pulseBlast) explodeAt(b.x, b.y, b.dmg * 0.45, e, 56, THEME.cyanSoft, b.owner);
+              if (stats.scatterBlast) explodeAt(b.x, b.y, b.dmg * 0.35, e, 38, THEME.gold, b.owner);
               if (stats.railShard && !b.shard) spawnRailShard(b, e);
             }
 

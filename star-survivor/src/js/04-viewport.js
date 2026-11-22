@@ -121,7 +121,19 @@
   }
 
   function updateCamera(dt) {
-    const me = getLocalPlayer() || player;
+    let me = getLocalPlayer() || player;
+    // 联机倒地观战（P4-06）：跟随最近的可行动队友
+    if (roomCode && me && (me.down || me.eliminated)) {
+      let best = null;
+      let bd = Infinity;
+      for (let i = 0; i < players.length; i++) {
+        const q = players[i];
+        if (q === me || q.down || q.eliminated) continue;
+        const d = dist2(me.x, me.y, q.x, q.y);
+        if (d < bd) { bd = d; best = q; }
+      }
+      if (best) me = best;
+    }
     const tx = clamp(me.x - view.w / 2, 0, Math.max(0, world.w - view.w));
     const ty = clamp(me.y - view.h / 2, 0, Math.max(0, world.h - view.h));
     const k = Math.min(1, dt * CFG.WORLD.CAMERA_SMOOTH);
