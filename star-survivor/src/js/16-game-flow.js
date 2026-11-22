@@ -431,6 +431,16 @@
       coopRoster = coopRoster.filter((p) => p.id !== data.id);
     } else if (data.t === "start") {
       coopStartGuestGame();
+    } else if (data.t === "pause") {
+      if (!coopNet.host) {
+        coopRemoteAway = true;
+        coopPauseLocal("房主暂时离开，等待恢复…");
+      }
+    } else if (data.t === "resume") {
+      if (!coopNet.host && coopRemoteAway) {
+        coopRemoteAway = false;
+        coopResumeLocal();
+      }
     } else if (data.t === "p") {
       coopApplyPlayerState(data);
     }
@@ -546,6 +556,44 @@
       localPlayerId = coopSelf.id;
     }
   }
+
+  /* ===== 房主后台暂停（P2-07）===== */
+  let coopHostAway = false;
+  let coopRemoteAway = false;
+
+  function coopPauseLocal(text) {
+    if (state !== "playing") return;
+    togglePause();
+    const hint = document.getElementById("pause-hint");
+    if (hint) hint.textContent = text;
+  }
+
+  function coopResumeLocal() {
+    if (state === "paused") togglePause();
+    const hint = document.getElementById("pause-hint");
+    if (hint) hint.textContent = "按 ESC 也可继续";
+  }
+
+  function coopSetAway(hidden) {
+    if (!roomCode || !coopNet.host) return;
+    if (hidden) {
+      if (state === "playing") {
+        coopHostAway = true;
+        coopBroadcastCtrl({ t: "pause", reason: "房主暂时离开" });
+        coopPauseLocal("房主暂时离开，等待恢复…");
+      }
+    } else if (coopHostAway) {
+      coopHostAway = false;
+      coopBroadcastCtrl({ t: "resume" });
+      coopResumeLocal();
+    }
+  }
+
+  function coopOnVisibility() {
+    coopSetAway(!!document.hidden);
+  }
+
+  document.addEventListener("visibilitychange", coopOnVisibility);
 
   function connectHost() {
     if (!roomCode) return;
