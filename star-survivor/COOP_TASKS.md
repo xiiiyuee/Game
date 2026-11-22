@@ -356,9 +356,9 @@ window.SS_COOP_CONFIG = {
 ## 7. 当前进度
 
 - 当前阶段：**Phase 5 进行中（P5-03 配置注入已完成）**
-- 当前任务：Phase 0 ~ Phase 4 完成；P5-03 完成（信令 / TURN / PeerJS 客户端库均可配置）
-- 下一步：P5-01 自建信令服务（需要确定 WSS 部署位置）；随后 P5-02 TURN/coturn
-- 阻塞：自建信令与 TURN 需要基础设施（域名、证书、服务器），待你确认部署条件；真实双设备公网联机与手机真机仍需手动验证
+- 当前任务：Phase 0 ~ Phase 4 完成；P5-03 完成（信令 / TURN / PeerJS 客户端库均可配置；邀请链接会保留这些参数）
+- 下一步：P5-01 自建信令服务（可用 Tailscale 私网或 SakuraFrp 等 TCP/HTTP 隧道暴露，无需买服务器）；随后 P5-02 TURN/coturn
+- 阻塞：TURN 仍需公网 UDP 可达的服务器；真实双设备公网联机与手机真机仍需手动验证
 
 ---
 
@@ -370,9 +370,9 @@ window.SS_COOP_CONFIG = {
 日期：2026-11-22
 完成：Phase 0/1/2/3；Phase 4 全部（P4-01 ~ P4-08、P4-10；P4-09 按 D-08 跳过）；P5-03 配置注入
 当前：P5-03 已完成。信令地址、TURN/ICE、PeerJS 客户端库不再写死：优先级为默认值 → `window.SS_COOP_CONFIG` → URL（`?sig=` / `?sigport=` / `?sigpath=` / `?sigsecure=` / `?turn=` / `?peersrc=`）。本地信令示例：`?sig=localhost:9000&sigsecure=0&sigpath=/peerjs`；线上：`?sig=wss://sig.example.com/peerjs`。TURN 支持 `?turn=turn:user:pass@host:3478,turns:host:5349`。
-验证：npm test 通过（单文件 303.9 KB；CSS 27.5 KB / JS 265.3 KB）；无头 Chrome 157 项全 PASS（含 P5-03 默认/全局/URL 覆盖/完整 WSS 地址归一化），联机 0 JS 报错
-下一步：P5-01 自建信令服务（需确定 WSS 部署位置），随后 P5-02 TURN/coturn
-阻塞：自建信令/TURN 需要域名、证书与服务器；真实双设备公网联机仍需手动验证
+验证：npm test 通过（单文件 304.1 KB；CSS 27.5 KB / JS 265.5 KB）；无头 Chrome 158 项全 PASS（含 P5-03 默认/全局/URL 覆盖/完整 WSS 地址归一化/邀请链接保留配置），连续 3 次全绿，联机 0 JS 报错
+下一步：P5-01 自建信令服务（可先用 Tailscale 私网验证；SakuraFrp 等隧道只适合暴露页面/信令，不适合 TURN），随后 P5-02 TURN/coturn
+阻塞：TURN 需要公网 UDP 可达的服务器；真实双设备公网联机仍需手动验证
 约束：不提交 Git、不部署
 ```
 

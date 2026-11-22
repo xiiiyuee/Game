@@ -4399,7 +4399,12 @@
   }
 
   function shareLink(code) {
-    return location.origin + location.pathname + "?room=" + encodeURIComponent(code);
+    const keep = ["sig", "sigport", "sigpath", "sigsecure", "turn", "peersrc"];
+    const out = new URLSearchParams();
+    const q = coopQuery();
+    if (q) for (const k of keep) { const v = q.get(k); if (v) out.set(k, v); }
+    out.set("room", code);
+    return location.origin + location.pathname + "?" + out.toString();
   }
 
   function refreshRoomPanel() {
