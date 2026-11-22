@@ -368,9 +368,9 @@ window.SS_COOP_CONFIG = {
 
 ```
 日期：2026-11-22
-完成：Phase 0/1/2/3；Phase 4 全部（P4-01 ~ P4-08、P4-10；P4-09 按 D-08 跳过）；P5-03 配置注入
-当前：P5-03 已完成。信令地址、TURN/ICE、PeerJS 客户端库不再写死：优先级为默认值 → `window.SS_COOP_CONFIG` → URL（`?sig=` / `?sigport=` / `?sigpath=` / `?sigsecure=` / `?turn=` / `?peersrc=`）。本地信令示例：`?sig=localhost:9000&sigsecure=0&sigpath=/peerjs`；线上：`?sig=wss://sig.example.com/peerjs`。TURN 支持 `?turn=turn:user:pass@host:3478,turns:host:5349`。
-验证：npm test 通过（单文件 304.1 KB；CSS 27.5 KB / JS 265.5 KB）；无头 Chrome 158 项全 PASS（含 P5-03 默认/全局/URL 覆盖/完整 WSS 地址归一化/邀请链接保留配置），连续 3 次全绿，联机 0 JS 报错
+完成：Phase 0/1/2/3；Phase 4 全部（P4-01 ~ P4-08、P4-10；P4-09 按 D-08 跳过）；P5-03 配置注入；玩法扩展（打击感 + 塔防）
+当前：塔防系统已接入既有炮塔/缓速场：防线拥有耐久（炮塔 90 / 缓速场 70，按章节成长），敌人 300px 内且比玩家更近时转火拆塔，敌方子弹会命中防线，Boss 近身碾压；防线耐久归零后被摧毁并移除。联机：客户端建造改为上报房主 `build` 事件，房主校验核心/上限/距离后生成并回 `build-ok`/`build-no`；防线与耐久通过快照 `df` 字段同步，客户端从掉血推导受击闪白。
+验证：npm test 通过（单文件 319.1 KB；CSS 27.5 KB / JS 280.4 KB）；无头 Chrome 塔防 21 项全 PASS（建造扣核心/耐久、超范围与核心不足拒绝、敌人转火拆塔、敌弹命中、耐久归零移除、Boss 碾压、快照结构）；游戏运行 1.5s 冒烟 PASS，0 JS 报错
 下一步：P5-01 自建信令服务（可先用 Tailscale 私网验证；SakuraFrp 等隧道只适合暴露页面/信令，不适合 TURN），随后 P5-02 TURN/coturn
 阻塞：TURN 需要公网 UDP 可达的服务器；真实双设备公网联机仍需手动验证
 约束：不提交 Git、不部署

@@ -30,6 +30,12 @@
       TURRET_DMG: 9,
       FIELD_RADIUS: 125,
       FIELD_SLOW: 0.5,            // 缓速场内敌人移速倍率
+      DEF_TURRET_HP: 90,          // 炮塔耐久
+      DEF_FIELD_HP: 70,           // 缓速场耐久
+      DEF_HP_GROWTH: 0.35,        // 每章耐久成长
+      DEF_AGGRO: 300,             // 敌人转火防线的距离
+      DEF_ATTACK_CD: 0.8,         // 敌人拆塔间隔
+      DEF_BUILD_RANGE: 520,       // 部署距离上限
       CORE_MAGNET: 170,
       CORE_PICKUP: 30,
     },

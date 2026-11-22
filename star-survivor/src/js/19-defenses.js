@@ -739,30 +739,139 @@
     refreshHud(true);
   }
 
-  function placeDefense(type, x, y) {
+  function defenseMaxHp(type) {
+    const base = type === "turret" ? CFG.RUN.DEF_TURRET_HP : CFG.RUN.DEF_FIELD_HP;
+    return Math.round(base * (1 + (chapter - 1) * CFG.RUN.DEF_HP_GROWTH));
+  }
+
+  // 敌人转火：返回距离内最近的防线
+  function nearestDefense(x, y, maxDist) {
+    let best = null;
+    let bestD = maxDist * maxDist;
+    for (let i = 0; i < turrets.length; i++) {
+      const d = turrets[i];
+      if (d.dead) continue;
+      const dd = dist2(x, y, d.x, d.y);
+      if (dd < bestD) { bestD = dd; best = d; }
+    }
+    for (let i = 0; i < fields.length; i++) {
+      const d = fields[i];
+      if (d.dead) continue;
+      const dd = dist2(x, y, d.x, d.y);
+      if (dd < bestD) { bestD = dd; best = d; }
+    }
+    return best ? { d: best, x: best.x, y: best.y, hitR: best.hitR || 18, dist2: bestD } : null;
+  }
+
+  function defenseAt(x, y, pad) {
+    for (let i = 0; i < turrets.length; i++) {
+      const d = turrets[i];
+      if (d.dead) continue;
+      const rr = (d.hitR || 18) + pad;
+      if (dist2(x, y, d.x, d.y) <= rr * rr) return d;
+    }
+    for (let i = 0; i < fields.length; i++) {
+      const d = fields[i];
+      if (d.dead) continue;
+      const rr = (d.hitR || 20) + pad;
+      if (dist2(x, y, d.x, d.y) <= rr * rr) return d;
+    }
+    return null;
+  }
+
+  function hurtDefense(d, dmg, source) {
+    if (!d || d.dead || d.synced) return;
+    d.hp -= Math.max(0, dmg);
+    d.flash = 1;
+    emit(d.x, d.y, 4, "#ffb3a0", 130, 2, 0.3);
+    if (d.hp <= 0) destroyDefense(d);
+  }
+
+  function destroyDefense(d) {
+    if (!d || d.dead) return;
+    d.dead = true;
+    emit(d.x, d.y, 22, "#ffd666", 240, 3.2, 0.65);
+    addText(d.x, d.y - 30, "防线被摧毁", "#ff6b6b", 14);
+    shake = Math.max(shake, 5 * CFG.FX.SHAKE);
+    sfxExplode(false);
+    const arr = d.kind === "turret" ? turrets : fields;
+    const idx = arr.indexOf(d);
+    if (idx >= 0) arr.splice(idx, 1);
+  }
+
+  function placeDefense(type, x, y, owner, remote) {
+    if (type !== "turret" && type !== "field") return false;
+    const who = owner || getLocalPlayer() || player;
+    if (!who) return false;
+
+    // 联机客户端：只上报部署请求，由房主校验核心/上限/距离并生成
+    if (roomCode && coopIsGuest() && !remote) {
+      coopEventSeq += 1;
+      coopSendCtrl({ t: "ev", id: coopEventSeq, k: "build", d: { type, x: Math.round(x), y: Math.round(y) } });
+      buildMode = null;
+      refreshHud(true);
+      addText(who.x, who.y - 46, "部署请求已发送", "#9ad8ff", 13);
+      return true;
+    }
+
+    const dx = x - who.x, dy = y - who.y;
+    const maxD = CFG.RUN.DEF_BUILD_RANGE * view.scale;
+    if (dx * dx + dy * dy > maxD * maxD) {
+      addText(who.x, who.y - 46, "超出部署范围", "#ff9f9f", 13);
+      return false;
+    }
+
     const cost = type === "turret" ? CFG.RUN.TURRET_COST : CFG.RUN.FIELD_COST;
-    if (cores < cost) { buildMode = null; refreshHud(true); return; }
+    const atCap = type === "turret"
+      ? turrets.length >= CFG.RUN.MAX_TURRETS
+      : fields.length >= CFG.RUN.MAX_FIELDS;
+    if (cores < cost || atCap) {
+      buildMode = null;
+      refreshHud(true);
+      return false;
+    }
+
+    const hp = defenseMaxHp(type);
+    cores -= cost;
     if (type === "turret") {
-      if (turrets.length >= CFG.RUN.MAX_TURRETS) { buildMode = null; return; }
-      cores -= cost;
-      turrets.push({ x, y, cd: 0, ang: -Math.PI / 2, seed: Math.random() * TAU });
+      turrets.push({
+        id: nextPropId++, kind: "turret", x, y, cd: 0, ang: -Math.PI / 2,
+        seed: Math.random() * TAU, hp, maxHp: hp, hitR: 18, flash: 0,
+        dmg: Math.max(CFG.RUN.TURRET_DMG, who.stats.damage * 0.5),
+        speed: who.stats.bulletSpeed,
+        range: CFG.RUN.TURRET_RANGE,
+        owner: who.id,
+      });
       addText(x, y - 26, "炮塔已部署", "#ffd666", 14);
     } else {
-      if (fields.length >= CFG.RUN.MAX_FIELDS) { buildMode = null; return; }
-      cores -= cost;
-      fields.push({ x, y, r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU });
+      fields.push({
+        id: nextPropId++, kind: "field", x, y,
+        r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU,
+        hp, maxHp: hp, hitR: 20, flash: 0,
+      });
       addText(x, y - 26, "缓速场已展开", "#8ff6ff", 14);
     }
     emit(x, y, 16, "#ffd666", 200, 3, 0.6);
     sfxLevelUp();
     buildMode = null;
     refreshHud(true);
+    return true;
   }
 
   function updateDefenses(dt) {
+    // 受击闪白衰减（客户端也要跑）
+    for (let i = 0; i < turrets.length; i++) {
+      if (turrets[i].flash > 0) turrets[i].flash = Math.max(0, turrets[i].flash - dt * 9);
+    }
+    for (let i = 0; i < fields.length; i++) {
+      if (fields[i].flash > 0) fields[i].flash = Math.max(0, fields[i].flash - dt * 9);
+    }
+    if (coopIsGuest()) return;   // 客户端防线由房主快照驱动
+
     const range = CFG.RUN.TURRET_RANGE * view.scale;
     for (let i = 0; i < turrets.length; i++) {
       const t = turrets[i];
+      if (t.dead) continue;
       let best = null;
       let bestD = range * range;
       for (let k = 0; k < enemies.length; k++) {
@@ -777,13 +886,15 @@
         if (t.cd <= 0) {
           t.cd = CFG.RUN.TURRET_CD;
           if (bullets.length < CFG.LIMITS.BULLETS) {
-            const sp = stats.bulletSpeed * view.scale * 0.9;
+            const sp = (t.speed || stats.bulletSpeed) * view.scale * 0.9;
             bullets.push({
+              bid: nextBulletId++,
+              owner: t.owner,
               x: t.x, y: t.y,
               vx: Math.cos(t.ang) * sp,
               vy: Math.sin(t.ang) * sp,
               r: 3.4,
-              dmg: Math.max(6, stats.damage * 0.5),
+              dmg: t.dmg || Math.max(6, stats.damage * 0.5),
               pierce: 0,
               life: 1.2,
               dead: false,
@@ -797,6 +908,7 @@
     }
     for (let i = 0; i < fields.length; i++) {
       const f = fields[i];
+      if (f.dead) continue;
       const r2 = f.r * f.r;
       for (let k = 0; k < enemies.length; k++) {
         const e = enemies[k];

@@ -399,6 +399,16 @@
     if (dist2(b.x, b.y, tgt.x, tgt.y) < rr * rr) {
       damagePlayer(b.dmg * (b.dashTime > 0 ? 1 : 0.6), tgt);
     }
+
+    // ===== 碾压防线：Boss 靠近时直接拆塔 =====
+    b.defCd = Math.max(0, (b.defCd || 0) - slowDt);
+    if (b.defCd <= 0) {
+      const nd = nearestDefense(b.x, b.y, b.r + 56);
+      if (nd) {
+        hurtDefense(nd.d, b.dmg * 0.9, b);
+        b.defCd = 0.7;
+      }
+    }
   }
 
   function bossVolley(b, count, spread, speed, dmg) {
@@ -445,7 +455,15 @@
         continue;
       }
 
-      const tgt = nearestPlayer(e.x, e.y);
+      // 塔防：附近有防线且比玩家更近时，优先拆防线
+      const playerTgt = nearestPlayer(e.x, e.y);
+      let tgt = playerTgt;
+      let defTgt = null;
+      const nd = nearestDefense(e.x, e.y, CFG.RUN.DEF_AGGRO * view.scale);
+      if (nd && nd.dist2 < dist2(e.x, e.y, playerTgt.x, playerTgt.y) * 0.9) {
+        defTgt = nd.d;
+        tgt = { x: nd.x, y: nd.y, r: nd.hitR };
+      }
       let ang = Math.atan2(tgt.y - e.y, tgt.x - e.x);
 
       // 五边形：带横向摆动
@@ -512,12 +530,22 @@
         }
       }
 
-      // 接触伤害
+      // 接触伤害：拆防线或打玩家
       const rr = e.r + tgt.r;
       if (dist2(e.x, e.y, tgt.x, tgt.y) < rr * rr) {
-        damagePlayer(e.dmg, tgt);
-        e.x -= Math.cos(ang) * 10;
-        e.y -= Math.sin(ang) * 10;
+        if (defTgt) {
+          e.defCd = Math.max(0, (e.defCd || 0) - sdt);
+          if (e.defCd <= 0) {
+            e.defCd = CFG.RUN.DEF_ATTACK_CD * rand(0.85, 1.2);
+            hurtDefense(defTgt, e.dmg, e);
+          }
+          e.x -= Math.cos(ang) * 4;
+          e.y -= Math.sin(ang) * 4;
+        } else {
+          damagePlayer(e.dmg, tgt);
+          e.x -= Math.cos(ang) * 10;
+          e.y -= Math.sin(ang) * 10;
+        }
       }
     }
 

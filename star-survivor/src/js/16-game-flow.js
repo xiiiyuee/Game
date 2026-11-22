@@ -906,12 +906,73 @@
     return arr;
   }
 
+  // 防线快照：id, kind(0炮塔/1缓速场), x, y, hp, maxHp, 角度
+  function coopDefenseList() {
+    const arr = [];
+    for (let i = 0; i < turrets.length; i++) {
+      const d = turrets[i];
+      arr.push([d.id, 0, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100)]);
+    }
+    for (let i = 0; i < fields.length; i++) {
+      const d = fields[i];
+      arr.push([d.id, 1, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), 0]);
+    }
+    return arr;
+  }
+
+  function coopApplyDefenses(list) {
+    if (coopNet.host || !list) return;
+    const seen = {};
+    for (let i = 0; i < list.length; i++) {
+      const row = list[i];
+      if (!row || row.length < 6 || !row[0]) continue;
+      const id = row[0];
+      const kind = row[1];
+      const arr = kind === 0 ? turrets : fields;
+      let d = null;
+      for (let j = 0; j < arr.length; j++) if (arr[j].id === id) { d = arr[j]; break; }
+      if (!d) {
+        d = kind === 0
+          ? { id, kind: "turret", synced: true, x: 0, y: 0, cd: 0, ang: -Math.PI / 2,
+              seed: Math.random() * TAU, hp: 1, maxHp: 1, hitR: 18, flash: 0 }
+          : { id, kind: "field", synced: true, x: 0, y: 0,
+              r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU,
+              hp: 1, maxHp: 1, hitR: 20, flash: 0 };
+        arr.push(d);
+      }
+      const hp = row[4], maxHp = row[5] || 1;
+      if (hp < d.hp - 0.5) d.flash = 1;          // 客户端从掉血推导受击闪白
+      d.x = row[2];
+      d.y = row[3];
+      d.hp = hp;
+      d.maxHp = maxHp;
+      if (kind === 0) d.ang = (row[6] || 0) / 100;
+      seen[id] = 1;
+    }
+    // 房主已摧毁的防线，在客户端移除并播放摧毁反馈
+    for (let i = turrets.length - 1; i >= 0; i--) {
+      if (turrets[i].synced && !seen[turrets[i].id]) {
+        emit(turrets[i].x, turrets[i].y, 16, "#ffd666", 220, 3, 0.55);
+        addText(turrets[i].x, turrets[i].y - 26, "防线被摧毁", "#ff6b6b", 13);
+        turrets.splice(i, 1);
+      }
+    }
+    for (let i = fields.length - 1; i >= 0; i--) {
+      if (fields[i].synced && !seen[fields[i].id]) {
+        emit(fields[i].x, fields[i].y, 16, "#8ff6ff", 220, 3, 0.55);
+        addText(fields[i].x, fields[i].y - 26, "防线被摧毁", "#ff6b6b", 13);
+        fields.splice(i, 1);
+      }
+    }
+  }
+
   function coopSendSnapshot() {
     if (!coopNet.host || state !== "playing") return;
     coopSnapSeq += 1;
     coopSendState({
       t: "snap", v: COOP_SNAP_VER, s: coopSnapSeq, pl: coopSnapshotList(),
       cr: Math.round(credits), co: cores, rv: revives,
+      df: coopDefenseList(),
     });
   }
 
@@ -952,6 +1013,7 @@
     if (typeof d.cr === "number" && d.cr !== credits) credits = d.cr;
     if (typeof d.co === "number" && d.co !== cores) cores = d.co;
     if (typeof d.rv === "number" && d.rv !== revives) revives = d.rv;
+    if (d.df) coopApplyDefenses(d.df);       // 炮塔/缓速场及耐久由房主同步
     refreshHud();
   }
 
@@ -2276,6 +2338,25 @@
       coopBuyTrade(p, q);
     } else if (d.k === "trade-bye") {
       if (p.tradeOffer && q.sid === p.tradeOffer.sid) coopCloseTrade(p);
+    } else if (d.k === "build") {
+      // 队友建造请求：房主校验后生成防线，再回报结果
+      if (q.type !== "turret" && q.type !== "field") { coopInReject(); return; }
+      if (p.down || p.eliminated) { coopInReject(); return; }
+      const bx = Number(q.x), by = Number(q.y);
+      if (!isFinite(bx) || !isFinite(by)) { coopInReject(); return; }
+      const maxD = CFG.RUN.DEF_BUILD_RANGE * view.scale;
+      const pid = coopFindPeerOf(p.id);
+      if (dist2(bx, by, p.x, p.y) > maxD * maxD) {
+        if (pid) coopSendEventTo(pid, "build-no", { reason: "range" });
+        coopInReject();
+        return;
+      }
+      if (!placeDefense(q.type, bx, by, p, true)) {
+        if (pid) coopSendEventTo(pid, "build-no", { reason: "cost" });
+        coopInReject();
+        return;
+      }
+      if (pid) coopSendEventTo(pid, "build-ok", { type: q.type, x: bx, y: by });
     }
   }
 
@@ -2336,6 +2417,14 @@
       ebullets = [];
       addText(player.x, player.y - 64, "第 " + chapter + " 星域", "#ffd666", 24);
       refreshHud(true);
+    } else if (d.k === "build-ok") {
+      const bx = Number(p.x) || 0, by = Number(p.y) || 0;
+      emit(bx, by, 16, "#ffd666", 200, 3, 0.6);
+      addText(bx, by - 26, p.type === "field" ? "缓速场已展开" : "炮塔已部署", "#ffd666", 14);
+      sfxLevelUp();
+    } else if (d.k === "build-no") {
+      const lp = getLocalPlayer() || player;
+      addText(lp.x, lp.y - 46, p.reason === "range" ? "超出部署范围" : "核心不足 / 已达上限", "#ff9f9f", 13);
     } else if (d.k === "over") {
       if (state !== "over") endGame(!!p.win, p.reason, p.team);
     }

@@ -225,16 +225,28 @@
       b.y += b.vy * dt * slow;
       b.life -= dt * slow;
 
-      // 命中任意存活玩家；玩家之间无友伤
-      for (let k = 0; k < players.length; k++) {
-        const p = players[k];
-        if (p.down || p.eliminated) continue;
-        const rr = b.r + p.r;
-        if (dist2(b.x, b.y, p.x, p.y) <= rr * rr) {
-          damagePlayer(b.dmg, p);
+      // 命中防线：炮塔/缓速场会替玩家挡弹并被破坏
+      if (!b.dead) {
+        const d = defenseAt(b.x, b.y, b.r);
+        if (d) {
+          hurtDefense(d, b.dmg, null);
           b.dead = true;
-          emit(b.x, b.y, 8, b.color, 160, 2.4, 0.4);
-          break;
+          emit(b.x, b.y, 6, "#ffb3a0", 150, 2.4, 0.32);
+        }
+      }
+
+      // 命中任意存活玩家；玩家之间无友伤
+      if (!b.dead) {
+        for (let k = 0; k < players.length; k++) {
+          const p = players[k];
+          if (p.down || p.eliminated) continue;
+          const rr = b.r + p.r;
+          if (dist2(b.x, b.y, p.x, p.y) <= rr * rr) {
+            damagePlayer(b.dmg, p);
+            b.dead = true;
+            emit(b.x, b.y, 8, b.color, 160, 2.4, 0.4);
+            break;
+          }
         }
       }
 

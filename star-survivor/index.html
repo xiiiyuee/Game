@@ -1209,6 +1209,12 @@
       TURRET_DMG: 9,
       FIELD_RADIUS: 125,
       FIELD_SLOW: 0.5,            // 缓速场内敌人移速倍率
+      DEF_TURRET_HP: 90,          // 炮塔耐久
+      DEF_FIELD_HP: 70,           // 缓速场耐久
+      DEF_HP_GROWTH: 0.35,        // 每章耐久成长
+      DEF_AGGRO: 300,             // 敌人转火防线的距离
+      DEF_ATTACK_CD: 0.8,         // 敌人拆塔间隔
+      DEF_BUILD_RANGE: 520,       // 部署距离上限
       CORE_MAGNET: 170,
       CORE_PICKUP: 30,
     },
@@ -3525,6 +3531,16 @@
     if (dist2(b.x, b.y, tgt.x, tgt.y) < rr * rr) {
       damagePlayer(b.dmg * (b.dashTime > 0 ? 1 : 0.6), tgt);
     }
+
+    // ===== 碾压防线：Boss 靠近时直接拆塔 =====
+    b.defCd = Math.max(0, (b.defCd || 0) - slowDt);
+    if (b.defCd <= 0) {
+      const nd = nearestDefense(b.x, b.y, b.r + 56);
+      if (nd) {
+        hurtDefense(nd.d, b.dmg * 0.9, b);
+        b.defCd = 0.7;
+      }
+    }
   }
 
   function bossVolley(b, count, spread, speed, dmg) {
@@ -3571,7 +3587,15 @@
         continue;
       }
 
-      const tgt = nearestPlayer(e.x, e.y);
+      // 塔防：附近有防线且比玩家更近时，优先拆防线
+      const playerTgt = nearestPlayer(e.x, e.y);
+      let tgt = playerTgt;
+      let defTgt = null;
+      const nd = nearestDefense(e.x, e.y, CFG.RUN.DEF_AGGRO * view.scale);
+      if (nd && nd.dist2 < dist2(e.x, e.y, playerTgt.x, playerTgt.y) * 0.9) {
+        defTgt = nd.d;
+        tgt = { x: nd.x, y: nd.y, r: nd.hitR };
+      }
       let ang = Math.atan2(tgt.y - e.y, tgt.x - e.x);
 
       // 五边形：带横向摆动
@@ -3638,12 +3662,22 @@
         }
       }
 
-      // 接触伤害
+      // 接触伤害：拆防线或打玩家
       const rr = e.r + tgt.r;
       if (dist2(e.x, e.y, tgt.x, tgt.y) < rr * rr) {
-        damagePlayer(e.dmg, tgt);
-        e.x -= Math.cos(ang) * 10;
-        e.y -= Math.sin(ang) * 10;
+        if (defTgt) {
+          e.defCd = Math.max(0, (e.defCd || 0) - sdt);
+          if (e.defCd <= 0) {
+            e.defCd = CFG.RUN.DEF_ATTACK_CD * rand(0.85, 1.2);
+            hurtDefense(defTgt, e.dmg, e);
+          }
+          e.x -= Math.cos(ang) * 4;
+          e.y -= Math.sin(ang) * 4;
+        } else {
+          damagePlayer(e.dmg, tgt);
+          e.x -= Math.cos(ang) * 10;
+          e.y -= Math.sin(ang) * 10;
+        }
       }
     }
 
@@ -4329,16 +4363,28 @@
       b.y += b.vy * dt * slow;
       b.life -= dt * slow;
 
-      // 命中任意存活玩家；玩家之间无友伤
-      for (let k = 0; k < players.length; k++) {
-        const p = players[k];
-        if (p.down || p.eliminated) continue;
-        const rr = b.r + p.r;
-        if (dist2(b.x, b.y, p.x, p.y) <= rr * rr) {
-          damagePlayer(b.dmg, p);
+      // 命中防线：炮塔/缓速场会替玩家挡弹并被破坏
+      if (!b.dead) {
+        const d = defenseAt(b.x, b.y, b.r);
+        if (d) {
+          hurtDefense(d, b.dmg, null);
           b.dead = true;
-          emit(b.x, b.y, 8, b.color, 160, 2.4, 0.4);
-          break;
+          emit(b.x, b.y, 6, "#ffb3a0", 150, 2.4, 0.32);
+        }
+      }
+
+      // 命中任意存活玩家；玩家之间无友伤
+      if (!b.dead) {
+        for (let k = 0; k < players.length; k++) {
+          const p = players[k];
+          if (p.down || p.eliminated) continue;
+          const rr = b.r + p.r;
+          if (dist2(b.x, b.y, p.x, p.y) <= rr * rr) {
+            damagePlayer(b.dmg, p);
+            b.dead = true;
+            emit(b.x, b.y, 8, b.color, 160, 2.4, 0.4);
+            break;
+          }
         }
       }
 
@@ -5257,12 +5303,73 @@
     return arr;
   }
 
+  // 防线快照：id, kind(0炮塔/1缓速场), x, y, hp, maxHp, 角度
+  function coopDefenseList() {
+    const arr = [];
+    for (let i = 0; i < turrets.length; i++) {
+      const d = turrets[i];
+      arr.push([d.id, 0, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100)]);
+    }
+    for (let i = 0; i < fields.length; i++) {
+      const d = fields[i];
+      arr.push([d.id, 1, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), 0]);
+    }
+    return arr;
+  }
+
+  function coopApplyDefenses(list) {
+    if (coopNet.host || !list) return;
+    const seen = {};
+    for (let i = 0; i < list.length; i++) {
+      const row = list[i];
+      if (!row || row.length < 6 || !row[0]) continue;
+      const id = row[0];
+      const kind = row[1];
+      const arr = kind === 0 ? turrets : fields;
+      let d = null;
+      for (let j = 0; j < arr.length; j++) if (arr[j].id === id) { d = arr[j]; break; }
+      if (!d) {
+        d = kind === 0
+          ? { id, kind: "turret", synced: true, x: 0, y: 0, cd: 0, ang: -Math.PI / 2,
+              seed: Math.random() * TAU, hp: 1, maxHp: 1, hitR: 18, flash: 0 }
+          : { id, kind: "field", synced: true, x: 0, y: 0,
+              r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU,
+              hp: 1, maxHp: 1, hitR: 20, flash: 0 };
+        arr.push(d);
+      }
+      const hp = row[4], maxHp = row[5] || 1;
+      if (hp < d.hp - 0.5) d.flash = 1;          // 客户端从掉血推导受击闪白
+      d.x = row[2];
+      d.y = row[3];
+      d.hp = hp;
+      d.maxHp = maxHp;
+      if (kind === 0) d.ang = (row[6] || 0) / 100;
+      seen[id] = 1;
+    }
+    // 房主已摧毁的防线，在客户端移除并播放摧毁反馈
+    for (let i = turrets.length - 1; i >= 0; i--) {
+      if (turrets[i].synced && !seen[turrets[i].id]) {
+        emit(turrets[i].x, turrets[i].y, 16, "#ffd666", 220, 3, 0.55);
+        addText(turrets[i].x, turrets[i].y - 26, "防线被摧毁", "#ff6b6b", 13);
+        turrets.splice(i, 1);
+      }
+    }
+    for (let i = fields.length - 1; i >= 0; i--) {
+      if (fields[i].synced && !seen[fields[i].id]) {
+        emit(fields[i].x, fields[i].y, 16, "#8ff6ff", 220, 3, 0.55);
+        addText(fields[i].x, fields[i].y - 26, "防线被摧毁", "#ff6b6b", 13);
+        fields.splice(i, 1);
+      }
+    }
+  }
+
   function coopSendSnapshot() {
     if (!coopNet.host || state !== "playing") return;
     coopSnapSeq += 1;
     coopSendState({
       t: "snap", v: COOP_SNAP_VER, s: coopSnapSeq, pl: coopSnapshotList(),
       cr: Math.round(credits), co: cores, rv: revives,
+      df: coopDefenseList(),
     });
   }
 
@@ -5303,6 +5410,7 @@
     if (typeof d.cr === "number" && d.cr !== credits) credits = d.cr;
     if (typeof d.co === "number" && d.co !== cores) cores = d.co;
     if (typeof d.rv === "number" && d.rv !== revives) revives = d.rv;
+    if (d.df) coopApplyDefenses(d.df);       // 炮塔/缓速场及耐久由房主同步
     refreshHud();
   }
 
@@ -6627,6 +6735,25 @@
       coopBuyTrade(p, q);
     } else if (d.k === "trade-bye") {
       if (p.tradeOffer && q.sid === p.tradeOffer.sid) coopCloseTrade(p);
+    } else if (d.k === "build") {
+      // 队友建造请求：房主校验后生成防线，再回报结果
+      if (q.type !== "turret" && q.type !== "field") { coopInReject(); return; }
+      if (p.down || p.eliminated) { coopInReject(); return; }
+      const bx = Number(q.x), by = Number(q.y);
+      if (!isFinite(bx) || !isFinite(by)) { coopInReject(); return; }
+      const maxD = CFG.RUN.DEF_BUILD_RANGE * view.scale;
+      const pid = coopFindPeerOf(p.id);
+      if (dist2(bx, by, p.x, p.y) > maxD * maxD) {
+        if (pid) coopSendEventTo(pid, "build-no", { reason: "range" });
+        coopInReject();
+        return;
+      }
+      if (!placeDefense(q.type, bx, by, p, true)) {
+        if (pid) coopSendEventTo(pid, "build-no", { reason: "cost" });
+        coopInReject();
+        return;
+      }
+      if (pid) coopSendEventTo(pid, "build-ok", { type: q.type, x: bx, y: by });
     }
   }
 
@@ -6687,6 +6814,14 @@
       ebullets = [];
       addText(player.x, player.y - 64, "第 " + chapter + " 星域", "#ffd666", 24);
       refreshHud(true);
+    } else if (d.k === "build-ok") {
+      const bx = Number(p.x) || 0, by = Number(p.y) || 0;
+      emit(bx, by, 16, "#ffd666", 200, 3, 0.6);
+      addText(bx, by - 26, p.type === "field" ? "缓速场已展开" : "炮塔已部署", "#ffd666", 14);
+      sfxLevelUp();
+    } else if (d.k === "build-no") {
+      const lp = getLocalPlayer() || player;
+      addText(lp.x, lp.y - 46, p.reason === "range" ? "超出部署范围" : "核心不足 / 已达上限", "#ff9f9f", 13);
     } else if (d.k === "over") {
       if (state !== "over") endGame(!!p.win, p.reason, p.team);
     }
@@ -7770,30 +7905,139 @@
     refreshHud(true);
   }
 
-  function placeDefense(type, x, y) {
+  function defenseMaxHp(type) {
+    const base = type === "turret" ? CFG.RUN.DEF_TURRET_HP : CFG.RUN.DEF_FIELD_HP;
+    return Math.round(base * (1 + (chapter - 1) * CFG.RUN.DEF_HP_GROWTH));
+  }
+
+  // 敌人转火：返回距离内最近的防线
+  function nearestDefense(x, y, maxDist) {
+    let best = null;
+    let bestD = maxDist * maxDist;
+    for (let i = 0; i < turrets.length; i++) {
+      const d = turrets[i];
+      if (d.dead) continue;
+      const dd = dist2(x, y, d.x, d.y);
+      if (dd < bestD) { bestD = dd; best = d; }
+    }
+    for (let i = 0; i < fields.length; i++) {
+      const d = fields[i];
+      if (d.dead) continue;
+      const dd = dist2(x, y, d.x, d.y);
+      if (dd < bestD) { bestD = dd; best = d; }
+    }
+    return best ? { d: best, x: best.x, y: best.y, hitR: best.hitR || 18, dist2: bestD } : null;
+  }
+
+  function defenseAt(x, y, pad) {
+    for (let i = 0; i < turrets.length; i++) {
+      const d = turrets[i];
+      if (d.dead) continue;
+      const rr = (d.hitR || 18) + pad;
+      if (dist2(x, y, d.x, d.y) <= rr * rr) return d;
+    }
+    for (let i = 0; i < fields.length; i++) {
+      const d = fields[i];
+      if (d.dead) continue;
+      const rr = (d.hitR || 20) + pad;
+      if (dist2(x, y, d.x, d.y) <= rr * rr) return d;
+    }
+    return null;
+  }
+
+  function hurtDefense(d, dmg, source) {
+    if (!d || d.dead || d.synced) return;
+    d.hp -= Math.max(0, dmg);
+    d.flash = 1;
+    emit(d.x, d.y, 4, "#ffb3a0", 130, 2, 0.3);
+    if (d.hp <= 0) destroyDefense(d);
+  }
+
+  function destroyDefense(d) {
+    if (!d || d.dead) return;
+    d.dead = true;
+    emit(d.x, d.y, 22, "#ffd666", 240, 3.2, 0.65);
+    addText(d.x, d.y - 30, "防线被摧毁", "#ff6b6b", 14);
+    shake = Math.max(shake, 5 * CFG.FX.SHAKE);
+    sfxExplode(false);
+    const arr = d.kind === "turret" ? turrets : fields;
+    const idx = arr.indexOf(d);
+    if (idx >= 0) arr.splice(idx, 1);
+  }
+
+  function placeDefense(type, x, y, owner, remote) {
+    if (type !== "turret" && type !== "field") return false;
+    const who = owner || getLocalPlayer() || player;
+    if (!who) return false;
+
+    // 联机客户端：只上报部署请求，由房主校验核心/上限/距离并生成
+    if (roomCode && coopIsGuest() && !remote) {
+      coopEventSeq += 1;
+      coopSendCtrl({ t: "ev", id: coopEventSeq, k: "build", d: { type, x: Math.round(x), y: Math.round(y) } });
+      buildMode = null;
+      refreshHud(true);
+      addText(who.x, who.y - 46, "部署请求已发送", "#9ad8ff", 13);
+      return true;
+    }
+
+    const dx = x - who.x, dy = y - who.y;
+    const maxD = CFG.RUN.DEF_BUILD_RANGE * view.scale;
+    if (dx * dx + dy * dy > maxD * maxD) {
+      addText(who.x, who.y - 46, "超出部署范围", "#ff9f9f", 13);
+      return false;
+    }
+
     const cost = type === "turret" ? CFG.RUN.TURRET_COST : CFG.RUN.FIELD_COST;
-    if (cores < cost) { buildMode = null; refreshHud(true); return; }
+    const atCap = type === "turret"
+      ? turrets.length >= CFG.RUN.MAX_TURRETS
+      : fields.length >= CFG.RUN.MAX_FIELDS;
+    if (cores < cost || atCap) {
+      buildMode = null;
+      refreshHud(true);
+      return false;
+    }
+
+    const hp = defenseMaxHp(type);
+    cores -= cost;
     if (type === "turret") {
-      if (turrets.length >= CFG.RUN.MAX_TURRETS) { buildMode = null; return; }
-      cores -= cost;
-      turrets.push({ x, y, cd: 0, ang: -Math.PI / 2, seed: Math.random() * TAU });
+      turrets.push({
+        id: nextPropId++, kind: "turret", x, y, cd: 0, ang: -Math.PI / 2,
+        seed: Math.random() * TAU, hp, maxHp: hp, hitR: 18, flash: 0,
+        dmg: Math.max(CFG.RUN.TURRET_DMG, who.stats.damage * 0.5),
+        speed: who.stats.bulletSpeed,
+        range: CFG.RUN.TURRET_RANGE,
+        owner: who.id,
+      });
       addText(x, y - 26, "炮塔已部署", "#ffd666", 14);
     } else {
-      if (fields.length >= CFG.RUN.MAX_FIELDS) { buildMode = null; return; }
-      cores -= cost;
-      fields.push({ x, y, r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU });
+      fields.push({
+        id: nextPropId++, kind: "field", x, y,
+        r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU,
+        hp, maxHp: hp, hitR: 20, flash: 0,
+      });
       addText(x, y - 26, "缓速场已展开", "#8ff6ff", 14);
     }
     emit(x, y, 16, "#ffd666", 200, 3, 0.6);
     sfxLevelUp();
     buildMode = null;
     refreshHud(true);
+    return true;
   }
 
   function updateDefenses(dt) {
+    // 受击闪白衰减（客户端也要跑）
+    for (let i = 0; i < turrets.length; i++) {
+      if (turrets[i].flash > 0) turrets[i].flash = Math.max(0, turrets[i].flash - dt * 9);
+    }
+    for (let i = 0; i < fields.length; i++) {
+      if (fields[i].flash > 0) fields[i].flash = Math.max(0, fields[i].flash - dt * 9);
+    }
+    if (coopIsGuest()) return;   // 客户端防线由房主快照驱动
+
     const range = CFG.RUN.TURRET_RANGE * view.scale;
     for (let i = 0; i < turrets.length; i++) {
       const t = turrets[i];
+      if (t.dead) continue;
       let best = null;
       let bestD = range * range;
       for (let k = 0; k < enemies.length; k++) {
@@ -7808,13 +8052,15 @@
         if (t.cd <= 0) {
           t.cd = CFG.RUN.TURRET_CD;
           if (bullets.length < CFG.LIMITS.BULLETS) {
-            const sp = stats.bulletSpeed * view.scale * 0.9;
+            const sp = (t.speed || stats.bulletSpeed) * view.scale * 0.9;
             bullets.push({
+              bid: nextBulletId++,
+              owner: t.owner,
               x: t.x, y: t.y,
               vx: Math.cos(t.ang) * sp,
               vy: Math.sin(t.ang) * sp,
               r: 3.4,
-              dmg: Math.max(6, stats.damage * 0.5),
+              dmg: t.dmg || Math.max(6, stats.damage * 0.5),
               pierce: 0,
               life: 1.2,
               dead: false,
@@ -7828,6 +8074,7 @@
     }
     for (let i = 0; i < fields.length; i++) {
       const f = fields[i];
+      if (f.dead) continue;
       const r2 = f.r * f.r;
       for (let k = 0; k < enemies.length; k++) {
         const e = enemies[k];
@@ -8594,6 +8841,40 @@
       ctx.arc(0, 0, f.r * 0.5, 0, TAU);
       ctx.stroke();
       ctx.restore();
+
+      // 中央发生器：可被敌人锁定和摧毁
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.rotate(t * 0.6 + f.seed);
+      drawGlow("#8ff6ff", 0, 0, 18, 0.3);
+      ctx.fillStyle = "rgba(10, 40, 48, 0.9)";
+      ctx.strokeStyle = "rgba(140, 250, 255, 0.85)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * TAU;
+        const px = Math.cos(a) * 11;
+        const py = Math.sin(a) * 11;
+        k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      if (f.flash > 0) {
+        ctx.globalAlpha = Math.min(0.8, f.flash) * 0.85;
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
+
+      const fhp = clamp((f.hp != null ? f.hp : 1) / (f.maxHp || 1), 0, 1);
+      if (fhp < 0.999) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(f.x - 17, f.y + 18, 34, 4);
+        ctx.fillStyle = fhp > 0.5 ? "#8bffdc" : fhp > 0.25 ? "#ffd666" : "#ff6b6b";
+        ctx.fillRect(f.x - 17, f.y + 18, 34 * fhp, 4);
+      }
     }
   }
 
@@ -8630,6 +8911,23 @@
       ctx.arc(0, 0, 4.4, 0, TAU);
       ctx.fill();
       ctx.restore();
+
+      // 受击闪白 + 耐久条
+      if (tu.flash > 0) {
+        ctx.globalAlpha = Math.min(0.8, tu.flash) * 0.8;
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(tu.x, tu.y, 15, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      const thp = clamp((tu.hp != null ? tu.hp : 1) / (tu.maxHp || 1), 0, 1);
+      if (thp < 0.999) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(tu.x - 17, tu.y + 20, 34, 4);
+        ctx.fillStyle = thp > 0.5 ? "#8bffdc" : thp > 0.25 ? "#ffd666" : "#ff6b6b";
+        ctx.fillRect(tu.x - 17, tu.y + 20, 34 * thp, 4);
+      }
 
       // 待机指示
       ctx.globalAlpha = 0.35;

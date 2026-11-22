@@ -589,6 +589,40 @@
       ctx.arc(0, 0, f.r * 0.5, 0, TAU);
       ctx.stroke();
       ctx.restore();
+
+      // 中央发生器：可被敌人锁定和摧毁
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.rotate(t * 0.6 + f.seed);
+      drawGlow("#8ff6ff", 0, 0, 18, 0.3);
+      ctx.fillStyle = "rgba(10, 40, 48, 0.9)";
+      ctx.strokeStyle = "rgba(140, 250, 255, 0.85)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * TAU;
+        const px = Math.cos(a) * 11;
+        const py = Math.sin(a) * 11;
+        k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      if (f.flash > 0) {
+        ctx.globalAlpha = Math.min(0.8, f.flash) * 0.85;
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
+
+      const fhp = clamp((f.hp != null ? f.hp : 1) / (f.maxHp || 1), 0, 1);
+      if (fhp < 0.999) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(f.x - 17, f.y + 18, 34, 4);
+        ctx.fillStyle = fhp > 0.5 ? "#8bffdc" : fhp > 0.25 ? "#ffd666" : "#ff6b6b";
+        ctx.fillRect(f.x - 17, f.y + 18, 34 * fhp, 4);
+      }
     }
   }
 
@@ -625,6 +659,23 @@
       ctx.arc(0, 0, 4.4, 0, TAU);
       ctx.fill();
       ctx.restore();
+
+      // 受击闪白 + 耐久条
+      if (tu.flash > 0) {
+        ctx.globalAlpha = Math.min(0.8, tu.flash) * 0.8;
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(tu.x, tu.y, 15, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      const thp = clamp((tu.hp != null ? tu.hp : 1) / (tu.maxHp || 1), 0, 1);
+      if (thp < 0.999) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(tu.x - 17, tu.y + 20, 34, 4);
+        ctx.fillStyle = thp > 0.5 ? "#8bffdc" : thp > 0.25 ? "#ffd666" : "#ff6b6b";
+        ctx.fillRect(tu.x - 17, tu.y + 20, 34 * thp, 4);
+      }
 
       // 待机指示
       ctx.globalAlpha = 0.35;
