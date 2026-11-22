@@ -23,6 +23,7 @@ const hook = `
     get shake() { return shake; }, set shake(v) { shake = v; },
     get combo() { return combo; }, set combo(v) { combo = v; },
     spawnEnemy, damagePlayer, updateEnemies, coopAddRemote, coopEnemyPacket,
+    startIceWatchdog, get coopNet() { return coopNet; },
     startGame,
   };
 `;

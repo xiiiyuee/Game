@@ -73,6 +73,19 @@ const r = await page.evaluate(() => {
   return out;
 });
 
+const wd = await page.evaluate(async () => {
+  const S = window.__SS__;
+  S.state = "playing";
+  S.coopNet.peer = {};
+  S.coopNet.host = false;
+  S.startIceWatchdog({ open: false, peerConnection: { iceConnectionState: "failed" } });
+  await new Promise((r) => setTimeout(r, 700));
+  return {
+    title: (document.getElementById("coop-err-title") || {}).textContent || "",
+    visible: !document.getElementById("ov-coop").classList.contains("hidden"),
+  };
+});
+
 ok("远程队友对象创建成功", r.remoteCreated === true);
 ok("队友受伤不触发本地红屏", r.remoteNoFlash === true);
 ok("队友受伤不触发本地震屏", r.remoteNoShake === true);
@@ -85,6 +98,7 @@ ok("轻包不含掉落物字段", r.lightNoDrops === true);
 ok("轻包保留敌人列表", r.lightKeepsEnemies === true);
 ok("全量包包含掉落物字段", r.fullHasDrops === true);
 ok("轻包保留游商状态", r.lightKeepsTrader === true);
+ok("ICE 失败时弹出打洞失败提示", wd.visible === true && wd.title.indexOf("打洞") >= 0, wd);
 ok("无页面报错", errors.length === 0, errors);
 
 await browser.close();

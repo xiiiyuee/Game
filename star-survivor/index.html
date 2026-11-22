@@ -4972,6 +4972,7 @@
   function coopReset(keepStatus) {
     const oldPeer = coopNet.peer;
     coopNet.peer = null;
+    if (coopIceTimer) { clearInterval(coopIceTimer); coopIceTimer = null; }
     if (oldPeer) {
       try { oldPeer.destroy(); } catch (err) {}
     }
@@ -5337,6 +5338,7 @@
     }
     coopNet[kind] = conn;
     conn.on("open", () => {
+      if (kind === "ctrl" && coopIceTimer) { clearInterval(coopIceTimer); coopIceTimer = null; }
       coopNet.lastSeen = Date.now();
       refreshChannelStatus();
       if (kind === "ctrl" && !coopNet.host) coopSayHello();
@@ -5356,6 +5358,7 @@
   }
 
   let coopPosTimer = null;
+  let coopIceTimer = null;   // 加入方：P2P 打洞看门狗
   let coopInterp = {};       // 加入方：玩家 id -> 位置样本缓冲
 
   /* ===== 快照协议 v1（P3-02）：15Hz，只含玩家，坐标量化到 0.1 ===== */
@@ -6340,6 +6343,36 @@
     }).catch(onLoadError);
   }
 
+  function startIceWatchdog(conn) {
+    if (coopIceTimer) clearInterval(coopIceTimer);
+    const t0 = Date.now();
+    coopIceTimer = setInterval(() => {
+      if (!coopNet.peer || coopNet.host || !conn) {
+        clearInterval(coopIceTimer);
+        coopIceTimer = null;
+        return;
+      }
+      if (conn.open) {
+        clearInterval(coopIceTimer);
+        coopIceTimer = null;
+        return;
+      }
+      const pc = conn.peerConnection;
+      const ice = pc ? pc.iceConnectionState : "";
+      if (ice === "failed") {
+        clearInterval(coopIceTimer);
+        coopIceTimer = null;
+        coopFatal("P2P 打洞失败", "手机流量 / 公司网络常被运营商 NAT 拦截，电脑和手机无法直连。请优先让两台设备连同一 Wi-Fi；或配置 TURN 中继后重试。");
+      } else if (Date.now() - t0 > 9000) {
+        clearInterval(coopIceTimer);
+        coopIceTimer = null;
+        coopFatal("连接超时", ice === "checking"
+          ? "网络打洞未成功：手机流量网络常被 NAT 拦截，建议两台设备连同一 Wi-Fi，或配置 TURN 中继。"
+          : "无法建立直连：请检查网络后重试，或让两台设备连同一 Wi-Fi。");
+      }
+    }, 500);
+  }
+
   function connectGuest() {
     if (!roomCode) return;
     coopReset(true);
@@ -6360,7 +6393,9 @@
       peer.on("open", () => {
         if (coopDiscTimer) { clearTimeout(coopDiscTimer); coopDiscTimer = null; }
         const target = PEER_ID_PREFIX + roomCode;
-        wireChannel("ctrl", peer.connect(target, { label: "ctrl", reliable: true, serialization: "json" }));
+        const ctrl = peer.connect(target, { label: "ctrl", reliable: true, serialization: "json" });
+        wireChannel("ctrl", ctrl);
+        startIceWatchdog(ctrl);
         wireChannel("state", peer.connect(target, { label: "state", reliable: false, serialization: "json" }));
       });
       peer.on("close", () => {
