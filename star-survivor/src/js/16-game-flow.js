@@ -191,6 +191,11 @@
   let coopHelloSent = false;
   let coopEventSeq = 0;      // 可靠事件序号（P3-12）
 
+  /* ===== 输入校验（P3-13）：房主对客户端输入做边界检查 ===== */
+  const COOP_IN_MAX_FRAMES = 6;    // 单包最多帧数（客户端正常 3）
+  const COOP_IN_RATE = 90;         // 每客户端每秒最多输入包数（正常 30）
+  let coopInBad = 0;               // 被拒绝的非法包计数（调试面板可见）
+
   /* ===== 心跳（P2-05）：1 秒一次，5 秒无响应判定掉线 ===== */
   const COOP_HEARTBEAT_MS = 1000;
   const COOP_TIMEOUT_MS = 5000;
@@ -480,7 +485,7 @@
     } else if (data.t === "bye") {
       if (!coopNet.host) coopFatal("房主已离开房间", data.reason || "房主已结束联机，请返回菜单或重新加入");
     } else if (data.t === "i") {
-      coopApplyInput(data);
+      if (coopNet.host) coopApplyInput(data, conn);
     } else if (data.t === "snap") {
       coopApplySnapshot(data);
     } else if (data.t === "en") {
@@ -1184,41 +1189,79 @@
     });
   }
 
-  function coopApplyInput(d) {
-    if (!coopNet.host || !d || !d.fr || !d.fr.length) return;
-    const pid = d.id;
-    if (!pid) return;
-    if (d.vw && d.vh) {
-      for (const gpid in coopGuests) {
-        if (coopGuests[gpid].id === pid) {
-          coopGuests[gpid].vw = d.vw;
-          coopGuests[gpid].vh = d.vh;
-          break;
-        }
-      }
+  // 输入包校验（P3-13）：房主不信客户端，逐字段限幅
+  function coopInNum(v, min, max, fallback) {
+    return (typeof v === "number" && isFinite(v)) ? clamp(v, min, max) : fallback;
+  }
+
+  function coopInReject() {
+    coopInBad += 1;
+  }
+
+  function coopApplyInput(d, conn) {
+    if (!coopNet.host || !d || typeof d !== "object") return;
+    if (!Array.isArray(d.fr) || !d.fr.length || d.fr.length > COOP_IN_MAX_FRAMES) {
+      coopInReject();
+      return;
     }
+    if (typeof d.id !== "string" || !d.id) { coopInReject(); return; }
+
+    // 身份校验 + 限流：只接受该连接自称的玩家
+    let g = null;
+    if (conn && conn.peer) {
+      g = coopGuests[conn.peer];
+      if (!g || g.id !== d.id) { coopInReject(); return; }
+      const sec = Math.floor(Date.now() / 1000);
+      if (g.inSec !== sec) { g.inSec = sec; g.inCount = 0; }
+      g.inCount = (g.inCount || 0) + 1;
+      if (g.inCount > COOP_IN_RATE) { coopInReject(); return; }
+    } else {
+      for (const k in coopGuests) if (coopGuests[k].id === d.id) { g = coopGuests[k]; break; }
+    }
+
+    // 视口尺寸用于兴趣裁剪，限制在合理区间
+    if (g && typeof d.vw === "number" && typeof d.vh === "number") {
+      g.vw = Math.round(clamp(d.vw, 320, 4096));
+      g.vh = Math.round(clamp(d.vh, 240, 2160));
+    }
+
     let p = null;
-    for (let i = 0; i < players.length; i++) if (players[i].id === pid) { p = players[i]; break; }
+    for (let i = 0; i < players.length; i++) if (players[i].id === d.id) { p = players[i]; break; }
     if (!p) return;
-    const st = coopInState[pid] || (coopInState[pid] = { seq: 0 });
-    if (typeof d.seq === "number" && d.seq <= st.seq) return;
+
+    const seq = typeof d.seq === "number" && isFinite(d.seq) ? d.seq : 0;
+    if (seq <= 0) { coopInReject(); return; }
+    const st = coopInState[d.id] || (coopInState[d.id] = { seq: 0 });
+    if (seq <= st.seq) return;
+    if (seq > st.seq + 600) {          // 序号一次跳 20 秒以上：视为伪造
+      coopInReject();
+      st.seq = seq;
+      return;
+    }
+
     let dash = false;
     let ult = false;
     for (let i = 0; i < d.fr.length; i++) {
       const f = d.fr[i];
-      if (typeof f.s === "number" && f.s <= st.seq) continue;
-      if (f.d) dash = true;
+      if (!f || typeof f !== "object") { coopInReject(); return; }
+      const fs = typeof f.s === "number" && isFinite(f.s) ? f.s : 0;
+      if (fs && fs <= st.seq) continue;
+      if (f.d) dash = true;           // 冲刺/超载仍受房主冷却与能量裁决
       if (f.u) ult = true;
     }
-    if (typeof d.seq === "number") st.seq = d.seq;
     const last = d.fr[d.fr.length - 1];
+    let mx = coopInNum(last.mx, -1, 1, 0);
+    let my = coopInNum(last.my, -1, 1, 0);
+    const len = Math.hypot(mx, my);
+    if (len > 1) { mx /= len; my /= len; }   // 禁止斜向超速
+    st.seq = seq;
     p.intent = {
-      mx: last.mx || 0,
-      my: last.my || 0,
+      mx,
+      my,
       fire: !!last.f,
       dash,
       ult,
-      aim: last.a || 0,
+      aim: coopInNum(last.a, -Math.PI, Math.PI, 0),
     };
   }
 
