@@ -269,6 +269,12 @@
     if (coopDiscTimer) { clearTimeout(coopDiscTimer); coopDiscTimer = null; }
     coopStopHeartbeat();
     coopStopPosLoop();
+    coopStopInputLoop();
+    coopEdge.dash = false;
+    coopEdge.ult = false;
+    coopInSeq = 0;
+    coopInBuf = [];
+    coopInState = {};
     if (!keepStatus) setCoopStatus("idle", "未连接");
   }
 
@@ -468,6 +474,8 @@
       }
     } else if (data.t === "bye") {
       if (!coopNet.host) coopFatal("房主已离开房间", data.reason || "房主已结束联机，请返回菜单或重新加入");
+    } else if (data.t === "i") {
+      coopApplyInput(data);
     } else if (data.t === "p") {
       coopNoteSnapshot(data);
       coopApplyPlayerState(data);
@@ -613,6 +621,88 @@
     }
   }
 
+  /* ===== 输入包（P3-01）：30Hz，序号 + 最近 3 帧冗余 ===== */
+  let coopInTimer = null;
+  let coopInSeq = 0;
+  let coopInBuf = [];
+  const coopEdge = { dash: false, ult: false };
+  let coopInState = {};       // 房主侧：玩家 id -> 已处理的最大帧序号
+
+  // 冲刺/超载是一次性动作，update 会立刻消费；这里单独留一份给输入包
+  function coopMarkEdge(kind) {
+    if (roomCode && !coopNet.host) coopEdge[kind] = true;
+  }
+
+  function coopInputFrame() {
+    const p = getLocalPlayer();
+    const it = (p && p.intent) || {};
+    const fr = {
+      s: 0,
+      mx: Math.round((it.mx || 0) * 100) / 100,
+      my: Math.round((it.my || 0) * 100) / 100,
+      f: it.fire ? 1 : 0,
+      d: coopEdge.dash ? 1 : 0,
+      u: coopEdge.ult ? 1 : 0,
+      a: Math.round((it.aim || 0) * 100) / 100,
+    };
+    coopEdge.dash = false;
+    coopEdge.ult = false;
+    return fr;
+  }
+
+  function coopSendInput() {
+    if (coopNet.host || state !== "playing" || !player) return;
+    coopInSeq += 1;
+    const fr = coopInputFrame();
+    fr.s = coopInSeq;
+    coopInBuf.push(fr);
+    if (coopInBuf.length > 3) coopInBuf.shift();
+    coopSendState({ t: "i", id: player.id, seq: coopInSeq, fr: coopInBuf.slice() });
+  }
+
+  function coopApplyInput(d) {
+    if (!coopNet.host || !d || !d.fr || !d.fr.length) return;
+    const pid = d.id;
+    if (!pid) return;
+    let p = null;
+    for (let i = 0; i < players.length; i++) if (players[i].id === pid) { p = players[i]; break; }
+    if (!p) return;
+    const st = coopInState[pid] || (coopInState[pid] = { seq: 0 });
+    if (typeof d.seq === "number" && d.seq <= st.seq) return;
+    let dash = false;
+    let ult = false;
+    for (let i = 0; i < d.fr.length; i++) {
+      const f = d.fr[i];
+      if (typeof f.s === "number" && f.s <= st.seq) continue;
+      if (f.d) dash = true;
+      if (f.u) ult = true;
+    }
+    if (typeof d.seq === "number") st.seq = d.seq;
+    const last = d.fr[d.fr.length - 1];
+    p.intent = {
+      mx: last.mx || 0,
+      my: last.my || 0,
+      fire: !!last.f,
+      dash,
+      ult,
+      aim: last.a || 0,
+    };
+  }
+
+  function coopStartInputLoop() {
+    if (coopInTimer) return;
+    coopInSeq = 0;
+    coopInBuf = [];
+    coopInTimer = setInterval(coopSendInput, 33);
+  }
+
+  function coopStopInputLoop() {
+    if (coopInTimer) {
+      clearInterval(coopInTimer);
+      coopInTimer = null;
+    }
+  }
+
   // 房主开局：登记队友残影、广播开始；加入方收到 start 后开局并改用自己的槽位 ID
   function coopOnGameStarted() {
     if (!roomCode) return;
@@ -632,6 +722,7 @@
       player.id = coopSelf.id;
       localPlayerId = coopSelf.id;
     }
+    coopStartInputLoop();
   }
 
   /* ===== 房主后台暂停（P2-07）===== */

@@ -7,8 +7,8 @@
 
     // 统一输入意图：每帧汇总移动 / 开火，并消费一次性动作（冲刺 / 超载）
     pollInputIntent();
-    if (intent.dash) { intent.dash = false; tryDash(); }
-    if (intent.ult) { intent.ult = false; activateUltimate(); }
+    if (intent.dash) { intent.dash = false; tryDash(); coopMarkEdge("dash"); }
+    if (intent.ult) { intent.ult = false; activateUltimate(); coopMarkEdge("ult"); }
 
     // Boss 击杀特写：慢动作 + 延迟进入下一星域
     if (victoryTimer > 0) {
