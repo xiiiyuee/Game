@@ -117,5 +117,14 @@
     text-shadow: 0 0 14px rgba(63, 229, 255, 0.5);
   }
   .coop-row .btn { margin-top: 0; padding: 8px 14px; font-size: 12px; letter-spacing: 1px; }
+  .coop-status {
+    flex-basis: 100%;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+  .coop-status.ok { color: var(--cyan); text-shadow: 0 0 10px rgba(63, 229, 255, 0.35); }
+  .coop-status.err { color: #ff6b8b; }
 
 
