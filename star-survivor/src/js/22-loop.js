@@ -47,10 +47,19 @@
       if (qualityCd > 0) qualityCd -= dt;
       if (perfAcc >= 2 && qualityCd <= 0) {
         const fps = perfFrames / perfAcc;
-        if (fps < 48 && renderScale > 0.6) {
+        // 联机低帧率兜底：自动切到省电特效（仅一次，玩家仍可手动关掉）
+        if (roomCode && !lowFx && !coopAutoLowFx && fps < 42) {
+          coopAutoLowFx = true;
+          lowFx = true;
+          try { localStorage.setItem("sf_lowfx", "1"); } catch (e) {}
+          if (typeof applyFxLabel === "function") applyFxLabel();
+          if (player) addText(player.x, player.y - 62, "已自动开启省电特效", "#9ad8ff", 12);
+        }
+        const minScale = roomCode ? 0.5 : 0.6;
+        if (fps < 48 && renderScale > minScale) {
           // 按实际帧率一次性降到接近合适的倍率，避免多轮才追上
           const factor = clamp(fps / 58, 0.62, 0.92);
-          renderScale = Math.max(0.6, renderScale * factor);
+          renderScale = Math.max(minScale, renderScale * factor);
           qualityCd = 3;
           resize();
           snapCamera();

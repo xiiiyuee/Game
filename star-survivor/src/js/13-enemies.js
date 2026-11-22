@@ -454,7 +454,15 @@
       // 受击闪白 / 重击限频对所有敌人推进（客户端同步怪也要衰减）
       if (e.hitFlash > 0) e.hitFlash = Math.max(0, e.hitFlash - dt * 12);
       if (e.fxCd > 0) e.fxCd = Math.max(0, e.fxCd - dt);
-      if (e.synced) continue;
+      if (e.synced) {
+        // 联机客户端：按快照目标位置平滑插值，掩盖 15Hz 网络步进
+        if (e.tx !== undefined) {
+          const k = Math.min(1, dt * 16);
+          e.x += (e.tx - e.x) * k;
+          e.y += (e.ty - e.y) * k;
+        }
+        continue;
+      }
 
       if (e.isBoss) {
         updateBoss(e, dt, t);

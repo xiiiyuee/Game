@@ -1158,9 +1158,9 @@
     return !!roomCode && !coopNet.host;
   }
 
-  /* ===== 兴趣裁剪（P3-11）：只下发该客户端视野 + 200px ===== */
-  const COOP_CULL_PAD = 200;
-  const COOP_CULL_MIN = 760;        // 小窗 / 竖屏保底半径
+  /* ===== 兴趣裁剪（P3-11）：只下发该客户端视野 + 120px ===== */
+  const COOP_CULL_PAD = 120;
+  const COOP_CULL_MIN = 700;        // 小窗 / 竖屏保底半径
 
   function coopCullRadius(g) {
     const w = (g && g.vw) || view.w;
@@ -1443,24 +1443,32 @@
     chipDrops = next;
   }
 
-  function coopEnemyPacket(cx, cy, rad) {
-    return {
+  function coopEnemyPacket(cx, cy, rad, full) {
+    const pkt = {
       t: "en", s: coopSnapSeq,
       list: coopEnemyList(cx, cy, rad),
       eb: coopBulletList(cx, cy, rad),
       pb: coopPlayerBulletList(cx, cy, rad),
       bs: coopBossState(),                 // Boss 全量：不受裁剪
-      as: coopAsteroidList(cx, cy, rad),
-      tr: coopTraderState(),               // 游商 / 芯片为关键事件：全量
-      gm: coopGemList(cx, cy, rad),
-      cd: coopCoreList(cx, cy, rad),
-      ch: coopChipList(),
+      tr: coopTraderState(),               // 游商为关键事件：每帧同步
     };
+    // 掉落物/环境物变化慢，降到约 5Hz，减少序列化与带宽
+    if (full) {
+      pkt.as = coopAsteroidList(cx, cy, rad);
+      pkt.gm = coopGemList(cx, cy, rad);
+      pkt.cd = coopCoreList(cx, cy, rad);
+      pkt.ch = coopChipList();
+    }
+    return pkt;
   }
+
+  let coopHeavyTick = 0;
 
   function coopSendEnemies() {
     if (!coopNet.host || state !== "playing") return;
-    // 按客户端兴趣裁剪：以该队友的玩家位置为中心，视野半径 + 200px
+    // 按客户端兴趣裁剪：以该队友的玩家位置为中心，视野半径 + 120px
+    coopHeavyTick = (coopHeavyTick + 1) % 3;
+    const full = coopHeavyTick === 0;
     for (const pid in coopGuests) {
       const g = coopGuests[pid];
       if (!g.state || !g.state.open) continue;
@@ -1472,7 +1480,7 @@
       }
       const cx = p ? p.x : (player ? player.x : world.w / 2);
       const cy = p ? p.y : (player ? player.y : world.h / 2);
-      const pkt = coopEnemyPacket(cx, cy, coopCullRadius(g));
+      const pkt = coopEnemyPacket(cx, cy, coopCullRadius(g), full);
       g.state.send(pkt);
       coopCountSent(pkt);
     }
@@ -1502,10 +1510,13 @@
       for (let j = 0; j < enemies.length; j++) {
         if (enemies[j].synced && enemies[j].id === id) { e = enemies[j]; break; }
       }
-      if (!e) e = coopSyncedEnemy(id, s[1], s[2] / 10, s[3] / 10, s[4], s[5], s[6]);
+      const nx = s[2] / 10, ny = s[3] / 10;
+      if (!e) e = coopSyncedEnemy(id, s[1], nx, ny, s[4], s[5], s[6]);
       if (!e) continue;
-      e.x = s[2] / 10;
-      e.y = s[3] / 10;
+      // 目标位置用于插值；偏差过大（传送/重生）才直接吸附
+      if (dist2(nx, ny, e.x, e.y) > 220 * 220) { e.x = nx; e.y = ny; }
+      e.tx = nx;
+      e.ty = ny;
       e.hp = s[4];
       e.maxHp = s[5];
       if (s[6]) e.r = s[6];

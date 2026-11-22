@@ -20,6 +20,7 @@
   let perfFrames = 0;           // 窗口内帧数
   let perfGoodTime = 0;         // 持续流畅时长
   let qualityCd = 0;            // 调档冷却
+  let coopAutoLowFx = false;    // 联机低帧率时已自动开启省电特效
   let idleRenderAcc = 0;        // 非游戏状态下的低帧率绘制累计
 
   function targetDpr() {

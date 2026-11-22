@@ -211,15 +211,17 @@
     p.invuln = CFG.PLAYER.INVULN_ON_HURT;
     p.shieldDelay = CFG.PLAYER.SHIELD_DELAY;
     p.hitFlash = 1;
-    hurtFlash = 1;
-    shake = Math.max(shake, 12 * CFG.FX.SHAKE);
     emit(p.x, p.y, 14, "#ff4d6d", 220, 3, 0.5);
-    sfxHurt();
-    hitStop = Math.max(hitStop, 0.025);
-    if (document.body.classList.contains("touch") && navigator.vibrate) navigator.vibrate(28);
-    // 受击断连杀
-    combo = 0;
-    comboTimer = 0;
+    // 受击反馈只作用于本地玩家，队友受伤不再让全场红屏/震屏/断连杀
+    if (p === player) {
+      hurtFlash = 1;
+      shake = Math.max(shake, 12 * CFG.FX.SHAKE);
+      sfxHurt();
+      hitStop = Math.max(hitStop, 0.025);
+      if (document.body.classList.contains("touch") && navigator.vibrate) navigator.vibrate(28);
+      combo = 0;
+      comboTimer = 0;
+    }
     if (roomCode) {                        // P4-02：受击立即关闭个人商店/游商
       if (p.shopOpen) coopCloseShop(p);
       if (p.tradeOffer) coopCloseTrade(p);
@@ -244,7 +246,7 @@
     }
     if (remain > 0) p.hp -= remain;
     p.shieldDelay = CFG.PLAYER.SHIELD_DELAY;
-    hurtFlash = Math.max(hurtFlash, 0.1);
+    if (p === player) hurtFlash = Math.max(hurtFlash, 0.1);
     if (p.hp <= 0) {
       p.hp = 0;
       downPlayer(p);
