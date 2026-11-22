@@ -2643,7 +2643,10 @@
 
   function spawnGem(x, y, value) {
     if (gems.length >= CFG.LIMITS.GEMS) {
-      gems[gems.length - 1].value += value;
+      // 经验球满时把溢出经验均摊到现有球：避免所有经验堆进最后一颗，
+      // 捡起来一次连升十几级、被迫连选十几次战备
+      const share = value / gems.length;
+      for (let i = 0; i < gems.length; i++) gems[i].value += share;
       return;
     }
     const a = Math.random() * TAU;
