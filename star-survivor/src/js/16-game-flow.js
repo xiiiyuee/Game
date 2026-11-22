@@ -271,6 +271,7 @@
     coopStopHeartbeat();
     coopStopPosLoop();
     coopStopInputLoop();
+    coopResetSimClock();
     coopEdge.dash = false;
     coopEdge.ult = false;
     coopInSeq = 0;
