@@ -256,13 +256,26 @@
     pendingLevels = p.pendingLevels;
   }
 
-  function rollRarity() {
+  // 稀有度权重随等级成长：前期压低史诗/传说，后期逐步放大
+  function rarityWeights(owner) {
+    const lv = Math.max(1, (owner && owner.level) || 1);
+    const t = Math.min(1, (lv - 1) / 18);      // 1 级 → 19 级线性过渡
+    return RARITIES.map((r) => {
+      let mul = 1;
+      if (r.key === "epic") mul = 0.35 + 1.05 * t;
+      else if (r.key === "legend") mul = 0.12 + 1.88 * t;
+      return { r, w: r.weight * mul };
+    });
+  }
+
+  function rollRarity(owner) {
+    const list = rarityWeights(owner);
     let total = 0;
-    for (const r of RARITIES) total += r.weight;
+    for (const it of list) total += it.w;
     let roll = Math.random() * total;
-    for (const r of RARITIES) {
-      roll -= r.weight;
-      if (roll <= 0) return r;
+    for (const it of list) {
+      roll -= it.w;
+      if (roll <= 0) return it.r;
     }
     return RARITIES[0];
   }
@@ -309,7 +322,7 @@
     let guard = 0;
     // 3) 普通强化：按稀有度抽取不重复项
     while (cards.length < 3 && guard++ < 80) {
-      const rarity = rollRarity();
+      const rarity = rollRarity(lp);
       const rIdx = RARITIES.indexOf(rarity);
       const pool = UPGRADES.filter((d) => {
         if (d.curse) return false;
