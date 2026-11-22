@@ -206,6 +206,25 @@
   let coopSeq = {};       // 发送方 id -> 最近快照序号
   let coopPosSeq = 0;     // 本地快照序号
 
+  /* ===== 带宽 / 房主 CPU 观测（P3-14）===== */
+  let coopNetBytes = {
+    sent: 0, recv: 0,          // 本秒累计（字节）
+    sentRate: 0, recvRate: 0,  // 上一秒速率（字节/秒）
+    tickSum: 0, tickN: 0,      // 模拟步耗时累计
+    tickMs: 0,                 // 单步平均耗时
+  };
+  const coopByteCache = new WeakMap();   // 同一包发给多人时只序列化一次
+  function coopMsgBytes(msg) {
+    let n = coopByteCache.get(msg);
+    if (n === undefined) {
+      try { n = JSON.stringify(msg).length; } catch (err) { n = 0; }
+      coopByteCache.set(msg, n);
+    }
+    return n;
+  }
+  function coopCountSent(msg) { coopNetBytes.sent += coopMsgBytes(msg); }
+  function coopCountRecv(msg) { coopNetBytes.recv += coopMsgBytes(msg); }
+
   /* ===== 连接失败兜底（P2-09）===== */
   let coopFatalActive = false;
   let coopFatalPaused = false;
@@ -269,6 +288,13 @@
     coopNet.ping = 0;
     coopNet.lastSeen = 0;
     coopStats = { recv: 0, rate: 0, got: 0, lost: 0, lossPct: 0 };
+    coopNetBytes.sent = 0;
+    coopNetBytes.recv = 0;
+    coopNetBytes.sentRate = 0;
+    coopNetBytes.recvRate = 0;
+    coopNetBytes.tickSum = 0;
+    coopNetBytes.tickN = 0;
+    coopNetBytes.tickMs = 0;
     coopSeq = {};
     coopPosSeq = 0;
     coopSnapSeq = 0;
@@ -366,7 +392,7 @@
     for (const pid in coopGuests) {
       if (pid === exceptPid) continue;
       const c = coopGuests[pid].ctrl;
-      if (c && c.open) c.send(msg);
+      if (c && c.open) { c.send(msg); coopCountSent(msg); }
     }
   }
 
@@ -421,6 +447,7 @@
   // 握手：加入方发 hello，房主回 welcome（版本 / 槽位 / 种子 / 队伍）
   function coopOnData(conn, data) {
     if (!data || typeof data !== "object") return;
+    coopCountRecv(data);
     const now = Date.now();
     if (coopNet.host) {
       const g = conn && conn.peer ? coopGuests[conn.peer] : null;
@@ -515,8 +542,17 @@
     coopStats.lossPct = total ? Math.round((coopStats.lost * 100) / total) : 0;
     coopStats.got = 0;
     coopStats.lost = 0;
+    coopNetBytes.sentRate = coopNetBytes.sent;
+    coopNetBytes.recvRate = coopNetBytes.recv;
+    coopNetBytes.sent = 0;
+    coopNetBytes.recv = 0;
+    coopNetBytes.tickMs = coopNetBytes.tickN ? coopNetBytes.tickSum / coopNetBytes.tickN : 0;
+    coopNetBytes.tickSum = 0;
+    coopNetBytes.tickN = 0;
     refreshCoopDebug();
   }
+
+  function coopKb(v) { return (v / 1024).toFixed(1); }
 
   function refreshCoopDebug() {
     const el = document.getElementById("coop-debug");
@@ -538,6 +574,23 @@
     if (ping) ping.textContent = "PING " + (coopNet.ping ? Math.round(coopNet.ping) + "ms" : "-");
     if (rate) rate.textContent = "快照 " + coopStats.rate + "/s";
     if (loss) loss.textContent = "丢包 " + coopStats.lossPct + "%";
+    const net = document.getElementById("dbg-net");
+    const tick = document.getElementById("dbg-tick");
+    if (net) {
+      if (coopNet.host) {
+        const n = Math.max(1, Object.keys(coopGuests).length);
+        net.textContent = `带宽 ↑${coopKb(coopNetBytes.sentRate)} KB/s · 单人 ${coopKb(coopNetBytes.sentRate / n)} KB/s`;
+        net.classList.toggle("over", coopNetBytes.sentRate / n > 100 * 1024);
+      } else {
+        net.textContent = `带宽 ↓${coopKb(coopNetBytes.recvRate)} KB/s`;
+        net.classList.toggle("over", coopNetBytes.recvRate > 100 * 1024);
+      }
+    }
+    if (tick) {
+      tick.textContent = coopNet.host
+        ? `CPU ${coopNetBytes.tickMs.toFixed(2)}ms/步`
+        : "CPU -";
+    }
   }
 
   function coopSayHello() {
@@ -1036,7 +1089,9 @@
       }
       const cx = p ? p.x : (player ? player.x : world.w / 2);
       const cy = p ? p.y : (player ? player.y : world.h / 2);
-      g.state.send(coopEnemyPacket(cx, cy, coopCullRadius(g)));
+      const pkt = coopEnemyPacket(cx, cy, coopCullRadius(g));
+      g.state.send(pkt);
+      coopCountSent(pkt);
     }
   }
 
@@ -1465,18 +1520,18 @@
   }
 
   function coopSendCtrl(msg) {
-    if (coopNet.ctrl && coopNet.ctrl.open) coopNet.ctrl.send(msg);
+    if (coopNet.ctrl && coopNet.ctrl.open) { coopNet.ctrl.send(msg); coopCountSent(msg); }
   }
 
   function coopSendState(msg) {
     if (coopNet.host) {
       for (const pid in coopGuests) {
         const c = coopGuests[pid].state;
-        if (c && c.open) c.send(msg);
+        if (c && c.open) { c.send(msg); coopCountSent(msg); }
       }
       return;
     }
-    if (coopNet.state && coopNet.state.open) coopNet.state.send(msg);
+    if (coopNet.state && coopNet.state.open) { coopNet.state.send(msg); coopCountSent(msg); }
   }
 
   /* ===== 可靠事件通道（P3-12）：关键事件走 ctrl，不随状态包丢失 ===== */
@@ -1488,7 +1543,7 @@
       for (const pid in coopGuests) {
         if (pid === exceptPid) continue;
         const c = coopGuests[pid].ctrl;
-        if (c && c.open) c.send(msg);
+        if (c && c.open) { c.send(msg); coopCountSent(msg); }
       }
       return;
     }

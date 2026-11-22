@@ -147,5 +147,6 @@
     pointer-events: none;
     opacity: 0.82;
   }
+  .coop-debug .over { color: #ff6b8b; text-shadow: 0 0 8px rgba(255, 107, 139, 0.45); }
 
 

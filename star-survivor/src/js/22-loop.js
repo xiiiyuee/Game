@@ -14,12 +14,17 @@
     if (!roomCode || !coopNet.host || state !== "playing") return 0;
     coopSimAcc += dt;
     let steps = 0;
+    const t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : 0;
     while (coopSimAcc >= COOP_SIM_STEP && steps < 3 && state === "playing") {
       update(COOP_SIM_STEP);
       coopSimAcc -= COOP_SIM_STEP;
       steps++;
     }
     if (coopSimAcc > COOP_SIM_STEP * 3) coopSimAcc = 0;
+    if (steps && t0) {
+      coopNetBytes.tickSum += performance.now() - t0;
+      coopNetBytes.tickN += steps;
+    }
     return steps;
   }
 
