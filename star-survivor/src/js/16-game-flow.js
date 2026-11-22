@@ -727,9 +727,37 @@
     return arr;
   }
 
+  function coopBulletList() {
+    const arr = [];
+    for (let i = 0; i < ebullets.length && arr.length < 160; i++) {
+      const b = ebullets[i];
+      if (b.dead) continue;
+      arr.push([
+        Math.round(b.x * 10), Math.round(b.y * 10), Math.round(b.r),
+        Math.round(b.dmg * 10) / 10, b.color, b.heavy ? 1 : 0,
+      ]);
+    }
+    return arr;
+  }
+
+  function coopApplyEnemyBullets(list) {
+    if (coopNet.host || !list) return;
+    const next = [];
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      if (!s || s.length < 6) continue;
+      next.push({
+        x: s[0] / 10, y: s[1] / 10, vx: 0, vy: 0,
+        r: s[2], dmg: s[3], color: s[4], heavy: !!s[5],
+        life: 5, dead: false, synced: true,
+      });
+    }
+    ebullets = next;
+  }
+
   function coopSendEnemies() {
     if (!coopNet.host || state !== "playing") return;
-    coopSendState({ t: "en", s: coopSnapSeq, list: coopEnemyList() });
+    coopSendState({ t: "en", s: coopSnapSeq, list: coopEnemyList(), eb: coopBulletList() });
   }
 
   function coopSyncedEnemy(id, type, x, y, hp, maxHp, r) {
@@ -767,6 +795,7 @@
     }
     // 清掉非同步敌人（本地误生成的）以及房主已移除的敌人
     enemies = enemies.filter((e) => e.synced && seen[e.id]);
+    coopApplyEnemyBullets(d.eb);
   }
 
   function coopPosTick() {

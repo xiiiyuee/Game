@@ -170,6 +170,7 @@
     // 敌方子弹（超载期间减速）
     for (let i = ebullets.length - 1; i >= 0; i--) {
       const b = ebullets[i];
+      if (b.synced) continue;                 // 联机客户端：敌弹由房主同步
       b.x += b.vx * dt * slow;
       b.y += b.vy * dt * slow;
       b.life -= dt * slow;
