@@ -27,6 +27,7 @@
   let revives = 0;                 // 应急保险次数
   let turrets = [];
   let fields = [];
+  let walls = [];
   let coreDrops = [];
   let buildMode = null;            // "turret" / "field" / null
   let lastShopWave = 0;

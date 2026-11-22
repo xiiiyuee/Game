@@ -90,7 +90,7 @@
       <div><span>等级</span><b>LV ${myLevel}</b></div>
       <div><span>最高连杀</span><b>${comboBest}</b></div>
       <div><span>星币</span><b>${credits}</b></div>
-      <div><span>防线</span><b>${turrets.length + fields.length}</b></div>
+      <div><span>防线</span><b>${turrets.length + fields.length + walls.length}</b></div>
       <div><span>获得残骸</span><b style="color:var(--gold)">+${shardGain}</b></div>
     `;
 
@@ -906,7 +906,7 @@
     return arr;
   }
 
-  // 防线快照：id, kind(0炮塔/1缓速场), x, y, hp, maxHp, 角度
+  // 防线快照：id, kind(0炮塔/1缓速场/2城墙), x, y, hp, maxHp, 角度
   function coopDefenseList() {
     const arr = [];
     for (let i = 0; i < turrets.length; i++) {
@@ -916,6 +916,10 @@
     for (let i = 0; i < fields.length; i++) {
       const d = fields[i];
       arr.push([d.id, 1, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), 0]);
+    }
+    for (let i = 0; i < walls.length; i++) {
+      const d = walls[i];
+      arr.push([d.id, 2, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100)]);
     }
     return arr;
   }
@@ -928,16 +932,23 @@
       if (!row || row.length < 6 || !row[0]) continue;
       const id = row[0];
       const kind = row[1];
-      const arr = kind === 0 ? turrets : fields;
+      const arr = kind === 0 ? turrets : kind === 1 ? fields : walls;
       let d = null;
       for (let j = 0; j < arr.length; j++) if (arr[j].id === id) { d = arr[j]; break; }
       if (!d) {
-        d = kind === 0
-          ? { id, kind: "turret", synced: true, x: 0, y: 0, cd: 0, ang: -Math.PI / 2,
-              seed: Math.random() * TAU, hp: 1, maxHp: 1, hitR: 18, flash: 0 }
-          : { id, kind: "field", synced: true, x: 0, y: 0,
-              r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU,
-              hp: 1, maxHp: 1, hitR: 20, flash: 0 };
+        if (kind === 0) {
+          d = { id, kind: "turret", synced: true, x: 0, y: 0, cd: 0, ang: -Math.PI / 2,
+            seed: Math.random() * TAU, hp: 1, maxHp: 1, hitR: 18, flash: 0 };
+        } else if (kind === 1) {
+          d = { id, kind: "field", synced: true, x: 0, y: 0,
+            r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU,
+            hp: 1, maxHp: 1, hitR: 20, flash: 0 };
+        } else {
+          d = { id, kind: "wall", synced: true, x: 0, y: 0, ang: 0,
+            len: CFG.RUN.WALL_LEN * view.scale, thick: CFG.RUN.WALL_THICK * view.scale,
+            seed: Math.random() * TAU, hp: 1, maxHp: 1, flash: 0,
+            hitR: CFG.RUN.WALL_THICK * view.scale * 0.5 + 6 };
+        }
         arr.push(d);
       }
       const hp = row[4], maxHp = row[5] || 1;
@@ -946,7 +957,7 @@
       d.y = row[3];
       d.hp = hp;
       d.maxHp = maxHp;
-      if (kind === 0) d.ang = (row[6] || 0) / 100;
+      if (kind === 0 || kind === 2) d.ang = (row[6] || 0) / 100;
       seen[id] = 1;
     }
     // 房主已摧毁的防线，在客户端移除并播放摧毁反馈
@@ -962,6 +973,13 @@
         emit(fields[i].x, fields[i].y, 16, "#8ff6ff", 220, 3, 0.55);
         addText(fields[i].x, fields[i].y - 26, "防线被摧毁", "#ff6b6b", 13);
         fields.splice(i, 1);
+      }
+    }
+    for (let i = walls.length - 1; i >= 0; i--) {
+      if (walls[i].synced && !seen[walls[i].id]) {
+        emit(walls[i].x, walls[i].y, 16, "#d8e6ff", 220, 3, 0.55);
+        addText(walls[i].x, walls[i].y - 26, "城墙被摧毁", "#ff6b6b", 13);
+        walls.splice(i, 1);
       }
     }
   }
@@ -2340,7 +2358,7 @@
       if (p.tradeOffer && q.sid === p.tradeOffer.sid) coopCloseTrade(p);
     } else if (d.k === "build") {
       // 队友建造请求：房主校验后生成防线，再回报结果
-      if (q.type !== "turret" && q.type !== "field") { coopInReject(); return; }
+      if (q.type !== "turret" && q.type !== "field" && q.type !== "wall") { coopInReject(); return; }
       if (p.down || p.eliminated) { coopInReject(); return; }
       const bx = Number(q.x), by = Number(q.y);
       if (!isFinite(bx) || !isFinite(by)) { coopInReject(); return; }
@@ -2420,7 +2438,9 @@
     } else if (d.k === "build-ok") {
       const bx = Number(p.x) || 0, by = Number(p.y) || 0;
       emit(bx, by, 16, "#ffd666", 200, 3, 0.6);
-      addText(bx, by - 26, p.type === "field" ? "缓速场已展开" : "炮塔已部署", "#ffd666", 14);
+      addText(bx, by - 26,
+        p.type === "field" ? "缓速场已展开" : p.type === "wall" ? "城墙已架设" : "炮塔已部署",
+        "#ffd666", 14);
       sfxLevelUp();
     } else if (d.k === "build-no") {
       const lp = getLocalPlayer() || player;

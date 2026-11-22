@@ -23,8 +23,12 @@
       CREDIT_BOSS: 120,           // Boss 击杀星币
       MAX_TURRETS: 3,
       MAX_FIELDS: 2,
+      MAX_WALLS: 6,
       TURRET_COST: 2,             // 建造炮塔消耗核心
       FIELD_COST: 3,              // 建造缓速场消耗核心
+      WALL_COST: 1,               // 建造城墙消耗核心
+      WALL_LEN: 120,              // 城墙长度
+      WALL_THICK: 16,             // 城墙厚度
       TURRET_RANGE: 360,
       TURRET_CD: 0.7,
       TURRET_DMG: 9,
@@ -32,6 +36,7 @@
       FIELD_SLOW: 0.5,            // 缓速场内敌人移速倍率
       DEF_TURRET_HP: 90,          // 炮塔耐久
       DEF_FIELD_HP: 70,           // 缓速场耐久
+      DEF_WALL_HP: 120,           // 城墙耐久
       DEF_HP_GROWTH: 0.35,        // 每章耐久成长
       DEF_AGGRO: 300,             // 敌人转火防线的距离
       DEF_ATTACK_CD: 0.8,         // 敌人拆塔间隔

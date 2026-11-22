@@ -168,6 +168,7 @@
     pulses = [];
     turrets = [];
     fields = [];
+    walls = [];
     coreDrops = [];
     boss = null;
 

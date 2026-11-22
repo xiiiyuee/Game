@@ -1202,8 +1202,12 @@
       CREDIT_BOSS: 120,           // Boss 击杀星币
       MAX_TURRETS: 3,
       MAX_FIELDS: 2,
+      MAX_WALLS: 6,
       TURRET_COST: 2,             // 建造炮塔消耗核心
       FIELD_COST: 3,              // 建造缓速场消耗核心
+      WALL_COST: 1,               // 建造城墙消耗核心
+      WALL_LEN: 120,              // 城墙长度
+      WALL_THICK: 16,             // 城墙厚度
       TURRET_RANGE: 360,
       TURRET_CD: 0.7,
       TURRET_DMG: 9,
@@ -1211,6 +1215,7 @@
       FIELD_SLOW: 0.5,            // 缓速场内敌人移速倍率
       DEF_TURRET_HP: 90,          // 炮塔耐久
       DEF_FIELD_HP: 70,           // 缓速场耐久
+      DEF_WALL_HP: 120,           // 城墙耐久
       DEF_HP_GROWTH: 0.35,        // 每章耐久成长
       DEF_AGGRO: 300,             // 敌人转火防线的距离
       DEF_ATTACK_CD: 0.8,         // 敌人拆塔间隔
@@ -1919,6 +1924,7 @@
   let revives = 0;                 // 应急保险次数
   let turrets = [];
   let fields = [];
+  let walls = [];
   let coreDrops = [];
   let buildMode = null;            // "turret" / "field" / null
   let lastShopWave = 0;
@@ -2233,6 +2239,7 @@
     pulses = [];
     turrets = [];
     fields = [];
+    walls = [];
     coreDrops = [];
     boss = null;
 
@@ -3640,6 +3647,22 @@
         }
       }
 
+      // 城墙阻挡：碰撞后被推开，并就近攻击墙体
+      for (let wi = 0; wi < walls.length; wi++) {
+        const w = walls[wi];
+        if (w.dead) continue;
+        const hit = wallHit(w, e.x, e.y, e.r);
+        if (!hit) continue;
+        e.x += hit.nx * hit.depth;
+        e.y += hit.ny * hit.depth;
+        e.defCd = Math.max(0, (e.defCd || 0) - sdt);
+        if (e.defCd <= 0) {
+          e.defCd = CFG.RUN.DEF_ATTACK_CD * rand(0.85, 1.2);
+          hurtDefense(w, e.dmg, e);
+        }
+        break;
+      }
+
       // ===== 小怪远程弹幕（稀疏；三角怪只近战不射击）=====
       const gun = CFG.ENEMY_GUN[e.type];
       if (gun && gun.count > 0) {
@@ -4487,7 +4510,7 @@
       <div><span>等级</span><b>LV ${myLevel}</b></div>
       <div><span>最高连杀</span><b>${comboBest}</b></div>
       <div><span>星币</span><b>${credits}</b></div>
-      <div><span>防线</span><b>${turrets.length + fields.length}</b></div>
+      <div><span>防线</span><b>${turrets.length + fields.length + walls.length}</b></div>
       <div><span>获得残骸</span><b style="color:var(--gold)">+${shardGain}</b></div>
     `;
 
@@ -5303,7 +5326,7 @@
     return arr;
   }
 
-  // 防线快照：id, kind(0炮塔/1缓速场), x, y, hp, maxHp, 角度
+  // 防线快照：id, kind(0炮塔/1缓速场/2城墙), x, y, hp, maxHp, 角度
   function coopDefenseList() {
     const arr = [];
     for (let i = 0; i < turrets.length; i++) {
@@ -5313,6 +5336,10 @@
     for (let i = 0; i < fields.length; i++) {
       const d = fields[i];
       arr.push([d.id, 1, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), 0]);
+    }
+    for (let i = 0; i < walls.length; i++) {
+      const d = walls[i];
+      arr.push([d.id, 2, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100)]);
     }
     return arr;
   }
@@ -5325,16 +5352,23 @@
       if (!row || row.length < 6 || !row[0]) continue;
       const id = row[0];
       const kind = row[1];
-      const arr = kind === 0 ? turrets : fields;
+      const arr = kind === 0 ? turrets : kind === 1 ? fields : walls;
       let d = null;
       for (let j = 0; j < arr.length; j++) if (arr[j].id === id) { d = arr[j]; break; }
       if (!d) {
-        d = kind === 0
-          ? { id, kind: "turret", synced: true, x: 0, y: 0, cd: 0, ang: -Math.PI / 2,
-              seed: Math.random() * TAU, hp: 1, maxHp: 1, hitR: 18, flash: 0 }
-          : { id, kind: "field", synced: true, x: 0, y: 0,
-              r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU,
-              hp: 1, maxHp: 1, hitR: 20, flash: 0 };
+        if (kind === 0) {
+          d = { id, kind: "turret", synced: true, x: 0, y: 0, cd: 0, ang: -Math.PI / 2,
+            seed: Math.random() * TAU, hp: 1, maxHp: 1, hitR: 18, flash: 0 };
+        } else if (kind === 1) {
+          d = { id, kind: "field", synced: true, x: 0, y: 0,
+            r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU,
+            hp: 1, maxHp: 1, hitR: 20, flash: 0 };
+        } else {
+          d = { id, kind: "wall", synced: true, x: 0, y: 0, ang: 0,
+            len: CFG.RUN.WALL_LEN * view.scale, thick: CFG.RUN.WALL_THICK * view.scale,
+            seed: Math.random() * TAU, hp: 1, maxHp: 1, flash: 0,
+            hitR: CFG.RUN.WALL_THICK * view.scale * 0.5 + 6 };
+        }
         arr.push(d);
       }
       const hp = row[4], maxHp = row[5] || 1;
@@ -5343,7 +5377,7 @@
       d.y = row[3];
       d.hp = hp;
       d.maxHp = maxHp;
-      if (kind === 0) d.ang = (row[6] || 0) / 100;
+      if (kind === 0 || kind === 2) d.ang = (row[6] || 0) / 100;
       seen[id] = 1;
     }
     // 房主已摧毁的防线，在客户端移除并播放摧毁反馈
@@ -5359,6 +5393,13 @@
         emit(fields[i].x, fields[i].y, 16, "#8ff6ff", 220, 3, 0.55);
         addText(fields[i].x, fields[i].y - 26, "防线被摧毁", "#ff6b6b", 13);
         fields.splice(i, 1);
+      }
+    }
+    for (let i = walls.length - 1; i >= 0; i--) {
+      if (walls[i].synced && !seen[walls[i].id]) {
+        emit(walls[i].x, walls[i].y, 16, "#d8e6ff", 220, 3, 0.55);
+        addText(walls[i].x, walls[i].y - 26, "城墙被摧毁", "#ff6b6b", 13);
+        walls.splice(i, 1);
       }
     }
   }
@@ -6737,7 +6778,7 @@
       if (p.tradeOffer && q.sid === p.tradeOffer.sid) coopCloseTrade(p);
     } else if (d.k === "build") {
       // 队友建造请求：房主校验后生成防线，再回报结果
-      if (q.type !== "turret" && q.type !== "field") { coopInReject(); return; }
+      if (q.type !== "turret" && q.type !== "field" && q.type !== "wall") { coopInReject(); return; }
       if (p.down || p.eliminated) { coopInReject(); return; }
       const bx = Number(q.x), by = Number(q.y);
       if (!isFinite(bx) || !isFinite(by)) { coopInReject(); return; }
@@ -6817,7 +6858,9 @@
     } else if (d.k === "build-ok") {
       const bx = Number(p.x) || 0, by = Number(p.y) || 0;
       emit(bx, by, 16, "#ffd666", 200, 3, 0.6);
-      addText(bx, by - 26, p.type === "field" ? "缓速场已展开" : "炮塔已部署", "#ffd666", 14);
+      addText(bx, by - 26,
+        p.type === "field" ? "缓速场已展开" : p.type === "wall" ? "城墙已架设" : "炮塔已部署",
+        "#ffd666", 14);
       sfxLevelUp();
     } else if (d.k === "build-no") {
       const lp = getLocalPlayer() || player;
@@ -6909,9 +6952,10 @@
 
     // 建造入口
     const buildBtn = document.getElementById("build-btn");
-    const canBuild = state === "playing" && (turrets.length < CFG.RUN.MAX_TURRETS || fields.length < CFG.RUN.MAX_FIELDS);
+    const canBuild = state === "playing" &&
+      (turrets.length < CFG.RUN.MAX_TURRETS || fields.length < CFG.RUN.MAX_FIELDS || walls.length < CFG.RUN.MAX_WALLS);
     buildBtn.classList.toggle("hidden", !canBuild);
-    buildBtn.classList.toggle("ready", cores >= CFG.RUN.TURRET_COST);
+    buildBtn.classList.toggle("ready", cores >= CFG.RUN.WALL_COST);
 
     // 连杀
     const comboEl = document.getElementById("ui-combo");
@@ -7860,6 +7904,7 @@
     const wrap = document.getElementById("build-items");
     const turretAble = cores >= CFG.RUN.TURRET_COST && turrets.length < CFG.RUN.MAX_TURRETS;
     const fieldAble = cores >= CFG.RUN.FIELD_COST && fields.length < CFG.RUN.MAX_FIELDS;
+    const wallAble = cores >= CFG.RUN.WALL_COST && walls.length < CFG.RUN.MAX_WALLS;
     wrap.innerHTML = `
       <button class="shop-item" data-build="turret" ${turretAble ? "" : "disabled"}>
         <h3>⬢ 自动炮塔 · ${turrets.length}/${CFG.RUN.MAX_TURRETS}</h3>
@@ -7870,7 +7915,26 @@
         <h3>◎ 缓速场 · ${fields.length}/${CFG.RUN.MAX_FIELDS}</h3>
         <p>范围内敌人移速降低 50%，适合拉扯与守点</p>
         <span class="cost">${CFG.RUN.FIELD_COST} 核心</span>
+      </button>
+      <button class="shop-item" data-build="wall" ${wallAble ? "" : "disabled"}>
+        <h3>▬ 合金城墙 · ${walls.length}/${CFG.RUN.MAX_WALLS}</h3>
+        <p>阻断敌机行进路线，带血条；敌方弹幕与近身攻击都会拆墙</p>
+        <span class="cost">${CFG.RUN.WALL_COST} 核心</span>
       </button>`;
+  }
+
+  function defenseCost(type) {
+    if (type === "turret") return CFG.RUN.TURRET_COST;
+    if (type === "field") return CFG.RUN.FIELD_COST;
+    if (type === "wall") return CFG.RUN.WALL_COST;
+    return Infinity;
+  }
+
+  function defenseAtCap(type) {
+    if (type === "turret") return turrets.length >= CFG.RUN.MAX_TURRETS;
+    if (type === "field") return fields.length >= CFG.RUN.MAX_FIELDS;
+    if (type === "wall") return walls.length >= CFG.RUN.MAX_WALLS;
+    return true;
   }
 
   function openBuildMenu() {
@@ -7891,23 +7955,56 @@
 
   function chooseBuild(type) {
     if (state !== "build") return;
-    const cost = type === "turret" ? CFG.RUN.TURRET_COST : CFG.RUN.FIELD_COST;
-    const atCap = type === "turret"
-      ? turrets.length >= CFG.RUN.MAX_TURRETS
-      : fields.length >= CFG.RUN.MAX_FIELDS;
-    if (cores < cost || atCap) return;
+    const cost = defenseCost(type);
+    if (cores < cost || defenseAtCap(type)) return;
     buildMode = type;
     document.getElementById("ov-build").classList.add("hidden");
     state = "playing";
     lastFrame = performance.now();
     addText(player.x, player.y - 46,
-      type === "turret" ? "点击战场放置炮塔" : "点击战场放置缓速场", "#ffd666", 15);
+      type === "turret" ? "点击战场放置炮塔"
+        : type === "field" ? "点击战场放置缓速场"
+        : "点击战场放置城墙", "#ffd666", 15);
     refreshHud(true);
   }
 
   function defenseMaxHp(type) {
-    const base = type === "turret" ? CFG.RUN.DEF_TURRET_HP : CFG.RUN.DEF_FIELD_HP;
+    const base = type === "turret" ? CFG.RUN.DEF_TURRET_HP
+      : type === "field" ? CFG.RUN.DEF_FIELD_HP
+      : CFG.RUN.DEF_WALL_HP;
     return Math.round(base * (1 + (chapter - 1) * CFG.RUN.DEF_HP_GROWTH));
+  }
+
+  // 圆与城墙（有向矩形）的碰撞：返回推出法线与深度
+  function wallHit(w, x, y, r) {
+    const ca = Math.cos(w.ang), sa = Math.sin(w.ang);
+    const dx = x - w.x, dy = y - w.y;
+    const lx = dx * ca + dy * sa;
+    const ly = -dx * sa + dy * ca;
+    const hx = w.len / 2, hy = w.thick / 2;
+    const cx = clamp(lx, -hx, hx);
+    const cy = clamp(ly, -hy, hy);
+    let ox = lx - cx, oy = ly - cy;
+    const d2 = ox * ox + oy * oy;
+    if (d2 > r * r) return null;
+    if (d2 > 0.0001) {
+      const d = Math.sqrt(d2);
+      ox /= d; oy /= d;
+      return {
+        nx: ox * ca - oy * sa,
+        ny: ox * sa + oy * ca,
+        depth: r - d,
+      };
+    }
+    // 圆心落在矩形内部：沿最近的边推出
+    const px = hx - Math.abs(lx) + r;
+    const py = hy - Math.abs(ly) + r;
+    if (px < py) {
+      const sx = lx >= 0 ? 1 : -1;
+      return { nx: sx * ca, ny: sx * sa, depth: px };
+    }
+    const sy = ly >= 0 ? 1 : -1;
+    return { nx: -sy * sa, ny: sy * ca, depth: py };
   }
 
   // 敌人转火：返回距离内最近的防线
@@ -7922,6 +8019,12 @@
     }
     for (let i = 0; i < fields.length; i++) {
       const d = fields[i];
+      if (d.dead) continue;
+      const dd = dist2(x, y, d.x, d.y);
+      if (dd < bestD) { bestD = dd; best = d; }
+    }
+    for (let i = 0; i < walls.length; i++) {
+      const d = walls[i];
       if (d.dead) continue;
       const dd = dist2(x, y, d.x, d.y);
       if (dd < bestD) { bestD = dd; best = d; }
@@ -7942,6 +8045,11 @@
       const rr = (d.hitR || 20) + pad;
       if (dist2(x, y, d.x, d.y) <= rr * rr) return d;
     }
+    for (let i = 0; i < walls.length; i++) {
+      const d = walls[i];
+      if (d.dead) continue;
+      if (wallHit(d, x, y, pad + 1)) return d;
+    }
     return null;
   }
 
@@ -7960,13 +8068,13 @@
     addText(d.x, d.y - 30, "防线被摧毁", "#ff6b6b", 14);
     shake = Math.max(shake, 5 * CFG.FX.SHAKE);
     sfxExplode(false);
-    const arr = d.kind === "turret" ? turrets : fields;
+    const arr = d.kind === "turret" ? turrets : d.kind === "wall" ? walls : fields;
     const idx = arr.indexOf(d);
     if (idx >= 0) arr.splice(idx, 1);
   }
 
   function placeDefense(type, x, y, owner, remote) {
-    if (type !== "turret" && type !== "field") return false;
+    if (type !== "turret" && type !== "field" && type !== "wall") return false;
     const who = owner || getLocalPlayer() || player;
     if (!who) return false;
 
@@ -7987,11 +8095,8 @@
       return false;
     }
 
-    const cost = type === "turret" ? CFG.RUN.TURRET_COST : CFG.RUN.FIELD_COST;
-    const atCap = type === "turret"
-      ? turrets.length >= CFG.RUN.MAX_TURRETS
-      : fields.length >= CFG.RUN.MAX_FIELDS;
-    if (cores < cost || atCap) {
+    const cost = defenseCost(type);
+    if (cores < cost || defenseAtCap(type)) {
       buildMode = null;
       refreshHud(true);
       return false;
@@ -8009,13 +8114,24 @@
         owner: who.id,
       });
       addText(x, y - 26, "炮塔已部署", "#ffd666", 14);
-    } else {
+    } else if (type === "field") {
       fields.push({
         id: nextPropId++, kind: "field", x, y,
         r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU,
         hp, maxHp: hp, hitR: 20, flash: 0,
       });
       addText(x, y - 26, "缓速场已展开", "#8ff6ff", 14);
+    } else {
+      // 城墙沿玩家到落点的切线方向展开，默认横在敌人来向上
+      const ang = (dx * dx + dy * dy > 1) ? Math.atan2(dy, dx) + Math.PI / 2 : 0;
+      walls.push({
+        id: nextPropId++, kind: "wall", x, y, ang,
+        len: CFG.RUN.WALL_LEN * view.scale,
+        thick: CFG.RUN.WALL_THICK * view.scale,
+        seed: Math.random() * TAU, hp, maxHp: hp, flash: 0,
+        hitR: CFG.RUN.WALL_THICK * view.scale * 0.5 + 6,
+      });
+      addText(x, y - 26, "城墙已架设", "#d8e6ff", 14);
     }
     emit(x, y, 16, "#ffd666", 200, 3, 0.6);
     sfxLevelUp();
@@ -8031,6 +8147,9 @@
     }
     for (let i = 0; i < fields.length; i++) {
       if (fields[i].flash > 0) fields[i].flash = Math.max(0, fields[i].flash - dt * 9);
+    }
+    for (let i = 0; i < walls.length; i++) {
+      if (walls[i].flash > 0) walls[i].flash = Math.max(0, walls[i].flash - dt * 9);
     }
     if (coopIsGuest()) return;   // 客户端防线由房主快照驱动
 
@@ -8878,6 +8997,52 @@
     }
   }
 
+  // 城墙
+  function drawWalls(t) {
+    for (let i = 0; i < walls.length; i++) {
+      const w = walls[i];
+      const reach = Math.max(w.len, w.thick) * 0.6;
+      if (w.x + reach < cull.x0 || w.x - reach > cull.x1 ||
+          w.y + reach < cull.y0 || w.y - reach > cull.y1) continue;
+      const hx = w.len / 2, hy = w.thick / 2;
+      ctx.save();
+      ctx.translate(w.x, w.y);
+      ctx.rotate(w.ang);
+      // 阴影
+      ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.fillRect(-hx + 3, -hy + 4, w.len, w.thick);
+      // 主体
+      ctx.fillStyle = w.flash > 0 ? "rgba(255, 255, 255, 0.92)" : "rgba(54, 68, 94, 0.97)";
+      ctx.strokeStyle = w.flash > 0 ? "#ffffff" : "rgba(150, 195, 245, 0.85)";
+      ctx.lineWidth = 2;
+      ctx.fillRect(-hx, -hy, w.len, w.thick);
+      ctx.strokeRect(-hx, -hy, w.len, w.thick);
+      // 装甲接缝
+      ctx.strokeStyle = "rgba(120, 165, 220, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let px = -hx + 20; px < hx - 2; px += 20) {
+        ctx.moveTo(px, -hy + 2);
+        ctx.lineTo(px, hy - 2);
+      }
+      ctx.stroke();
+      // 中央能量带
+      ctx.fillStyle = w.flash > 0 ? "#ffffff" : "rgba(120, 220, 255, 0.55)";
+      ctx.fillRect(-hx + 6, -1.5, w.len - 12, 3);
+      ctx.restore();
+
+      // 耐久条
+      const whp = clamp((w.hp != null ? w.hp : 1) / (w.maxHp || 1), 0, 1);
+      if (whp < 0.999) {
+        const bw = Math.min(w.len, 54);
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(w.x - bw / 2, w.y - hy - 14, bw, 4);
+        ctx.fillStyle = whp > 0.5 ? "#8bffdc" : whp > 0.25 ? "#ffd666" : "#ff6b6b";
+        ctx.fillRect(w.x - bw / 2, w.y - hy - 14, bw * whp, 4);
+      }
+    }
+  }
+
   // 自动炮塔
   function drawTurrets(t) {
     for (let i = 0; i < turrets.length; i++) {
@@ -9151,6 +9316,7 @@
       ctx.translate(-camera.x, -camera.y);
       drawWorldBounds();
       drawFields(t);
+      drawWalls(t);
       drawZones(t);
       drawAsteroids(t);
       drawProps(t);

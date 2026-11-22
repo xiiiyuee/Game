@@ -508,6 +508,22 @@
         }
       }
 
+      // 城墙阻挡：碰撞后被推开，并就近攻击墙体
+      for (let wi = 0; wi < walls.length; wi++) {
+        const w = walls[wi];
+        if (w.dead) continue;
+        const hit = wallHit(w, e.x, e.y, e.r);
+        if (!hit) continue;
+        e.x += hit.nx * hit.depth;
+        e.y += hit.ny * hit.depth;
+        e.defCd = Math.max(0, (e.defCd || 0) - sdt);
+        if (e.defCd <= 0) {
+          e.defCd = CFG.RUN.DEF_ATTACK_CD * rand(0.85, 1.2);
+          hurtDefense(w, e.dmg, e);
+        }
+        break;
+      }
+
       // ===== 小怪远程弹幕（稀疏；三角怪只近战不射击）=====
       const gun = CFG.ENEMY_GUN[e.type];
       if (gun && gun.count > 0) {

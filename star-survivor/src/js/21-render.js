@@ -626,6 +626,52 @@
     }
   }
 
+  // 城墙
+  function drawWalls(t) {
+    for (let i = 0; i < walls.length; i++) {
+      const w = walls[i];
+      const reach = Math.max(w.len, w.thick) * 0.6;
+      if (w.x + reach < cull.x0 || w.x - reach > cull.x1 ||
+          w.y + reach < cull.y0 || w.y - reach > cull.y1) continue;
+      const hx = w.len / 2, hy = w.thick / 2;
+      ctx.save();
+      ctx.translate(w.x, w.y);
+      ctx.rotate(w.ang);
+      // 阴影
+      ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.fillRect(-hx + 3, -hy + 4, w.len, w.thick);
+      // 主体
+      ctx.fillStyle = w.flash > 0 ? "rgba(255, 255, 255, 0.92)" : "rgba(54, 68, 94, 0.97)";
+      ctx.strokeStyle = w.flash > 0 ? "#ffffff" : "rgba(150, 195, 245, 0.85)";
+      ctx.lineWidth = 2;
+      ctx.fillRect(-hx, -hy, w.len, w.thick);
+      ctx.strokeRect(-hx, -hy, w.len, w.thick);
+      // 装甲接缝
+      ctx.strokeStyle = "rgba(120, 165, 220, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let px = -hx + 20; px < hx - 2; px += 20) {
+        ctx.moveTo(px, -hy + 2);
+        ctx.lineTo(px, hy - 2);
+      }
+      ctx.stroke();
+      // 中央能量带
+      ctx.fillStyle = w.flash > 0 ? "#ffffff" : "rgba(120, 220, 255, 0.55)";
+      ctx.fillRect(-hx + 6, -1.5, w.len - 12, 3);
+      ctx.restore();
+
+      // 耐久条
+      const whp = clamp((w.hp != null ? w.hp : 1) / (w.maxHp || 1), 0, 1);
+      if (whp < 0.999) {
+        const bw = Math.min(w.len, 54);
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(w.x - bw / 2, w.y - hy - 14, bw, 4);
+        ctx.fillStyle = whp > 0.5 ? "#8bffdc" : whp > 0.25 ? "#ffd666" : "#ff6b6b";
+        ctx.fillRect(w.x - bw / 2, w.y - hy - 14, bw * whp, 4);
+      }
+    }
+  }
+
   // 自动炮塔
   function drawTurrets(t) {
     for (let i = 0; i < turrets.length; i++) {
@@ -899,6 +945,7 @@
       ctx.translate(-camera.x, -camera.y);
       drawWorldBounds();
       drawFields(t);
+      drawWalls(t);
       drawZones(t);
       drawAsteroids(t);
       drawProps(t);

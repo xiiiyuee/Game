@@ -78,9 +78,10 @@
 
     // 建造入口
     const buildBtn = document.getElementById("build-btn");
-    const canBuild = state === "playing" && (turrets.length < CFG.RUN.MAX_TURRETS || fields.length < CFG.RUN.MAX_FIELDS);
+    const canBuild = state === "playing" &&
+      (turrets.length < CFG.RUN.MAX_TURRETS || fields.length < CFG.RUN.MAX_FIELDS || walls.length < CFG.RUN.MAX_WALLS);
     buildBtn.classList.toggle("hidden", !canBuild);
-    buildBtn.classList.toggle("ready", cores >= CFG.RUN.TURRET_COST);
+    buildBtn.classList.toggle("ready", cores >= CFG.RUN.WALL_COST);
 
     // 连杀
     const comboEl = document.getElementById("ui-combo");
