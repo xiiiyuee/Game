@@ -175,6 +175,16 @@
   };
   let peerLoadPromise = null;
 
+  /* ===== 握手协议（P2-04）===== */
+  const COOP_VERSION = 1;
+  const COOP_MAX_PLAYERS = 4;
+  let coopSeed = 0;          // 本局随机种子（房主生成）
+  let coopSelf = null;       // 加入方自身的槽位 { slot, id }
+  let coopRoster = [];       // 当前队伍 [{ id, slot }]
+  let coopGuests = {};       // 房主侧：peer -> { ctrl, state, slot, id }
+  let coopFallbackId = 0;
+  let coopHelloSent = false;
+
   function setCoopStatus(status, text) {
     coopNet.status = status;
     const el = document.getElementById("coop-status");
@@ -223,6 +233,11 @@
     coopNet.ctrl = null;
     coopNet.state = null;
     coopNet.error = "";
+    coopGuests = {};
+    coopSelf = null;
+    coopRoster = [];
+    coopSeed = 0;
+    coopHelloSent = false;
     if (!keepStatus) setCoopStatus("idle", "未连接");
   }
 
@@ -247,23 +262,136 @@
   }
 
   function refreshChannelStatus() {
+    if (coopNet.host) {
+      let n = 0;
+      for (const pid in coopGuests) {
+        const g = coopGuests[pid];
+        if (g.ctrl && g.ctrl.open && g.state && g.state.open) n += 1;
+      }
+      if (n > 0) setCoopStatus("connected", "已连接 " + n + " 人");
+      else setCoopStatus("waiting", "等待队友加入…");
+      return;
+    }
     const ctrl = coopNet.ctrl && coopNet.ctrl.open;
     const state = coopNet.state && coopNet.state.open;
     if (ctrl && state) setCoopStatus("connected", "已连接");
     else if (ctrl || state) setCoopStatus("connecting", "通道 1/2");
-    else if (coopNet.host) setCoopStatus("waiting", "等待队友加入…");
     else setCoopStatus("connecting", "连接中…");
   }
 
+  function coopGuestOf(conn) {
+    const pid = conn.peer || ("g" + (++coopFallbackId));
+    if (!coopGuests[pid]) coopGuests[pid] = { ctrl: null, state: null, slot: 0, id: null };
+    return { pid, g: coopGuests[pid] };
+  }
+
+  function coopAssignSlot(pid, g) {
+    if (g.slot) return g.slot;
+    const used = { 1: true };
+    for (const k in coopGuests) if (k !== pid && coopGuests[k].slot) used[coopGuests[k].slot] = true;
+    for (let slot = 2; slot <= COOP_MAX_PLAYERS; slot++) {
+      if (!used[slot]) {
+        g.slot = slot;
+        g.id = "p" + slot;
+        return slot;
+      }
+    }
+    return 0;
+  }
+
+  function coopRosterList() {
+    const list = [{ id: "p1", slot: 1 }];
+    for (const pid in coopGuests) {
+      const g = coopGuests[pid];
+      if (g.slot) list.push({ id: g.id, slot: g.slot });
+    }
+    list.sort((a, b) => a.slot - b.slot);
+    return list;
+  }
+
+  function coopBroadcastCtrl(msg, exceptPid) {
+    for (const pid in coopGuests) {
+      if (pid === exceptPid) continue;
+      const c = coopGuests[pid].ctrl;
+      if (c && c.open) c.send(msg);
+    }
+  }
+
+  // 握手：加入方发 hello，房主回 welcome（版本 / 槽位 / 种子 / 队伍）
+  function coopOnData(conn, data) {
+    if (!data || typeof data !== "object") return;
+    if (data.t === "hello") {
+      if (!coopNet.host || !conn) return;
+      if (data.v !== COOP_VERSION) {
+        conn.send({ t: "reject", reason: "版本不一致" });
+        return;
+      }
+      const { pid, g } = coopGuestOf(conn);
+      const slot = coopAssignSlot(pid, g);
+      if (!slot) {
+        conn.send({ t: "reject", reason: "房间已满" });
+        return;
+      }
+      conn.send({
+        t: "welcome", v: COOP_VERSION, slot, id: g.id, seed: coopSeed,
+        roster: coopRosterList(),
+      });
+      refreshChannelStatus();
+    } else if (data.t === "welcome") {
+      if (coopNet.host) return;
+      if (data.v !== COOP_VERSION) {
+        coopNet.error = "版本不一致";
+        setCoopStatus("error", "连接失败：版本不一致");
+        return;
+      }
+      coopSelf = { slot: data.slot || 0, id: data.id || "" };
+      coopSeed = data.seed | 0;
+      coopRoster = Array.isArray(data.roster) ? data.roster : [];
+      setCoopStatus("connected", "已连接 · " + String(coopSelf.id).toUpperCase());
+    } else if (data.t === "reject") {
+      coopNet.error = data.reason || "被拒绝";
+      setCoopStatus("error", "连接失败：" + coopNet.error);
+    } else if (data.t === "left") {
+      coopRoster = coopRoster.filter((p) => p.id !== data.id);
+    }
+  }
+
+  function coopSayHello() {
+    if (coopNet.host || coopHelloSent) return;
+    if (!coopNet.ctrl || !coopNet.ctrl.open) return;
+    coopHelloSent = true;
+    coopNet.ctrl.send({ t: "hello", v: COOP_VERSION });
+  }
+
   function wireChannel(kind, conn) {
+    if (coopNet.host) {
+      const { pid, g } = coopGuestOf(conn);
+      g[kind] = conn;
+      coopNet[kind] = conn;
+      conn.on("open", refreshChannelStatus);
+      conn.on("close", () => {
+        g[kind] = null;
+        if (!g.ctrl && !g.state) delete coopGuests[pid];
+        if (g.slot) coopBroadcastCtrl({ t: "left", id: g.id }, pid);
+        refreshChannelStatus();
+      });
+      conn.on("error", () => {});
+      conn.on("data", (data) => coopOnData(conn, data));
+      refreshChannelStatus();
+      return;
+    }
     coopNet[kind] = conn;
-    conn.on("open", refreshChannelStatus);
+    conn.on("open", () => {
+      refreshChannelStatus();
+      if (kind === "ctrl" && !coopNet.host) coopSayHello();
+    });
     conn.on("close", () => {
       if (coopNet[kind] === conn) coopNet[kind] = null;
       refreshChannelStatus();
     });
     conn.on("error", () => {});
-    conn.on("data", () => {});
+    conn.on("data", (data) => coopOnData(conn, data));
+    if (kind === "ctrl" && !coopNet.host && conn.open) coopSayHello();
     refreshChannelStatus();
   }
 
@@ -271,6 +399,7 @@
     if (!roomCode) return;
     coopReset(true);
     coopNet.host = true;
+    coopSeed = (Math.random() * 2147483647) | 0;
     setCoopStatus("loading", "加载信令库…");
     loadPeerLib().then(() => {
       if (!roomCode || !coopNet.host) return;
@@ -298,6 +427,7 @@
     if (!roomCode) return;
     coopReset(true);
     coopNet.host = false;
+    coopHelloSent = false;
     setCoopStatus("loading", "加载信令库…");
     loadPeerLib().then(() => {
       if (!roomCode || coopNet.host) return;
