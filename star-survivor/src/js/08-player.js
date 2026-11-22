@@ -176,6 +176,7 @@
     shake = 0;
     hurtFlash = 0;
     nextEnemyId = 1;
+    nextBulletId = 1;
     nextPropId = 1;
     upgradeCards = [];
     chapterMod = pick(CHAPTER_MODS);

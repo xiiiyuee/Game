@@ -73,10 +73,12 @@
   }
 
   // 无人机子弹（独立颜色，便于区分）
-  function spawnDroneBullet(x, y, ang, s) {
+  function spawnDroneBullet(x, y, ang, s, p) {
     if (bullets.length >= CFG.LIMITS.BULLETS) return;
     const sp = s.bulletSpeed * view.scale * CFG.DRONES.SPEED_MUL;
     bullets.push({
+      bid: nextBulletId++,
+      owner: p ? p.id : (localPlayerId || "p1"),
       x, y,
       vx: Math.cos(ang) * sp,
       vy: Math.sin(ang) * sp,
@@ -116,7 +118,7 @@
         if (d < bestD) { bestD = d; best = e; }
       }
       if (best) {
-        spawnDroneBullet(dx, dy, Math.atan2(best.y - dy, best.x - dx), s);
+        spawnDroneBullet(dx, dy, Math.atan2(best.y - dy, best.x - dx), s, p);
         p.droneCd[i] = CFG.DRONES.FIRE_CD;
       } else {
         p.droneCd[i] = 0.2;
@@ -173,6 +175,8 @@
     if (bullets.length >= CFG.LIMITS.BULLETS) return;
     const sp = s.bulletSpeed * view.scale * (speedMul || 1);
     bullets.push({
+      bid: nextBulletId++,
+      owner: p.id,
       x: p.x + Math.cos(ang) * (p.r + 4),
       y: p.y + Math.sin(ang) * (p.r + 4),
       vx: Math.cos(ang) * sp,

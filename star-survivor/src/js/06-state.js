@@ -49,6 +49,7 @@
   let hurtFlash = 0;
   let hudAcc = 0;          // HUD 刷新节流（每帧写 DOM 会造成额外布局开销）
   let nextEnemyId = 1;
+  let nextBulletId = 1;
   let nextPropId = 1;
   let lastFrame = performance.now();
   let upgradeCards = [];

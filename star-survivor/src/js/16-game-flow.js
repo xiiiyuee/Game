@@ -755,9 +755,55 @@
     ebullets = next;
   }
 
+  function coopPlayerBulletList() {
+    const arr = [];
+    for (let i = 0; i < bullets.length && arr.length < 200; i++) {
+      const b = bullets[i];
+      if (b.dead || !b.owner) continue;       // 只同步玩家/无人机子弹
+      arr.push([
+        b.bid, Math.round(b.x * 10), Math.round(b.y * 10),
+        Math.round(b.r), b.color, b.owner,
+      ]);
+    }
+    return arr;
+  }
+
+  function coopApplyPlayerBullets(list) {
+    if (coopNet.host || !list) return;
+    const next = [];
+    const keep = {};
+    for (let i = 0; i < bullets.length; i++) {
+      if (!bullets[i].synced) next.push(bullets[i]);   // 本地预测的自己的子弹保留
+    }
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      if (!s || s.length < 6) continue;
+      if (s[5] === localPlayerId) continue;            // 自己的子弹已在本地
+      let b = null;
+      for (let j = 0; j < next.length; j++) {
+        if (next[j].synced && next[j].bid === s[0]) { b = next[j]; break; }
+      }
+      if (!b) {
+        b = {
+          bid: s[0], owner: s[5], x: s[1] / 10, y: s[2] / 10,
+          vx: 0, vy: 0, r: s[3], dmg: 0, pierce: 0, life: 1.5,
+          dead: false, hit: new Set(), ang: 0, color: s[4], synced: true,
+        };
+        next.push(b);
+      }
+      b.tx = s[1] / 10;
+      b.ty = s[2] / 10;
+      keep[s[0]] = 1;
+    }
+    bullets = next.filter((b) => !b.synced || keep[b.bid]);
+  }
+
   function coopSendEnemies() {
     if (!coopNet.host || state !== "playing") return;
-    coopSendState({ t: "en", s: coopSnapSeq, list: coopEnemyList(), eb: coopBulletList() });
+    coopSendState({
+      t: "en", s: coopSnapSeq, list: coopEnemyList(),
+      eb: coopBulletList(), pb: coopPlayerBulletList(),
+    });
   }
 
   function coopSyncedEnemy(id, type, x, y, hp, maxHp, r) {
@@ -791,11 +837,13 @@
       e.hp = s[4];
       e.maxHp = s[5];
       if (s[6]) e.r = s[6];
+      e.dead = false;
       seen[id] = 1;
     }
     // 清掉非同步敌人（本地误生成的）以及房主已移除的敌人
     enemies = enemies.filter((e) => e.synced && seen[e.id]);
     coopApplyEnemyBullets(d.eb);
+    coopApplyPlayerBullets(d.pb);
   }
 
   function coopPosTick() {

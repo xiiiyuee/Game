@@ -60,6 +60,8 @@
     const ang = Math.atan2(best.y - b.y, best.x - b.x);
     const sp = stats.bulletSpeed * view.scale * 0.95;
     bullets.push({
+      bid: nextBulletId++,
+      owner: b.owner,
       x: b.x, y: b.y,
       vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
       r: 3, dmg: b.dmg * 0.5, pierce: 0, life: 0.9,
@@ -73,6 +75,14 @@
     const slow = ultTimer > 0 ? CFG.ULT.SLOW : 1;
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
+
+      if (b.synced) {
+        // 联机客户端：远端玩家子弹按最新快照平滑插值
+        const k = Math.min(1, dt * 18);
+        b.x += (b.tx - b.x) * k;
+        b.y += (b.ty - b.y) * k;
+        continue;
+      }
 
       b.x += b.vx * dt;
       b.y += b.vy * dt;

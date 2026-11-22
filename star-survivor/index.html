@@ -1770,6 +1770,7 @@
   let hurtFlash = 0;
   let hudAcc = 0;          // HUD 刷新节流（每帧写 DOM 会造成额外布局开销）
   let nextEnemyId = 1;
+  let nextBulletId = 1;
   let nextPropId = 1;
   let lastFrame = performance.now();
   let upgradeCards = [];
@@ -2067,6 +2068,7 @@
     shake = 0;
     hurtFlash = 0;
     nextEnemyId = 1;
+    nextBulletId = 1;
     nextPropId = 1;
     upgradeCards = [];
     chapterMod = pick(CHAPTER_MODS);
@@ -3560,10 +3562,12 @@
   }
 
   // 无人机子弹（独立颜色，便于区分）
-  function spawnDroneBullet(x, y, ang, s) {
+  function spawnDroneBullet(x, y, ang, s, p) {
     if (bullets.length >= CFG.LIMITS.BULLETS) return;
     const sp = s.bulletSpeed * view.scale * CFG.DRONES.SPEED_MUL;
     bullets.push({
+      bid: nextBulletId++,
+      owner: p ? p.id : (localPlayerId || "p1"),
       x, y,
       vx: Math.cos(ang) * sp,
       vy: Math.sin(ang) * sp,
@@ -3603,7 +3607,7 @@
         if (d < bestD) { bestD = d; best = e; }
       }
       if (best) {
-        spawnDroneBullet(dx, dy, Math.atan2(best.y - dy, best.x - dx), s);
+        spawnDroneBullet(dx, dy, Math.atan2(best.y - dy, best.x - dx), s, p);
         p.droneCd[i] = CFG.DRONES.FIRE_CD;
       } else {
         p.droneCd[i] = 0.2;
@@ -3660,6 +3664,8 @@
     if (bullets.length >= CFG.LIMITS.BULLETS) return;
     const sp = s.bulletSpeed * view.scale * (speedMul || 1);
     bullets.push({
+      bid: nextBulletId++,
+      owner: p.id,
       x: p.x + Math.cos(ang) * (p.r + 4),
       y: p.y + Math.sin(ang) * (p.r + 4),
       vx: Math.cos(ang) * sp,
@@ -3881,6 +3887,8 @@
     const ang = Math.atan2(best.y - b.y, best.x - b.x);
     const sp = stats.bulletSpeed * view.scale * 0.95;
     bullets.push({
+      bid: nextBulletId++,
+      owner: b.owner,
       x: b.x, y: b.y,
       vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
       r: 3, dmg: b.dmg * 0.5, pierce: 0, life: 0.9,
@@ -3894,6 +3902,14 @@
     const slow = ultTimer > 0 ? CFG.ULT.SLOW : 1;
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
+
+      if (b.synced) {
+        // 联机客户端：远端玩家子弹按最新快照平滑插值
+        const k = Math.min(1, dt * 18);
+        b.x += (b.tx - b.x) * k;
+        b.y += (b.ty - b.y) * k;
+        continue;
+      }
 
       b.x += b.vx * dt;
       b.y += b.vy * dt;
@@ -4773,9 +4789,55 @@
     ebullets = next;
   }
 
+  function coopPlayerBulletList() {
+    const arr = [];
+    for (let i = 0; i < bullets.length && arr.length < 200; i++) {
+      const b = bullets[i];
+      if (b.dead || !b.owner) continue;       // 只同步玩家/无人机子弹
+      arr.push([
+        b.bid, Math.round(b.x * 10), Math.round(b.y * 10),
+        Math.round(b.r), b.color, b.owner,
+      ]);
+    }
+    return arr;
+  }
+
+  function coopApplyPlayerBullets(list) {
+    if (coopNet.host || !list) return;
+    const next = [];
+    const keep = {};
+    for (let i = 0; i < bullets.length; i++) {
+      if (!bullets[i].synced) next.push(bullets[i]);   // 本地预测的自己的子弹保留
+    }
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      if (!s || s.length < 6) continue;
+      if (s[5] === localPlayerId) continue;            // 自己的子弹已在本地
+      let b = null;
+      for (let j = 0; j < next.length; j++) {
+        if (next[j].synced && next[j].bid === s[0]) { b = next[j]; break; }
+      }
+      if (!b) {
+        b = {
+          bid: s[0], owner: s[5], x: s[1] / 10, y: s[2] / 10,
+          vx: 0, vy: 0, r: s[3], dmg: 0, pierce: 0, life: 1.5,
+          dead: false, hit: new Set(), ang: 0, color: s[4], synced: true,
+        };
+        next.push(b);
+      }
+      b.tx = s[1] / 10;
+      b.ty = s[2] / 10;
+      keep[s[0]] = 1;
+    }
+    bullets = next.filter((b) => !b.synced || keep[b.bid]);
+  }
+
   function coopSendEnemies() {
     if (!coopNet.host || state !== "playing") return;
-    coopSendState({ t: "en", s: coopSnapSeq, list: coopEnemyList(), eb: coopBulletList() });
+    coopSendState({
+      t: "en", s: coopSnapSeq, list: coopEnemyList(),
+      eb: coopBulletList(), pb: coopPlayerBulletList(),
+    });
   }
 
   function coopSyncedEnemy(id, type, x, y, hp, maxHp, r) {
@@ -4809,11 +4871,13 @@
       e.hp = s[4];
       e.maxHp = s[5];
       if (s[6]) e.r = s[6];
+      e.dead = false;
       seen[id] = 1;
     }
     // 清掉非同步敌人（本地误生成的）以及房主已移除的敌人
     enemies = enemies.filter((e) => e.synced && seen[e.id]);
     coopApplyEnemyBullets(d.eb);
+    coopApplyPlayerBullets(d.pb);
   }
 
   function coopPosTick() {
