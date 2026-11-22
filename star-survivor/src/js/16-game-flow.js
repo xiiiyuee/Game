@@ -713,11 +713,29 @@
     return !!roomCode && !coopNet.host;
   }
 
-  function coopEnemyList() {
+  /* ===== 兴趣裁剪（P3-11）：只下发该客户端视野 + 200px ===== */
+  const COOP_CULL_PAD = 200;
+  const COOP_CULL_MIN = 760;        // 小窗 / 竖屏保底半径
+
+  function coopCullRadius(g) {
+    const w = (g && g.vw) || view.w;
+    const h = (g && g.vh) || view.h;
+    return Math.max(COOP_CULL_MIN, Math.hypot(w, h) / 2) + COOP_CULL_PAD;
+  }
+
+  function coopInRange(x, y, cx, cy, rad) {
+    if (rad === undefined) return true;
+    const dx = x - cx;
+    const dy = y - cy;
+    return dx * dx + dy * dy <= rad * rad;
+  }
+
+  function coopEnemyList(cx, cy, rad) {
     const arr = [];
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (e.dead || e.synced || e.isBoss) continue;
+      if (!coopInRange(e.x, e.y, cx, cy, rad)) continue;
       arr.push([
         e.id, e.type,
         Math.round(e.x * 10), Math.round(e.y * 10),
@@ -727,11 +745,12 @@
     return arr;
   }
 
-  function coopBulletList() {
+  function coopBulletList(cx, cy, rad) {
     const arr = [];
     for (let i = 0; i < ebullets.length && arr.length < 160; i++) {
       const b = ebullets[i];
       if (b.dead) continue;
+      if (!coopInRange(b.x, b.y, cx, cy, rad)) continue;
       arr.push([
         Math.round(b.x * 10), Math.round(b.y * 10), Math.round(b.r),
         Math.round(b.dmg * 10) / 10, b.color, b.heavy ? 1 : 0,
@@ -755,11 +774,12 @@
     ebullets = next;
   }
 
-  function coopPlayerBulletList() {
+  function coopPlayerBulletList(cx, cy, rad) {
     const arr = [];
     for (let i = 0; i < bullets.length && arr.length < 200; i++) {
       const b = bullets[i];
       if (b.dead || !b.owner) continue;       // 只同步玩家/无人机子弹
+      if (!coopInRange(b.x, b.y, cx, cy, rad)) continue;
       arr.push([
         b.bid, Math.round(b.x * 10), Math.round(b.y * 10),
         Math.round(b.r), b.color, b.owner,
@@ -856,10 +876,11 @@
   }
 
   /* ===== 场景物件同步（P3-10）：陨石 / 游商 / 经验 / 核心 / 芯片 ===== */
-  function coopAsteroidList() {
+  function coopAsteroidList(cx, cy, rad) {
     const arr = [];
     for (let i = 0; i < asteroids.length && arr.length < 12; i++) {
       const a = asteroids[i];
+      if (!coopInRange(a.x, a.y, cx, cy, rad)) continue;
       arr.push([a.id, Math.round(a.x * 10), Math.round(a.y * 10), Math.round(a.r),
         Math.round(a.hp), Math.round(a.maxHp), Math.round(a.seed * 100) / 100]);
     }
@@ -908,9 +929,10 @@
     };
   }
 
-  function coopGemList() {
+  function coopGemList(cx, cy, rad) {
     const arr = [];
     for (let i = 0; i < gems.length && arr.length < 150; i++) {
+      if (!coopInRange(gems[i].x, gems[i].y, cx, cy, rad)) continue;
       arr.push([Math.round(gems[i].x * 10), Math.round(gems[i].y * 10), gems[i].value]);
     }
     return arr;
@@ -930,10 +952,11 @@
     gems = next;
   }
 
-  function coopCoreList() {
+  function coopCoreList(cx, cy, rad) {
     const arr = [];
     for (let i = 0; i < coreDrops.length && arr.length < 30; i++) {
       const c = coreDrops[i];
+      if (!coopInRange(c.x, c.y, cx, cy, rad)) continue;
       arr.push([Math.round(c.x * 10), Math.round(c.y * 10), Math.round(c.seed * 100) / 100, Math.round(c.life * 10) / 10]);
     }
     return arr;
@@ -975,14 +998,37 @@
     chipDrops = next;
   }
 
+  function coopEnemyPacket(cx, cy, rad) {
+    return {
+      t: "en", s: coopSnapSeq,
+      list: coopEnemyList(cx, cy, rad),
+      eb: coopBulletList(cx, cy, rad),
+      pb: coopPlayerBulletList(cx, cy, rad),
+      bs: coopBossState(),                 // Boss 全量：不受裁剪
+      as: coopAsteroidList(cx, cy, rad),
+      tr: coopTraderState(),               // 游商 / 芯片为关键事件：全量
+      gm: coopGemList(cx, cy, rad),
+      cd: coopCoreList(cx, cy, rad),
+      ch: coopChipList(),
+    };
+  }
+
   function coopSendEnemies() {
     if (!coopNet.host || state !== "playing") return;
-    coopSendState({
-      t: "en", s: coopSnapSeq, list: coopEnemyList(),
-      eb: coopBulletList(), pb: coopPlayerBulletList(), bs: coopBossState(),
-      as: coopAsteroidList(), tr: coopTraderState(),
-      gm: coopGemList(), cd: coopCoreList(), ch: coopChipList(),
-    });
+    // 按客户端兴趣裁剪：以该队友的玩家位置为中心，视野半径 + 200px
+    for (const pid in coopGuests) {
+      const g = coopGuests[pid];
+      if (!g.state || !g.state.open) continue;
+      let p = null;
+      if (g.id) {
+        for (let i = 0; i < players.length; i++) {
+          if (players[i].id === g.id) { p = players[i]; break; }
+        }
+      }
+      const cx = p ? p.x : (player ? player.x : world.w / 2);
+      const cy = p ? p.y : (player ? player.y : world.h / 2);
+      g.state.send(coopEnemyPacket(cx, cy, coopCullRadius(g)));
+    }
   }
 
   function coopSyncedEnemy(id, type, x, y, hp, maxHp, r) {
@@ -1128,13 +1174,25 @@
     fr.s = coopInSeq;
     coopInBuf.push(fr);
     if (coopInBuf.length > 3) coopInBuf.shift();
-    coopSendState({ t: "i", id: player.id, seq: coopInSeq, fr: coopInBuf.slice() });
+    coopSendState({
+      t: "i", id: player.id, seq: coopInSeq, fr: coopInBuf.slice(),
+      vw: Math.round(view.w), vh: Math.round(view.h),   // 供房主做兴趣裁剪
+    });
   }
 
   function coopApplyInput(d) {
     if (!coopNet.host || !d || !d.fr || !d.fr.length) return;
     const pid = d.id;
     if (!pid) return;
+    if (d.vw && d.vh) {
+      for (const gpid in coopGuests) {
+        if (coopGuests[gpid].id === pid) {
+          coopGuests[gpid].vw = d.vw;
+          coopGuests[gpid].vh = d.vh;
+          break;
+        }
+      }
+    }
     let p = null;
     for (let i = 0; i < players.length; i++) if (players[i].id === pid) { p = players[i]; break; }
     if (!p) return;
@@ -1364,6 +1422,13 @@
   }
 
   function coopSendState(msg) {
+    if (coopNet.host) {
+      for (const pid in coopGuests) {
+        const c = coopGuests[pid].state;
+        if (c && c.open) c.send(msg);
+      }
+      return;
+    }
     if (coopNet.state && coopNet.state.open) coopNet.state.send(msg);
   }
 
