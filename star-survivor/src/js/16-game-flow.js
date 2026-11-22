@@ -121,6 +121,7 @@
     if (again) again.classList.toggle("hidden", !roomHost);
     const copy = row.querySelector('[data-act="coop-copy"]');
     if (copy) copy.textContent = roomHost ? "复制邀请链接" : "复制房间号";
+    refreshCoopDebug();
   }
 
   function newRoom() {
@@ -192,6 +193,11 @@
   const COOP_TIMEOUT_MS = 5000;
   let coopHeartTimer = null;
 
+  /* ===== 调试面板（P2-08）：ping / 快照频率 / 丢包估算 ===== */
+  let coopStats = { recv: 0, rate: 0, got: 0, lost: 0, lossPct: 0 };
+  let coopSeq = {};       // 发送方 id -> 最近快照序号
+  let coopPosSeq = 0;     // 本地快照序号
+
   function setCoopStatus(status, text) {
     coopNet.status = status;
     const el = document.getElementById("coop-status");
@@ -199,6 +205,7 @@
     el.textContent = text;
     el.classList.toggle("ok", status === "connected" || status === "waiting");
     el.classList.toggle("err", status === "error");
+    refreshCoopDebug();
   }
 
   function loadPeerLib(i) {
@@ -247,6 +254,9 @@
     coopHelloSent = false;
     coopNet.ping = 0;
     coopNet.lastSeen = 0;
+    coopStats = { recv: 0, rate: 0, got: 0, lost: 0, lossPct: 0 };
+    coopSeq = {};
+    coopPosSeq = 0;
     coopStopHeartbeat();
     coopStopPosLoop();
     if (!keepStatus) setCoopStatus("idle", "未连接");
@@ -354,6 +364,7 @@
   }
 
   function coopHeartbeatTick() {
+    coopStatsTick();
     const now = Date.now();
     if (coopNet.host) {
       for (const pid in coopGuests) {
@@ -442,8 +453,51 @@
         coopResumeLocal();
       }
     } else if (data.t === "p") {
+      coopNoteSnapshot(data);
       coopApplyPlayerState(data);
     }
+  }
+
+  function coopNoteSnapshot(data) {
+    coopStats.recv += 1;
+    coopStats.got += 1;
+    if (typeof data.s === "number" && typeof data.id === "string") {
+      const last = coopSeq[data.id];
+      if (typeof last === "number" && data.s > last + 1) coopStats.lost += data.s - last - 1;
+      if (typeof last !== "number" || data.s > last) coopSeq[data.id] = data.s;
+    }
+  }
+
+  function coopStatsTick() {
+    coopStats.rate = coopStats.recv;
+    coopStats.recv = 0;
+    const total = coopStats.got + coopStats.lost;
+    coopStats.lossPct = total ? Math.round((coopStats.lost * 100) / total) : 0;
+    coopStats.got = 0;
+    coopStats.lost = 0;
+    refreshCoopDebug();
+  }
+
+  function refreshCoopDebug() {
+    const el = document.getElementById("coop-debug");
+    if (!el) return;
+    if (!roomCode) {
+      el.classList.add("hidden");
+      return;
+    }
+    el.classList.remove("hidden");
+    const labels = {
+      idle: "未连接", loading: "加载中", waiting: "等待队友",
+      connecting: "连接中", connected: "已连接", error: "错误",
+    };
+    const st = document.getElementById("dbg-status");
+    const ping = document.getElementById("dbg-ping");
+    const rate = document.getElementById("dbg-rate");
+    const loss = document.getElementById("dbg-loss");
+    if (st) st.textContent = "状态 " + (labels[coopNet.status] || coopNet.status);
+    if (ping) ping.textContent = "PING " + (coopNet.ping ? Math.round(coopNet.ping) + "ms" : "-");
+    if (rate) rate.textContent = "快照 " + coopStats.rate + "/s";
+    if (loss) loss.textContent = "丢包 " + coopStats.lossPct + "%";
   }
 
   function coopSayHello() {
@@ -516,8 +570,9 @@
 
   function coopSendPositions() {
     if (state !== "playing" || !player || !player.local) return;
+    coopPosSeq += 1;
     coopSendState({
-      t: "p", id: player.id,
+      t: "p", s: coopPosSeq, id: player.id,
       x: Math.round(player.x * 10) / 10,
       y: Math.round(player.y * 10) / 10,
       f: Math.round(player.facing * 100) / 100,
@@ -526,6 +581,8 @@
 
   function coopStartPosLoop() {
     if (coopPosTimer) return;
+    coopSeq = {};
+    coopPosSeq = 0;
     coopPosTimer = setInterval(coopSendPositions, 66);
   }
 
