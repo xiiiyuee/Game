@@ -4832,11 +4832,68 @@
     bullets = next.filter((b) => !b.synced || keep[b.bid]);
   }
 
+  /* ===== Boss 同步（P3-09）：房主广播完整状态，客户端只做表现 ===== */
+  function coopBossState() {
+    const b = boss;
+    if (!b || b.dead) return null;
+    return [
+      b.id, Math.round(b.x * 10), Math.round(b.y * 10),
+      Math.round(b.hp), Math.round(b.maxHp), b.phase,
+      Math.round(b.laserAng * 100), Math.round(b.laserTime * 100) / 100,
+      Math.round(b.shield), b.rage > 0 ? 1 : 0,
+      (b.mechanics || []).join(","), b.warn > 0 ? 1 : 0,
+      Math.round(b.dashAng * 100), Math.round(b.spin * 100) / 100,
+    ];
+  }
+
+  function coopApplyBoss(s) {
+    if (coopNet.host || s === undefined) return;
+    if (!s) {
+      if (boss) {
+        const idx = enemies.indexOf(boss);
+        if (idx >= 0) enemies.splice(idx, 1);
+        boss = null;
+      }
+      hideBossBar();
+      return;
+    }
+    const mech = String(s[10] || "").split(",").filter(Boolean);
+    if (!boss) {
+      boss = {
+        id: s[0], type: "boss", x: s[1] / 10, y: s[2] / 10,
+        r: CFG.BOSS.r, hp: s[3], maxHp: s[4], speed: 0, dmg: 0, xp: 0, score: 0,
+        color: THEME.boss, angle: 0, seed: 0, isBoss: true, dead: false, synced: true,
+        fireCd: 0, burstCd: 0, ringCd: 0, minionCd: 0,
+        warn: 0, dashTime: 0, dashCd: 0, dashAng: 0,
+        phase: s[5], spin: s[13], mechanics: mech,
+        shield: s[8], shieldCd: 0, laserCd: 0, laserTime: 0, laserAng: 0,
+        rage: 0, rageCd: 0,
+      };
+      enemies.push(boss);
+      bossSpawned = true;
+      document.getElementById("boss-wrap").classList.remove("hidden");
+      document.getElementById("ui-boss-name").textContent = bossLabel(boss);
+    }
+    boss.x = s[1] / 10;
+    boss.y = s[2] / 10;
+    boss.hp = s[3];
+    boss.maxHp = s[4];
+    boss.phase = s[5];
+    boss.laserAng = s[6] / 100;
+    boss.laserTime = s[7];
+    boss.shield = s[8];
+    boss.rage = s[9] ? 1 : 0;
+    boss.mechanics = mech;
+    boss.warn = s[11] ? 1 : 0;
+    boss.dashAng = s[12] / 100;
+    boss.spin = s[13];
+  }
+
   function coopSendEnemies() {
     if (!coopNet.host || state !== "playing") return;
     coopSendState({
       t: "en", s: coopSnapSeq, list: coopEnemyList(),
-      eb: coopBulletList(), pb: coopPlayerBulletList(),
+      eb: coopBulletList(), pb: coopPlayerBulletList(), bs: coopBossState(),
     });
   }
 
@@ -4878,6 +4935,7 @@
     enemies = enemies.filter((e) => e.synced && seen[e.id]);
     coopApplyEnemyBullets(d.eb);
     coopApplyPlayerBullets(d.pb);
+    coopApplyBoss(d.bs);
   }
 
   function coopPosTick() {
