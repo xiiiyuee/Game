@@ -3985,6 +3985,7 @@
     if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
     updateBuffPanel();
     refreshHud(true);
+    coopOnGameStarted();
   }
 
   function togglePause() {
@@ -4002,6 +4003,7 @@
 
   function endGame(win, reason) {
     if (state === "over") return;
+    coopStopPosLoop();
     state = "over";
     clearKeys();
     shake = 0;
@@ -4213,6 +4215,7 @@
     coopNet.ping = 0;
     coopNet.lastSeen = 0;
     coopStopHeartbeat();
+    coopStopPosLoop();
     if (!keepStatus) setCoopStatus("idle", "未连接");
   }
 
@@ -4393,6 +4396,10 @@
       setCoopStatus("error", "连接失败：" + coopNet.error);
     } else if (data.t === "left") {
       coopRoster = coopRoster.filter((p) => p.id !== data.id);
+    } else if (data.t === "start") {
+      coopStartGuestGame();
+    } else if (data.t === "p") {
+      coopApplyPlayerState(data);
     }
   }
 
@@ -4434,6 +4441,77 @@
     conn.on("data", (data) => coopOnData(conn, data));
     if (kind === "ctrl" && !coopNet.host && conn.open) coopSayHello();
     refreshChannelStatus();
+  }
+
+  let coopPosTimer = null;
+
+  function coopAddRemote(id, x, y) {
+    if (!id || id === localPlayerId) return null;
+    for (let i = 0; i < players.length; i++) if (players[i].id === id) return players[i];
+    const cx = x === undefined ? world.w / 2 : x;
+    const cy = y === undefined ? world.h / 2 : y;
+    const ang = (players.length * Math.PI) / 2;
+    const rp = createPlayer(id, cx + Math.cos(ang) * 86, cy + Math.sin(ang) * 86, false);
+    rp.remote = true;
+    rp.intent = { mx: 0, my: 0, fire: false, dash: false, ult: false, aim: 0 };
+    players.push(rp);
+    return rp;
+  }
+
+  function coopApplyPlayerState(d) {
+    if (!player || state === "menu" || state === "over") return;
+    if (!d.id || d.id === localPlayerId) return;
+    let p = null;
+    for (let i = 0; i < players.length; i++) if (players[i].id === d.id) { p = players[i]; break; }
+    if (!p) p = coopAddRemote(d.id, d.x, d.y);
+    if (!p) return;
+    p.x = d.x;
+    p.y = d.y;
+    p.facing = d.f;
+    p.lastDir = { x: Math.cos(d.f), y: Math.sin(d.f) };
+  }
+
+  function coopSendPositions() {
+    if (state !== "playing" || !player || !player.local) return;
+    coopSendState({
+      t: "p", id: player.id,
+      x: Math.round(player.x * 10) / 10,
+      y: Math.round(player.y * 10) / 10,
+      f: Math.round(player.facing * 100) / 100,
+    });
+  }
+
+  function coopStartPosLoop() {
+    if (coopPosTimer) return;
+    coopPosTimer = setInterval(coopSendPositions, 66);
+  }
+
+  function coopStopPosLoop() {
+    if (coopPosTimer) {
+      clearInterval(coopPosTimer);
+      coopPosTimer = null;
+    }
+  }
+
+  // 房主开局：登记队友残影、广播开始；加入方收到 start 后开局并改用自己的槽位 ID
+  function coopOnGameStarted() {
+    if (!roomCode) return;
+    if (coopNet.host) {
+      for (const pid in coopGuests) if (coopGuests[pid].slot) coopAddRemote(coopGuests[pid].id);
+      coopBroadcastCtrl({ t: "start", seed: coopSeed });
+      coopStartPosLoop();
+    } else if (coopSelf) {
+      coopStartPosLoop();
+    }
+  }
+
+  function coopStartGuestGame() {
+    if (coopNet.host || !coopSelf || state !== "menu") return;
+    startGame("pulse");
+    if (player) {
+      player.id = coopSelf.id;
+      localPlayerId = coopSelf.id;
+    }
   }
 
   function connectHost() {
