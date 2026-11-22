@@ -181,9 +181,14 @@
   let coopSeed = 0;          // 本局随机种子（房主生成）
   let coopSelf = null;       // 加入方自身的槽位 { slot, id }
   let coopRoster = [];       // 当前队伍 [{ id, slot }]
-  let coopGuests = {};       // 房主侧：peer -> { ctrl, state, slot, id }
+  let coopGuests = {};       // 房主侧：peer -> { ctrl, state, slot, id, lastSeen, ping }
   let coopFallbackId = 0;
   let coopHelloSent = false;
+
+  /* ===== 心跳（P2-05）：1 秒一次，5 秒无响应判定掉线 ===== */
+  const COOP_HEARTBEAT_MS = 1000;
+  const COOP_TIMEOUT_MS = 5000;
+  let coopHeartTimer = null;
 
   function setCoopStatus(status, text) {
     coopNet.status = status;
@@ -238,6 +243,9 @@
     coopRoster = [];
     coopSeed = 0;
     coopHelloSent = false;
+    coopNet.ping = 0;
+    coopNet.lastSeen = 0;
+    coopStopHeartbeat();
     if (!keepStatus) setCoopStatus("idle", "未连接");
   }
 
@@ -252,11 +260,13 @@
     else if (type === "unavailable-id") msg = "房间码被占用，请换一个";
     else if (type === "network" || type === "server-error" || type === "socket-error") msg = "信令服务不可用";
     else if (err && err.message) msg = err.message;
+    coopStopHeartbeat();
     coopNet.error = msg;
     setCoopStatus("error", "连接失败：" + msg);
   }
 
   function onLoadError(err) {
+    coopStopHeartbeat();
     coopNet.error = err && err.message ? err.message : "信令库加载失败";
     setCoopStatus("error", "连接失败：" + coopNet.error);
   }
@@ -281,7 +291,7 @@
 
   function coopGuestOf(conn) {
     const pid = conn.peer || ("g" + (++coopFallbackId));
-    if (!coopGuests[pid]) coopGuests[pid] = { ctrl: null, state: null, slot: 0, id: null };
+    if (!coopGuests[pid]) coopGuests[pid] = { ctrl: null, state: null, slot: 0, id: null, lastSeen: Date.now(), ping: 0 };
     return { pid, g: coopGuests[pid] };
   }
 
@@ -317,9 +327,72 @@
     }
   }
 
+  function coopStartHeartbeat() {
+    coopStopHeartbeat();
+    coopHeartTimer = setInterval(coopHeartbeatTick, COOP_HEARTBEAT_MS);
+  }
+
+  function coopStopHeartbeat() {
+    if (coopHeartTimer) {
+      clearInterval(coopHeartTimer);
+      coopHeartTimer = null;
+    }
+  }
+
+  function coopDropGuest(pid, reason) {
+    const g = coopGuests[pid];
+    if (!g) return;
+    try { if (g.ctrl && g.ctrl.close) g.ctrl.close(); } catch (err) {}
+    try { if (g.state && g.state.close) g.state.close(); } catch (err) {}
+    const id = g.id;
+    delete coopGuests[pid];
+    if (id) coopBroadcastCtrl({ t: "left", id });
+    setCoopStatus("waiting", (reason || "队友掉线") + "，等待重新加入…");
+  }
+
+  function coopHeartbeatTick() {
+    const now = Date.now();
+    if (coopNet.host) {
+      for (const pid in coopGuests) {
+        const g = coopGuests[pid];
+        if (!g.ctrl || !g.ctrl.open) continue;
+        if (g.lastSeen && now - g.lastSeen > COOP_TIMEOUT_MS) {
+          coopDropGuest(pid, "队友掉线");
+          continue;
+        }
+        g.ctrl.send({ t: "ping", ts: now });
+      }
+      return;
+    }
+    if (!coopNet.ctrl || !coopNet.ctrl.open) return;
+    if (coopNet.lastSeen && now - coopNet.lastSeen > COOP_TIMEOUT_MS) {
+      coopStopHeartbeat();
+      coopNet.error = "与房主连接超时";
+      setCoopStatus("error", "连接失败：与房主连接超时");
+      return;
+    }
+    coopSendCtrl({ t: "ping", ts: now });
+  }
+
   // 握手：加入方发 hello，房主回 welcome（版本 / 槽位 / 种子 / 队伍）
   function coopOnData(conn, data) {
     if (!data || typeof data !== "object") return;
+    const now = Date.now();
+    if (coopNet.host) {
+      const g = conn && conn.peer ? coopGuests[conn.peer] : null;
+      if (g) g.lastSeen = now;
+    } else {
+      coopNet.lastSeen = now;
+    }
+    if (data.t === "ping") {
+      if (conn && conn.send) conn.send({ t: "pong", ts: data.ts });
+      return;
+    }
+    if (data.t === "pong") {
+      coopNet.ping = Math.max(0, now - (data.ts || now));
+      if (coopNet.host && conn && conn.peer && coopGuests[conn.peer]) coopGuests[conn.peer].ping = coopNet.ping;
+      return;
+    }
     if (data.t === "hello") {
       if (!coopNet.host || !conn) return;
       if (data.v !== COOP_VERSION) {
@@ -382,6 +455,7 @@
     }
     coopNet[kind] = conn;
     conn.on("open", () => {
+      coopNet.lastSeen = Date.now();
       refreshChannelStatus();
       if (kind === "ctrl" && !coopNet.host) coopSayHello();
     });
@@ -400,6 +474,7 @@
     coopReset(true);
     coopNet.host = true;
     coopSeed = (Math.random() * 2147483647) | 0;
+    coopStartHeartbeat();
     setCoopStatus("loading", "加载信令库…");
     loadPeerLib().then(() => {
       if (!roomCode || !coopNet.host) return;
@@ -428,6 +503,7 @@
     coopReset(true);
     coopNet.host = false;
     coopHelloSent = false;
+    coopStartHeartbeat();
     setCoopStatus("loading", "加载信令库…");
     loadPeerLib().then(() => {
       if (!roomCode || coopNet.host) return;
