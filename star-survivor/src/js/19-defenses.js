@@ -797,7 +797,7 @@
     return { nx: -sy * sa, ny: sy * ca, depth: py };
   }
 
-  // 敌人转火：返回距离内最近的防线
+  // 敌人转火：返回距离内最近的防线（城墙不主动吸引仇恨，只做物理阻挡）
   function nearestDefense(x, y, maxDist) {
     let best = null;
     let bestD = maxDist * maxDist;
@@ -813,13 +813,20 @@
       const dd = dist2(x, y, d.x, d.y);
       if (dd < bestD) { bestD = dd; best = d; }
     }
+    return best ? { d: best, x: best.x, y: best.y, hitR: best.hitR || 18, dist2: bestD } : null;
+  }
+
+  // 最近的城墙（Boss 碾压用）
+  function nearestWall(x, y, maxDist) {
+    let best = null;
+    let bestD = maxDist * maxDist;
     for (let i = 0; i < walls.length; i++) {
       const d = walls[i];
       if (d.dead) continue;
       const dd = dist2(x, y, d.x, d.y);
       if (dd < bestD) { bestD = dd; best = d; }
     }
-    return best ? { d: best, x: best.x, y: best.y, hitR: best.hitR || 18, dist2: bestD } : null;
+    return best;
   }
 
   function defenseAt(x, y, pad) {
@@ -845,15 +852,26 @@
 
   function hurtDefense(d, dmg, source) {
     if (!d || d.dead || d.synced) return;
+    const dealt = Math.min(d.hp, Math.max(0, dmg));
+    defDamageTaken += dealt;
     d.hp -= Math.max(0, dmg);
     d.flash = 1;
+    d.repairT = CFG.RUN.DEF_REPAIR_DELAY;
     emit(d.x, d.y, 4, "#ffb3a0", 130, 2, 0.3);
     if (d.hp <= 0) destroyDefense(d);
+  }
+
+  // 脱战自修复：一段时间没挨打后缓慢恢复耐久
+  function tickDefRepair(d, dt) {
+    if (d.dead || d.hp >= d.maxHp) return;
+    if (d.repairT > 0) { d.repairT -= dt; return; }
+    d.hp = Math.min(d.maxHp, d.hp + d.maxHp * CFG.RUN.DEF_REPAIR_RATE * dt);
   }
 
   function destroyDefense(d) {
     if (!d || d.dead) return;
     d.dead = true;
+    defLost += 1;
     emit(d.x, d.y, 22, "#ffd666", 240, 3.2, 0.65);
     addText(d.x, d.y - 30, "防线被摧毁", "#ff6b6b", 14);
     shake = Math.max(shake, 5 * CFG.FX.SHAKE);
@@ -872,6 +890,13 @@
     if (roomCode && coopIsGuest() && !remote) {
       coopEventSeq += 1;
       coopSendCtrl({ t: "ev", id: coopEventSeq, k: "build", d: { type, x: Math.round(x), y: Math.round(y) } });
+      // 本地先显示半透明预测，房主确认后由快照实体化
+      const gdx = x - who.x, gdy = y - who.y;
+      buildGhosts.push({
+        type, x, y, t: 0,
+        ang: type === "wall" && (gdx * gdx + gdy * gdy > 1) ? Math.atan2(gdy, gdx) + Math.PI / 2 : 0,
+      });
+      if (buildGhosts.length > 8) buildGhosts.shift();
       buildMode = null;
       refreshHud(true);
       addText(who.x, who.y - 46, "部署请求已发送", "#9ad8ff", 13);
@@ -941,7 +966,26 @@
     for (let i = 0; i < walls.length; i++) {
       if (walls[i].flash > 0) walls[i].flash = Math.max(0, walls[i].flash - dt * 9);
     }
+    // 联机客户端的建造预测残影：超时或已被房主实体化后移除
+    for (let i = buildGhosts.length - 1; i >= 0; i--) {
+      const g = buildGhosts[i];
+      g.t += dt;
+      const arr = g.type === "turret" ? turrets : g.type === "field" ? fields : walls;
+      let done = g.t > 3;
+      if (!done) {
+        for (let j = 0; j < arr.length; j++) {
+          const d = arr[j];
+          if (d.synced && dist2(g.x, g.y, d.x, d.y) < 44 * 44) { done = true; break; }
+        }
+      }
+      if (done) buildGhosts.splice(i, 1);
+    }
     if (coopIsGuest()) return;   // 客户端防线由房主快照驱动
+
+    // 脱战自修复
+    for (let i = 0; i < turrets.length; i++) tickDefRepair(turrets[i], dt);
+    for (let i = 0; i < fields.length; i++) tickDefRepair(fields[i], dt);
+    for (let i = 0; i < walls.length; i++) tickDefRepair(walls[i], dt);
 
     const range = CFG.RUN.TURRET_RANGE * view.scale;
     for (let i = 0; i < turrets.length; i++) {

@@ -1216,6 +1216,8 @@
       DEF_TURRET_HP: 90,          // 炮塔耐久
       DEF_FIELD_HP: 70,           // 缓速场耐久
       DEF_WALL_HP: 120,           // 城墙耐久
+      DEF_REPAIR_DELAY: 6,        // 防线脱战多久后开始自修复
+      DEF_REPAIR_RATE: 0.06,      // 自修复速度（每秒恢复最大耐久比例）
       DEF_HP_GROWTH: 0.35,        // 每章耐久成长
       DEF_AGGRO: 300,             // 敌人转火防线的距离
       DEF_ATTACK_CD: 0.8,         // 敌人拆塔间隔
@@ -1925,6 +1927,9 @@
   let turrets = [];
   let fields = [];
   let walls = [];
+  let buildGhosts = [];            // 联机客户端建造预测（半透明残影）
+  let defDamageTaken = 0;          // 本局防线累计承伤
+  let defLost = 0;                 // 本局被摧毁的防线数
   let coreDrops = [];
   let buildMode = null;            // "turret" / "field" / null
   let lastShopWave = 0;
@@ -2240,6 +2245,9 @@
     turrets = [];
     fields = [];
     walls = [];
+    buildGhosts = [];
+    defDamageTaken = 0;
+    defLost = 0;
     coreDrops = [];
     boss = null;
 
@@ -3539,13 +3547,19 @@
       damagePlayer(b.dmg * (b.dashTime > 0 ? 1 : 0.6), tgt);
     }
 
-    // ===== 碾压防线：Boss 靠近时直接拆塔 =====
+    // ===== 碾压防线：Boss 靠近时直接拆塔 / 撞塌城墙 =====
     b.defCd = Math.max(0, (b.defCd || 0) - slowDt);
     if (b.defCd <= 0) {
       const nd = nearestDefense(b.x, b.y, b.r + 56);
       if (nd) {
         hurtDefense(nd.d, b.dmg * 0.9, b);
         b.defCd = 0.7;
+      } else {
+        const nw = nearestWall(b.x, b.y, b.r + 56);
+        if (nw) {
+          hurtDefense(nw, b.dmg * 0.9, b);
+          b.defCd = 0.7;
+        }
       }
     }
   }
@@ -3647,7 +3661,8 @@
         }
       }
 
-      // 城墙阻挡：碰撞后被推开，并就近攻击墙体
+      // 城墙阻挡：先沿墙滑向空隙，长时间被卡住才近身拆墙
+      let wallContact = null;
       for (let wi = 0; wi < walls.length; wi++) {
         const w = walls[wi];
         if (w.dead) continue;
@@ -3655,12 +3670,30 @@
         if (!hit) continue;
         e.x += hit.nx * hit.depth;
         e.y += hit.ny * hit.depth;
-        e.defCd = Math.max(0, (e.defCd || 0) - sdt);
-        if (e.defCd <= 0) {
-          e.defCd = CFG.RUN.DEF_ATTACK_CD * rand(0.85, 1.2);
-          hurtDefense(w, e.dmg, e);
-        }
+        wallContact = w;
+        // 沿墙朝玩家方向滑动，优先从离玩家更近的一端绕过去
+        const ca = Math.cos(w.ang), sa = Math.sin(w.ang);
+        const exL = (e.x - w.x) * ca + (e.y - w.y) * sa;
+        const txL = (playerTgt.x - w.x) * ca + (playerTgt.y - w.y) * sa;
+        const dir = txL >= exL ? 1 : -1;
+        const slide = sp * 0.85 * sdt;
+        e.x += ca * dir * slide;
+        e.y += sa * dir * slide;
+        e.x = clamp(e.x, e.r, world.w - e.r);
+        e.y = clamp(e.y, e.r, world.h - e.r);
         break;
+      }
+      if (wallContact) {
+        e.wallStuck = (e.wallStuck || 0) + sdt;
+        if (e.wallStuck > 1.4) {
+          e.defCd = Math.max(0, (e.defCd || 0) - sdt);
+          if (e.defCd <= 0) {
+            e.defCd = CFG.RUN.DEF_ATTACK_CD * rand(0.85, 1.2);
+            hurtDefense(wallContact, e.dmg, e);
+          }
+        }
+      } else {
+        e.wallStuck = 0;
       }
 
       // ===== 小怪远程弹幕（稀疏；三角怪只近战不射击）=====
@@ -4511,6 +4544,8 @@
       <div><span>最高连杀</span><b>${comboBest}</b></div>
       <div><span>星币</span><b>${credits}</b></div>
       <div><span>防线</span><b>${turrets.length + fields.length + walls.length}</b></div>
+      <div><span>防线承伤</span><b>${Math.round(defDamageTaken)}</b></div>
+      <div><span>防线损失</span><b>${defLost}</b></div>
       <div><span>获得残骸</span><b style="color:var(--gold)">+${shardGain}</b></div>
     `;
 
@@ -5404,6 +5439,17 @@
     }
   }
 
+  // 房主确认/拒绝后清理客户端的建造预测残影
+  function clearBuildGhost(type, x, y) {
+    for (let i = 0; i < buildGhosts.length; i++) {
+      const g = buildGhosts[i];
+      if (type && g.type !== type) continue;
+      if (x !== undefined && dist2(g.x, g.y, x, y) > 90 * 90) continue;
+      buildGhosts.splice(i, 1);
+      return;
+    }
+  }
+
   function coopSendSnapshot() {
     if (!coopNet.host || state !== "playing") return;
     coopSnapSeq += 1;
@@ -5411,6 +5457,8 @@
       t: "snap", v: COOP_SNAP_VER, s: coopSnapSeq, pl: coopSnapshotList(),
       cr: Math.round(credits), co: cores, rv: revives,
       df: coopDefenseList(),
+      dd: Math.round(defDamageTaken),
+      dl: defLost,
     });
   }
 
@@ -5452,6 +5500,8 @@
     if (typeof d.co === "number" && d.co !== cores) cores = d.co;
     if (typeof d.rv === "number" && d.rv !== revives) revives = d.rv;
     if (d.df) coopApplyDefenses(d.df);       // 炮塔/缓速场及耐久由房主同步
+    if (typeof d.dd === "number") defDamageTaken = d.dd;
+    if (typeof d.dl === "number") defLost = d.dl;
     refreshHud();
   }
 
@@ -6785,12 +6835,12 @@
       const maxD = CFG.RUN.DEF_BUILD_RANGE * view.scale;
       const pid = coopFindPeerOf(p.id);
       if (dist2(bx, by, p.x, p.y) > maxD * maxD) {
-        if (pid) coopSendEventTo(pid, "build-no", { reason: "range" });
+        if (pid) coopSendEventTo(pid, "build-no", { reason: "range", type: q.type });
         coopInReject();
         return;
       }
       if (!placeDefense(q.type, bx, by, p, true)) {
-        if (pid) coopSendEventTo(pid, "build-no", { reason: "cost" });
+        if (pid) coopSendEventTo(pid, "build-no", { reason: "cost", type: q.type });
         coopInReject();
         return;
       }
@@ -6857,6 +6907,7 @@
       refreshHud(true);
     } else if (d.k === "build-ok") {
       const bx = Number(p.x) || 0, by = Number(p.y) || 0;
+      clearBuildGhost(p.type, bx, by);
       emit(bx, by, 16, "#ffd666", 200, 3, 0.6);
       addText(bx, by - 26,
         p.type === "field" ? "缓速场已展开" : p.type === "wall" ? "城墙已架设" : "炮塔已部署",
@@ -6864,6 +6915,7 @@
       sfxLevelUp();
     } else if (d.k === "build-no") {
       const lp = getLocalPlayer() || player;
+      clearBuildGhost(p.type);
       addText(lp.x, lp.y - 46, p.reason === "range" ? "超出部署范围" : "核心不足 / 已达上限", "#ff9f9f", 13);
     } else if (d.k === "over") {
       if (state !== "over") endGame(!!p.win, p.reason, p.team);
@@ -8007,7 +8059,7 @@
     return { nx: -sy * sa, ny: sy * ca, depth: py };
   }
 
-  // 敌人转火：返回距离内最近的防线
+  // 敌人转火：返回距离内最近的防线（城墙不主动吸引仇恨，只做物理阻挡）
   function nearestDefense(x, y, maxDist) {
     let best = null;
     let bestD = maxDist * maxDist;
@@ -8023,13 +8075,20 @@
       const dd = dist2(x, y, d.x, d.y);
       if (dd < bestD) { bestD = dd; best = d; }
     }
+    return best ? { d: best, x: best.x, y: best.y, hitR: best.hitR || 18, dist2: bestD } : null;
+  }
+
+  // 最近的城墙（Boss 碾压用）
+  function nearestWall(x, y, maxDist) {
+    let best = null;
+    let bestD = maxDist * maxDist;
     for (let i = 0; i < walls.length; i++) {
       const d = walls[i];
       if (d.dead) continue;
       const dd = dist2(x, y, d.x, d.y);
       if (dd < bestD) { bestD = dd; best = d; }
     }
-    return best ? { d: best, x: best.x, y: best.y, hitR: best.hitR || 18, dist2: bestD } : null;
+    return best;
   }
 
   function defenseAt(x, y, pad) {
@@ -8055,15 +8114,26 @@
 
   function hurtDefense(d, dmg, source) {
     if (!d || d.dead || d.synced) return;
+    const dealt = Math.min(d.hp, Math.max(0, dmg));
+    defDamageTaken += dealt;
     d.hp -= Math.max(0, dmg);
     d.flash = 1;
+    d.repairT = CFG.RUN.DEF_REPAIR_DELAY;
     emit(d.x, d.y, 4, "#ffb3a0", 130, 2, 0.3);
     if (d.hp <= 0) destroyDefense(d);
+  }
+
+  // 脱战自修复：一段时间没挨打后缓慢恢复耐久
+  function tickDefRepair(d, dt) {
+    if (d.dead || d.hp >= d.maxHp) return;
+    if (d.repairT > 0) { d.repairT -= dt; return; }
+    d.hp = Math.min(d.maxHp, d.hp + d.maxHp * CFG.RUN.DEF_REPAIR_RATE * dt);
   }
 
   function destroyDefense(d) {
     if (!d || d.dead) return;
     d.dead = true;
+    defLost += 1;
     emit(d.x, d.y, 22, "#ffd666", 240, 3.2, 0.65);
     addText(d.x, d.y - 30, "防线被摧毁", "#ff6b6b", 14);
     shake = Math.max(shake, 5 * CFG.FX.SHAKE);
@@ -8082,6 +8152,13 @@
     if (roomCode && coopIsGuest() && !remote) {
       coopEventSeq += 1;
       coopSendCtrl({ t: "ev", id: coopEventSeq, k: "build", d: { type, x: Math.round(x), y: Math.round(y) } });
+      // 本地先显示半透明预测，房主确认后由快照实体化
+      const gdx = x - who.x, gdy = y - who.y;
+      buildGhosts.push({
+        type, x, y, t: 0,
+        ang: type === "wall" && (gdx * gdx + gdy * gdy > 1) ? Math.atan2(gdy, gdx) + Math.PI / 2 : 0,
+      });
+      if (buildGhosts.length > 8) buildGhosts.shift();
       buildMode = null;
       refreshHud(true);
       addText(who.x, who.y - 46, "部署请求已发送", "#9ad8ff", 13);
@@ -8151,7 +8228,26 @@
     for (let i = 0; i < walls.length; i++) {
       if (walls[i].flash > 0) walls[i].flash = Math.max(0, walls[i].flash - dt * 9);
     }
+    // 联机客户端的建造预测残影：超时或已被房主实体化后移除
+    for (let i = buildGhosts.length - 1; i >= 0; i--) {
+      const g = buildGhosts[i];
+      g.t += dt;
+      const arr = g.type === "turret" ? turrets : g.type === "field" ? fields : walls;
+      let done = g.t > 3;
+      if (!done) {
+        for (let j = 0; j < arr.length; j++) {
+          const d = arr[j];
+          if (d.synced && dist2(g.x, g.y, d.x, d.y) < 44 * 44) { done = true; break; }
+        }
+      }
+      if (done) buildGhosts.splice(i, 1);
+    }
     if (coopIsGuest()) return;   // 客户端防线由房主快照驱动
+
+    // 脱战自修复
+    for (let i = 0; i < turrets.length; i++) tickDefRepair(turrets[i], dt);
+    for (let i = 0; i < fields.length; i++) tickDefRepair(fields[i], dt);
+    for (let i = 0; i < walls.length; i++) tickDefRepair(walls[i], dt);
 
     const range = CFG.RUN.TURRET_RANGE * view.scale;
     for (let i = 0; i < turrets.length; i++) {
@@ -9005,6 +9101,10 @@
       if (w.x + reach < cull.x0 || w.x - reach > cull.x1 ||
           w.y + reach < cull.y0 || w.y - reach > cull.y1) continue;
       const hx = w.len / 2, hy = w.thick / 2;
+      const whp = clamp((w.hp != null ? w.hp : 1) / (w.maxHp || 1), 0, 1);
+      const cracked = whp < 0.66;
+      const critical = whp < 0.33;
+      const flick = critical ? 0.55 + 0.45 * Math.sin(t * 9 + w.seed) : 1;
       ctx.save();
       ctx.translate(w.x, w.y);
       ctx.rotate(w.ang);
@@ -9013,7 +9113,7 @@
       ctx.fillRect(-hx + 3, -hy + 4, w.len, w.thick);
       // 主体
       ctx.fillStyle = w.flash > 0 ? "rgba(255, 255, 255, 0.92)" : "rgba(54, 68, 94, 0.97)";
-      ctx.strokeStyle = w.flash > 0 ? "#ffffff" : "rgba(150, 195, 245, 0.85)";
+      ctx.strokeStyle = w.flash > 0 ? "#ffffff" : critical ? "rgba(255, 128, 128, 0.9)" : "rgba(150, 195, 245, 0.85)";
       ctx.lineWidth = 2;
       ctx.fillRect(-hx, -hy, w.len, w.thick);
       ctx.strokeRect(-hx, -hy, w.len, w.thick);
@@ -9026,13 +9126,32 @@
         ctx.lineTo(px, hy - 2);
       }
       ctx.stroke();
-      // 中央能量带
-      ctx.fillStyle = w.flash > 0 ? "#ffffff" : "rgba(120, 220, 255, 0.55)";
+      // 破损裂纹
+      if (cracked) {
+        ctx.strokeStyle = "rgba(8, 12, 20, 0.85)";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(-hx + 30, -hy);
+        ctx.lineTo(-hx + 24, 0);
+        ctx.lineTo(-hx + 34, hy);
+        ctx.moveTo(hx - 34, -hy);
+        ctx.lineTo(hx - 40, 0);
+        ctx.lineTo(hx - 30, hy);
+        if (critical) {
+          ctx.moveTo(-6, -hy);
+          ctx.lineTo(2, -1);
+          ctx.lineTo(-4, hy);
+        }
+        ctx.stroke();
+      }
+      // 中央能量带：残血时变红并闪烁
+      ctx.fillStyle = w.flash > 0 ? "#ffffff"
+        : critical ? `rgba(255, 90, 90, ${0.85 * flick})`
+        : "rgba(120, 220, 255, 0.55)";
       ctx.fillRect(-hx + 6, -1.5, w.len - 12, 3);
       ctx.restore();
 
       // 耐久条
-      const whp = clamp((w.hp != null ? w.hp : 1) / (w.maxHp || 1), 0, 1);
       if (whp < 0.999) {
         const bw = Math.min(w.len, 54);
         ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
@@ -9040,6 +9159,47 @@
         ctx.fillStyle = whp > 0.5 ? "#8bffdc" : whp > 0.25 ? "#ffd666" : "#ff6b6b";
         ctx.fillRect(w.x - bw / 2, w.y - hy - 14, bw * whp, 4);
       }
+    }
+  }
+
+  // 联机建造预测残影
+  function drawBuildGhosts(t) {
+    for (let i = 0; i < buildGhosts.length; i++) {
+      const g = buildGhosts[i];
+      ctx.save();
+      ctx.globalAlpha = 0.32 + 0.16 * Math.sin(t * 8 + i);
+      if (g.type === "wall") {
+        ctx.translate(g.x, g.y);
+        ctx.rotate(g.ang);
+        const hx = CFG.RUN.WALL_LEN * view.scale / 2;
+        const hy = CFG.RUN.WALL_THICK * view.scale / 2;
+        ctx.fillStyle = "#9fd8ff";
+        ctx.fillRect(-hx, -hy, hx * 2, hy * 2);
+        ctx.strokeStyle = "#e6f6ff";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-hx, -hy, hx * 2, hy * 2);
+      } else if (g.type === "field") {
+        ctx.strokeStyle = "#8ff6ff";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, CFG.RUN.FIELD_RADIUS * view.scale, 0, TAU);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        ctx.strokeStyle = "#ffd666";
+        ctx.fillStyle = "rgba(255, 214, 102, 0.35)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, 18, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(g.x, g.y);
+        ctx.lineTo(g.x, g.y - 22);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
   }
 
@@ -9317,6 +9477,7 @@
       drawWorldBounds();
       drawFields(t);
       drawWalls(t);
+      drawBuildGhosts(t);
       drawZones(t);
       drawAsteroids(t);
       drawProps(t);

@@ -169,6 +169,9 @@
     turrets = [];
     fields = [];
     walls = [];
+    buildGhosts = [];
+    defDamageTaken = 0;
+    defLost = 0;
     coreDrops = [];
     boss = null;
 

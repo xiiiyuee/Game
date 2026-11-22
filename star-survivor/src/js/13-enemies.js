@@ -400,13 +400,19 @@
       damagePlayer(b.dmg * (b.dashTime > 0 ? 1 : 0.6), tgt);
     }
 
-    // ===== 碾压防线：Boss 靠近时直接拆塔 =====
+    // ===== 碾压防线：Boss 靠近时直接拆塔 / 撞塌城墙 =====
     b.defCd = Math.max(0, (b.defCd || 0) - slowDt);
     if (b.defCd <= 0) {
       const nd = nearestDefense(b.x, b.y, b.r + 56);
       if (nd) {
         hurtDefense(nd.d, b.dmg * 0.9, b);
         b.defCd = 0.7;
+      } else {
+        const nw = nearestWall(b.x, b.y, b.r + 56);
+        if (nw) {
+          hurtDefense(nw, b.dmg * 0.9, b);
+          b.defCd = 0.7;
+        }
       }
     }
   }
@@ -508,7 +514,8 @@
         }
       }
 
-      // 城墙阻挡：碰撞后被推开，并就近攻击墙体
+      // 城墙阻挡：先沿墙滑向空隙，长时间被卡住才近身拆墙
+      let wallContact = null;
       for (let wi = 0; wi < walls.length; wi++) {
         const w = walls[wi];
         if (w.dead) continue;
@@ -516,12 +523,30 @@
         if (!hit) continue;
         e.x += hit.nx * hit.depth;
         e.y += hit.ny * hit.depth;
-        e.defCd = Math.max(0, (e.defCd || 0) - sdt);
-        if (e.defCd <= 0) {
-          e.defCd = CFG.RUN.DEF_ATTACK_CD * rand(0.85, 1.2);
-          hurtDefense(w, e.dmg, e);
-        }
+        wallContact = w;
+        // 沿墙朝玩家方向滑动，优先从离玩家更近的一端绕过去
+        const ca = Math.cos(w.ang), sa = Math.sin(w.ang);
+        const exL = (e.x - w.x) * ca + (e.y - w.y) * sa;
+        const txL = (playerTgt.x - w.x) * ca + (playerTgt.y - w.y) * sa;
+        const dir = txL >= exL ? 1 : -1;
+        const slide = sp * 0.85 * sdt;
+        e.x += ca * dir * slide;
+        e.y += sa * dir * slide;
+        e.x = clamp(e.x, e.r, world.w - e.r);
+        e.y = clamp(e.y, e.r, world.h - e.r);
         break;
+      }
+      if (wallContact) {
+        e.wallStuck = (e.wallStuck || 0) + sdt;
+        if (e.wallStuck > 1.4) {
+          e.defCd = Math.max(0, (e.defCd || 0) - sdt);
+          if (e.defCd <= 0) {
+            e.defCd = CFG.RUN.DEF_ATTACK_CD * rand(0.85, 1.2);
+            hurtDefense(wallContact, e.dmg, e);
+          }
+        }
+      } else {
+        e.wallStuck = 0;
       }
 
       // ===== 小怪远程弹幕（稀疏；三角怪只近战不射击）=====

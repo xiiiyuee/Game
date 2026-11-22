@@ -28,6 +28,9 @@
   let turrets = [];
   let fields = [];
   let walls = [];
+  let buildGhosts = [];            // 联机客户端建造预测（半透明残影）
+  let defDamageTaken = 0;          // 本局防线累计承伤
+  let defLost = 0;                 // 本局被摧毁的防线数
   let coreDrops = [];
   let buildMode = null;            // "turret" / "field" / null
   let lastShopWave = 0;

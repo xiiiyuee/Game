@@ -634,6 +634,10 @@
       if (w.x + reach < cull.x0 || w.x - reach > cull.x1 ||
           w.y + reach < cull.y0 || w.y - reach > cull.y1) continue;
       const hx = w.len / 2, hy = w.thick / 2;
+      const whp = clamp((w.hp != null ? w.hp : 1) / (w.maxHp || 1), 0, 1);
+      const cracked = whp < 0.66;
+      const critical = whp < 0.33;
+      const flick = critical ? 0.55 + 0.45 * Math.sin(t * 9 + w.seed) : 1;
       ctx.save();
       ctx.translate(w.x, w.y);
       ctx.rotate(w.ang);
@@ -642,7 +646,7 @@
       ctx.fillRect(-hx + 3, -hy + 4, w.len, w.thick);
       // 主体
       ctx.fillStyle = w.flash > 0 ? "rgba(255, 255, 255, 0.92)" : "rgba(54, 68, 94, 0.97)";
-      ctx.strokeStyle = w.flash > 0 ? "#ffffff" : "rgba(150, 195, 245, 0.85)";
+      ctx.strokeStyle = w.flash > 0 ? "#ffffff" : critical ? "rgba(255, 128, 128, 0.9)" : "rgba(150, 195, 245, 0.85)";
       ctx.lineWidth = 2;
       ctx.fillRect(-hx, -hy, w.len, w.thick);
       ctx.strokeRect(-hx, -hy, w.len, w.thick);
@@ -655,13 +659,32 @@
         ctx.lineTo(px, hy - 2);
       }
       ctx.stroke();
-      // 中央能量带
-      ctx.fillStyle = w.flash > 0 ? "#ffffff" : "rgba(120, 220, 255, 0.55)";
+      // 破损裂纹
+      if (cracked) {
+        ctx.strokeStyle = "rgba(8, 12, 20, 0.85)";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(-hx + 30, -hy);
+        ctx.lineTo(-hx + 24, 0);
+        ctx.lineTo(-hx + 34, hy);
+        ctx.moveTo(hx - 34, -hy);
+        ctx.lineTo(hx - 40, 0);
+        ctx.lineTo(hx - 30, hy);
+        if (critical) {
+          ctx.moveTo(-6, -hy);
+          ctx.lineTo(2, -1);
+          ctx.lineTo(-4, hy);
+        }
+        ctx.stroke();
+      }
+      // 中央能量带：残血时变红并闪烁
+      ctx.fillStyle = w.flash > 0 ? "#ffffff"
+        : critical ? `rgba(255, 90, 90, ${0.85 * flick})`
+        : "rgba(120, 220, 255, 0.55)";
       ctx.fillRect(-hx + 6, -1.5, w.len - 12, 3);
       ctx.restore();
 
       // 耐久条
-      const whp = clamp((w.hp != null ? w.hp : 1) / (w.maxHp || 1), 0, 1);
       if (whp < 0.999) {
         const bw = Math.min(w.len, 54);
         ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
@@ -669,6 +692,47 @@
         ctx.fillStyle = whp > 0.5 ? "#8bffdc" : whp > 0.25 ? "#ffd666" : "#ff6b6b";
         ctx.fillRect(w.x - bw / 2, w.y - hy - 14, bw * whp, 4);
       }
+    }
+  }
+
+  // 联机建造预测残影
+  function drawBuildGhosts(t) {
+    for (let i = 0; i < buildGhosts.length; i++) {
+      const g = buildGhosts[i];
+      ctx.save();
+      ctx.globalAlpha = 0.32 + 0.16 * Math.sin(t * 8 + i);
+      if (g.type === "wall") {
+        ctx.translate(g.x, g.y);
+        ctx.rotate(g.ang);
+        const hx = CFG.RUN.WALL_LEN * view.scale / 2;
+        const hy = CFG.RUN.WALL_THICK * view.scale / 2;
+        ctx.fillStyle = "#9fd8ff";
+        ctx.fillRect(-hx, -hy, hx * 2, hy * 2);
+        ctx.strokeStyle = "#e6f6ff";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-hx, -hy, hx * 2, hy * 2);
+      } else if (g.type === "field") {
+        ctx.strokeStyle = "#8ff6ff";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, CFG.RUN.FIELD_RADIUS * view.scale, 0, TAU);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        ctx.strokeStyle = "#ffd666";
+        ctx.fillStyle = "rgba(255, 214, 102, 0.35)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, 18, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(g.x, g.y);
+        ctx.lineTo(g.x, g.y - 22);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
   }
 
@@ -946,6 +1010,7 @@
       drawWorldBounds();
       drawFields(t);
       drawWalls(t);
+      drawBuildGhosts(t);
       drawZones(t);
       drawAsteroids(t);
       drawProps(t);

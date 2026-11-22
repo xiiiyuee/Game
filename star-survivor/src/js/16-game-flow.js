@@ -91,6 +91,8 @@
       <div><span>最高连杀</span><b>${comboBest}</b></div>
       <div><span>星币</span><b>${credits}</b></div>
       <div><span>防线</span><b>${turrets.length + fields.length + walls.length}</b></div>
+      <div><span>防线承伤</span><b>${Math.round(defDamageTaken)}</b></div>
+      <div><span>防线损失</span><b>${defLost}</b></div>
       <div><span>获得残骸</span><b style="color:var(--gold)">+${shardGain}</b></div>
     `;
 
@@ -984,6 +986,17 @@
     }
   }
 
+  // 房主确认/拒绝后清理客户端的建造预测残影
+  function clearBuildGhost(type, x, y) {
+    for (let i = 0; i < buildGhosts.length; i++) {
+      const g = buildGhosts[i];
+      if (type && g.type !== type) continue;
+      if (x !== undefined && dist2(g.x, g.y, x, y) > 90 * 90) continue;
+      buildGhosts.splice(i, 1);
+      return;
+    }
+  }
+
   function coopSendSnapshot() {
     if (!coopNet.host || state !== "playing") return;
     coopSnapSeq += 1;
@@ -991,6 +1004,8 @@
       t: "snap", v: COOP_SNAP_VER, s: coopSnapSeq, pl: coopSnapshotList(),
       cr: Math.round(credits), co: cores, rv: revives,
       df: coopDefenseList(),
+      dd: Math.round(defDamageTaken),
+      dl: defLost,
     });
   }
 
@@ -1032,6 +1047,8 @@
     if (typeof d.co === "number" && d.co !== cores) cores = d.co;
     if (typeof d.rv === "number" && d.rv !== revives) revives = d.rv;
     if (d.df) coopApplyDefenses(d.df);       // 炮塔/缓速场及耐久由房主同步
+    if (typeof d.dd === "number") defDamageTaken = d.dd;
+    if (typeof d.dl === "number") defLost = d.dl;
     refreshHud();
   }
 
@@ -2365,12 +2382,12 @@
       const maxD = CFG.RUN.DEF_BUILD_RANGE * view.scale;
       const pid = coopFindPeerOf(p.id);
       if (dist2(bx, by, p.x, p.y) > maxD * maxD) {
-        if (pid) coopSendEventTo(pid, "build-no", { reason: "range" });
+        if (pid) coopSendEventTo(pid, "build-no", { reason: "range", type: q.type });
         coopInReject();
         return;
       }
       if (!placeDefense(q.type, bx, by, p, true)) {
-        if (pid) coopSendEventTo(pid, "build-no", { reason: "cost" });
+        if (pid) coopSendEventTo(pid, "build-no", { reason: "cost", type: q.type });
         coopInReject();
         return;
       }
@@ -2437,6 +2454,7 @@
       refreshHud(true);
     } else if (d.k === "build-ok") {
       const bx = Number(p.x) || 0, by = Number(p.y) || 0;
+      clearBuildGhost(p.type, bx, by);
       emit(bx, by, 16, "#ffd666", 200, 3, 0.6);
       addText(bx, by - 26,
         p.type === "field" ? "缓速场已展开" : p.type === "wall" ? "城墙已架设" : "炮塔已部署",
@@ -2444,6 +2462,7 @@
       sfxLevelUp();
     } else if (d.k === "build-no") {
       const lp = getLocalPlayer() || player;
+      clearBuildGhost(p.type);
       addText(lp.x, lp.y - 46, p.reason === "range" ? "超出部署范围" : "核心不足 / 已达上限", "#ff9f9f", 13);
     } else if (d.k === "over") {
       if (state !== "over") endGame(!!p.win, p.reason, p.team);

@@ -37,6 +37,8 @@
       DEF_TURRET_HP: 90,          // 炮塔耐久
       DEF_FIELD_HP: 70,           // 缓速场耐久
       DEF_WALL_HP: 120,           // 城墙耐久
+      DEF_REPAIR_DELAY: 6,        // 防线脱战多久后开始自修复
+      DEF_REPAIR_RATE: 0.06,      // 自修复速度（每秒恢复最大耐久比例）
       DEF_HP_GROWTH: 0.35,        // 每章耐久成长
       DEF_AGGRO: 300,             // 敌人转火防线的距离
       DEF_ATTACK_CD: 0.8,         // 敌人拆塔间隔
