@@ -435,10 +435,10 @@
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (e.dead) continue;
-      if (e.synced) {
-        e.hitFlash = Math.max(0, (e.hitFlash || 0) - dt * 2.6);
-        continue;
-      }
+      // 受击闪白 / 重击限频对所有敌人推进（客户端同步怪也要衰减）
+      if (e.hitFlash > 0) e.hitFlash = Math.max(0, e.hitFlash - dt * 12);
+      if (e.fxCd > 0) e.fxCd = Math.max(0, e.fxCd - dt);
+      if (e.synced) continue;
 
       if (e.isBoss) {
         updateBoss(e, dt, t);
@@ -472,6 +472,23 @@
       e.x += Math.cos(ang) * sp * sdt;
       e.y += Math.sin(ang) * sp * sdt;
       e.angle = ang;
+
+      // 受击击退：短促冲量 + 快速衰减；冲刺中的精英免疫
+      if (e.kbx || e.kby) {
+        if (e.dashTime > 0) {
+          e.kbx = 0;
+          e.kby = 0;
+        } else {
+          e.x += e.kbx * sdt;
+          e.y += e.kby * sdt;
+          const kd = Math.pow(0.0008, sdt);
+          e.kbx *= kd;
+          e.kby *= kd;
+          if (Math.abs(e.kbx) < 3 && Math.abs(e.kby) < 3) { e.kbx = 0; e.kby = 0; }
+          e.x = clamp(e.x, e.r, world.w - e.r);
+          e.y = clamp(e.y, e.r, world.h - e.r);
+        }
+      }
 
       // ===== 小怪远程弹幕（稀疏；三角怪只近战不射击）=====
       const gun = CFG.ENEMY_GUN[e.type];

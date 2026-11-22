@@ -2,7 +2,7 @@
    * 13. 子弹 / 碰撞
    * ===================================================================*/
   // 统一伤害结算：暴击反馈、伤害数字、死亡处理
-  function hurtEnemy(e, dmg, crit, silent, ownerId) {
+  function hurtEnemy(e, dmg, crit, silent, ownerId, ang) {
     if (e.dead) return;
     // Boss「分裂护盾」：先消耗护盾层
     if (e.isBoss && e.shield > 0) {
@@ -24,13 +24,48 @@
       const op = coopPlayerById(ownerId);
       if (op) op.damage += Math.max(0, dmg);
     }
+
+    // 受击闪白 + 分档反馈（P0）：普通命中轻，暴击/精英/Boss 重
+    const heavy = !!(e.isBoss || e.type === "diamond");
+    const hasDir = typeof ang === "number";
+    const punch = heavy && (e.fxCd || 0) <= 0;   // 重击反馈限频，避免高射速下持续震屏/顿帧
+    if (punch) e.fxCd = e.isBoss ? 0.22 : 0.14;
+    e.hitFlash = Math.max(e.hitFlash || 0, silent ? 0.55 : 1);
+
     if (silent) {
-      emit(e.x, e.y, 3, "#ffd08a", 140, 2, 0.28);
+      emit(e.x, e.y, heavy ? 5 : 3, "#ffd08a", heavy ? 170 : 140, 2, 0.28);
     } else {
-      emit(e.x, e.y, crit ? 10 : 5, crit ? "#ffc857" : "#9ff8ff", crit ? 200 : 130, crit ? 3 : 2.2, 0.4);
-      addText(e.x, e.y - e.r - 4, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#ffc857" : "#cfefff", crit ? 16 : 12);
-      if (crit) shake = Math.max(shake, 3 * CFG.FX.SHAKE);
-      sfxHit();
+      const n = crit ? 12 : heavy ? 9 : 5;
+      const sp = crit ? 230 : heavy ? 195 : 145;
+      const color = crit ? "#ffc857" : "#9ff8ff";
+      if (hasDir) emitDir(e.x, e.y, n, color, ang, crit ? 0.5 : 0.75, sp, crit ? 3 : 2.2, 0.4);
+      else emit(e.x, e.y, n, color, sp * 0.85, crit ? 3 : 2.2, 0.4);
+      addText(e.x + rand(-3, 3), e.y - e.r - 4, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#ffc857" : "#cfefff", crit ? 17 : 12);
+
+      const shakeAdd = punch ? 4.2 : crit ? 2.8 : 0;
+      if (shakeAdd > 0) {
+        shake = Math.max(shake, shakeAdd * CFG.FX.SHAKE);
+        if (hasDir) { shakeDirX = Math.cos(ang); shakeDirY = Math.sin(ang); }
+      }
+      sfxHit(crit, punch);
+
+      // 顿帧：单机暴击/重击；联机房主只对精英/Boss，客户端不冻结本地操作
+      if (!roomCode) {
+        if (e.isBoss) hitStop = Math.max(hitStop, 0.05);
+        else if (heavy) hitStop = Math.max(hitStop, 0.03);
+        else if (crit) hitStop = Math.max(hitStop, 0.022);
+      } else if (!coopIsGuest() && punch) {
+        hitStop = Math.max(hitStop, 0.028);
+      }
+    }
+
+    // 轻击退：房主结算位置后随快照同步；Boss 与冲刺中的精英免疫
+    if (!silent && hasDir && !e.isBoss && !e.synced) {
+      if (e.type !== "diamond" || (e.dashTime || 0) <= 0) {
+        const kb = (e.type === "diamond" ? 70 : 150) * (crit ? 1.35 : 1);
+        e.kbx = (e.kbx || 0) + Math.cos(ang) * kb;
+        e.kby = (e.kby || 0) + Math.sin(ang) * kb;
+      }
     }
     if (e.hp <= 0) killEnemy(e);
   }
@@ -107,7 +142,7 @@
             b.hit.add(e.id);
             const crit = Math.random() < stats.crit;
             const dmg = b.dmg * (crit ? stats.critMult : 1);
-            hurtEnemy(e, dmg, crit, false, b.owner);
+            hurtEnemy(e, dmg, crit, false, b.owner, b.ang);
             if (state === "playing") {
               if (stats.explodeOnHit) explodeAt(b.x, b.y, b.dmg * 0.6, e, undefined, undefined, b.owner);
               if (stats.pulseBlast) explodeAt(b.x, b.y, b.dmg * 0.45, e, 56, THEME.cyanSoft, b.owner);

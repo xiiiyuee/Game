@@ -111,7 +111,11 @@
     updateMusic(simDt);
 
     shake *= Math.pow(0.0009, simDt);
-    if (shake < 0.15) shake = 0;
+    if (shake < 0.15) {
+      shake = 0;
+      shakeDirX = 0;
+      shakeDirY = 0;
+    }
     hurtFlash = Math.max(0, hurtFlash - simDt * 2.8);
 
     // HUD 约 12Hz 刷新即可，避免每帧多次触发样式计算

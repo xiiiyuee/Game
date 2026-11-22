@@ -20,6 +20,26 @@
     }
   }
 
+  // 定向粒子：沿命中方向喷溅，而不是四周均匀散开
+  function emitDir(x, y, count, color, ang, spread, speed, size, life) {
+    const cap = lowFx ? 120 : CFG.LIMITS.PARTICLES;
+    if (lowFx) count = Math.ceil(count * 0.4);
+    for (let i = 0; i < count; i++) {
+      if (particles.length >= cap) break;
+      const a = ang + rand(-spread, spread);
+      const sp = rand(0.35, 1) * speed;
+      particles.push({
+        x, y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        life: rand(0.55, 0.95) * life,
+        max: life,
+        size: rand(0.45, 1.2) * size,
+        color,
+      });
+    }
+  }
+
   function addText(x, y, str, color, size) {
     if (texts.length >= CFG.LIMITS.NUMBERS) texts.shift();
     texts.push({ x, y, text: str, color, size: size || 13, life: 0.75, vy: -46 });

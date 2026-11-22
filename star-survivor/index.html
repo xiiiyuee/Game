@@ -1700,6 +1700,7 @@
    * ===================================================================*/
   const audio = { ctx: null, master: null, sfx: null, music: null, noise: null, muted: false };
   let lastShootSfx = 0;
+  let lastHitSfx = 0;
   let lastExplodeSfx = 0;
 
   function initAudio() {
@@ -1792,11 +1793,14 @@
     lastShootSfx = now;
     tone(880, 520, 0.06, "triangle", 0.09, 3200);
   }
-  function sfxHit() {
+  function sfxHit(crit, heavy) {
     if (!audio.ctx || audio.muted) return;
     const now = performance.now();
-    if (now - lastShootSfx < 30) return;
-    tone(320, 220, 0.035, "square", 0.035, 2200);
+    if (now - lastHitSfx < (heavy ? 55 : 32)) return;   // 独立限流，避免被射击音吞掉
+    lastHitSfx = now;
+    const base = crit ? 430 : 310;
+    tone(base, base * 0.62, crit ? 0.05 : 0.035, "square", crit ? 0.05 : 0.032, 2600);
+    if (heavy) tone(120, 62, 0.12, "sawtooth", 0.06, 480);   // 重击低频层
   }
   function sfxExplode(big) {
     if (!audio.ctx || audio.muted) return;
@@ -1928,6 +1932,8 @@
   let bossSpawned = false;
   let spawnTimer = 1.2;
   let shake = 0;
+  let shakeDirX = 0;               // 重击震屏方向（单位向量，P0 打击感）
+  let shakeDirY = 0;
   let hurtFlash = 0;
   let hudAcc = 0;          // HUD 刷新节流（每帧写 DOM 会造成额外布局开销）
   let nextEnemyId = 1;
@@ -2243,6 +2249,8 @@
     bossSpawned = false;
     spawnTimer = 0.7;
     shake = 0;
+    shakeDirX = 0;
+    shakeDirY = 0;
     hurtFlash = 0;
     nextEnemyId = 1;
     nextBulletId = 1;
@@ -2603,6 +2611,26 @@
         life: rand(0.6, 1) * life,
         max: life,
         size: rand(0.5, 1.3) * size,
+        color,
+      });
+    }
+  }
+
+  // 定向粒子：沿命中方向喷溅，而不是四周均匀散开
+  function emitDir(x, y, count, color, ang, spread, speed, size, life) {
+    const cap = lowFx ? 120 : CFG.LIMITS.PARTICLES;
+    if (lowFx) count = Math.ceil(count * 0.4);
+    for (let i = 0; i < count; i++) {
+      if (particles.length >= cap) break;
+      const a = ang + rand(-spread, spread);
+      const sp = rand(0.35, 1) * speed;
+      particles.push({
+        x, y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        life: rand(0.55, 0.95) * life,
+        max: life,
+        size: rand(0.45, 1.2) * size,
         color,
       });
     }
@@ -3530,10 +3558,10 @@
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (e.dead) continue;
-      if (e.synced) {
-        e.hitFlash = Math.max(0, (e.hitFlash || 0) - dt * 2.6);
-        continue;
-      }
+      // 受击闪白 / 重击限频对所有敌人推进（客户端同步怪也要衰减）
+      if (e.hitFlash > 0) e.hitFlash = Math.max(0, e.hitFlash - dt * 12);
+      if (e.fxCd > 0) e.fxCd = Math.max(0, e.fxCd - dt);
+      if (e.synced) continue;
 
       if (e.isBoss) {
         updateBoss(e, dt, t);
@@ -3567,6 +3595,23 @@
       e.x += Math.cos(ang) * sp * sdt;
       e.y += Math.sin(ang) * sp * sdt;
       e.angle = ang;
+
+      // 受击击退：短促冲量 + 快速衰减；冲刺中的精英免疫
+      if (e.kbx || e.kby) {
+        if (e.dashTime > 0) {
+          e.kbx = 0;
+          e.kby = 0;
+        } else {
+          e.x += e.kbx * sdt;
+          e.y += e.kby * sdt;
+          const kd = Math.pow(0.0008, sdt);
+          e.kbx *= kd;
+          e.kby *= kd;
+          if (Math.abs(e.kbx) < 3 && Math.abs(e.kby) < 3) { e.kbx = 0; e.kby = 0; }
+          e.x = clamp(e.x, e.r, world.w - e.r);
+          e.y = clamp(e.y, e.r, world.h - e.r);
+        }
+      }
 
       // ===== 小怪远程弹幕（稀疏；三角怪只近战不射击）=====
       const gun = CFG.ENEMY_GUN[e.type];
@@ -4058,7 +4103,7 @@
    * 13. 子弹 / 碰撞
    * ===================================================================*/
   // 统一伤害结算：暴击反馈、伤害数字、死亡处理
-  function hurtEnemy(e, dmg, crit, silent, ownerId) {
+  function hurtEnemy(e, dmg, crit, silent, ownerId, ang) {
     if (e.dead) return;
     // Boss「分裂护盾」：先消耗护盾层
     if (e.isBoss && e.shield > 0) {
@@ -4080,13 +4125,48 @@
       const op = coopPlayerById(ownerId);
       if (op) op.damage += Math.max(0, dmg);
     }
+
+    // 受击闪白 + 分档反馈（P0）：普通命中轻，暴击/精英/Boss 重
+    const heavy = !!(e.isBoss || e.type === "diamond");
+    const hasDir = typeof ang === "number";
+    const punch = heavy && (e.fxCd || 0) <= 0;   // 重击反馈限频，避免高射速下持续震屏/顿帧
+    if (punch) e.fxCd = e.isBoss ? 0.22 : 0.14;
+    e.hitFlash = Math.max(e.hitFlash || 0, silent ? 0.55 : 1);
+
     if (silent) {
-      emit(e.x, e.y, 3, "#ffd08a", 140, 2, 0.28);
+      emit(e.x, e.y, heavy ? 5 : 3, "#ffd08a", heavy ? 170 : 140, 2, 0.28);
     } else {
-      emit(e.x, e.y, crit ? 10 : 5, crit ? "#ffc857" : "#9ff8ff", crit ? 200 : 130, crit ? 3 : 2.2, 0.4);
-      addText(e.x, e.y - e.r - 4, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#ffc857" : "#cfefff", crit ? 16 : 12);
-      if (crit) shake = Math.max(shake, 3 * CFG.FX.SHAKE);
-      sfxHit();
+      const n = crit ? 12 : heavy ? 9 : 5;
+      const sp = crit ? 230 : heavy ? 195 : 145;
+      const color = crit ? "#ffc857" : "#9ff8ff";
+      if (hasDir) emitDir(e.x, e.y, n, color, ang, crit ? 0.5 : 0.75, sp, crit ? 3 : 2.2, 0.4);
+      else emit(e.x, e.y, n, color, sp * 0.85, crit ? 3 : 2.2, 0.4);
+      addText(e.x + rand(-3, 3), e.y - e.r - 4, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#ffc857" : "#cfefff", crit ? 17 : 12);
+
+      const shakeAdd = punch ? 4.2 : crit ? 2.8 : 0;
+      if (shakeAdd > 0) {
+        shake = Math.max(shake, shakeAdd * CFG.FX.SHAKE);
+        if (hasDir) { shakeDirX = Math.cos(ang); shakeDirY = Math.sin(ang); }
+      }
+      sfxHit(crit, punch);
+
+      // 顿帧：单机暴击/重击；联机房主只对精英/Boss，客户端不冻结本地操作
+      if (!roomCode) {
+        if (e.isBoss) hitStop = Math.max(hitStop, 0.05);
+        else if (heavy) hitStop = Math.max(hitStop, 0.03);
+        else if (crit) hitStop = Math.max(hitStop, 0.022);
+      } else if (!coopIsGuest() && punch) {
+        hitStop = Math.max(hitStop, 0.028);
+      }
+    }
+
+    // 轻击退：房主结算位置后随快照同步；Boss 与冲刺中的精英免疫
+    if (!silent && hasDir && !e.isBoss && !e.synced) {
+      if (e.type !== "diamond" || (e.dashTime || 0) <= 0) {
+        const kb = (e.type === "diamond" ? 70 : 150) * (crit ? 1.35 : 1);
+        e.kbx = (e.kbx || 0) + Math.cos(ang) * kb;
+        e.kby = (e.kby || 0) + Math.sin(ang) * kb;
+      }
     }
     if (e.hp <= 0) killEnemy(e);
   }
@@ -4163,7 +4243,7 @@
             b.hit.add(e.id);
             const crit = Math.random() < stats.crit;
             const dmg = b.dmg * (crit ? stats.critMult : 1);
-            hurtEnemy(e, dmg, crit, false, b.owner);
+            hurtEnemy(e, dmg, crit, false, b.owner, b.ang);
             if (state === "playing") {
               if (stats.explodeOnHit) explodeAt(b.x, b.y, b.dmg * 0.6, e, undefined, undefined, b.owner);
               if (stats.pulseBlast) explodeAt(b.x, b.y, b.dmg * 0.45, e, 56, THEME.cyanSoft, b.owner);
@@ -7905,7 +7985,11 @@
     updateMusic(simDt);
 
     shake *= Math.pow(0.0009, simDt);
-    if (shake < 0.15) shake = 0;
+    if (shake < 0.15) {
+      shake = 0;
+      shakeDirX = 0;
+      shakeDirY = 0;
+    }
     hurtFlash = Math.max(0, hurtFlash - simDt * 2.8);
 
     // HUD 约 12Hz 刷新即可，避免每帧多次触发样式计算
@@ -8189,6 +8273,17 @@
         ctx.beginPath();
         ctx.arc(0, 0, e.r * 0.3, 0, TAU);
         ctx.fill();
+
+        // 受击闪白
+        const bf = e.hitFlash || 0;
+        if (bf > 0) {
+          ctx.globalAlpha = Math.min(0.85, bf) * 0.8;
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(0, 0, e.r * 0.86, 0, TAU);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
         ctx.restore();
 
         // ===== 机制表现 =====
@@ -8262,14 +8357,23 @@
       const detail = e.r * view.scale > 7;
       if (!lowFx) drawGlow(e.color, 0, 0, e.r * (e.type === "diamond" ? 3 : 2.4), e.type === "diamond" ? 0.55 : 0.42);
 
+      let sides = 4, rot = e.angle + Math.PI / 4, fillA = 0.24, lw = 2.4;
       if (e.type === "tri") {
-        drawShape(0, 0, e.r, 3, e.angle + Math.PI / 2, rgbaOf(e.color, 0.22), e.color, 2);
+        sides = 3; rot = e.angle + Math.PI / 2; fillA = 0.22; lw = 2;
       } else if (e.type === "square") {
-        drawShape(0, 0, e.r, 4, t * 0.9 + e.seed, rgbaOf(e.color, 0.2), e.color, 2);
+        rot = t * 0.9 + e.seed; fillA = 0.2; lw = 2;
       } else if (e.type === "penta") {
-        drawShape(0, 0, e.r, 5, t * 1.4 + e.seed, rgbaOf(e.color, 0.2), e.color, 2);
-      } else {
-        drawShape(0, 0, e.r, 4, e.angle + Math.PI / 4, rgbaOf(e.color, 0.24), e.color, 2.4);
+        sides = 5; rot = t * 1.4 + e.seed; fillA = 0.2; lw = 2;
+      }
+      drawShape(0, 0, e.r, sides, rot, rgbaOf(e.color, fillA), e.color, lw);
+
+      // 受击闪白：用同样的轮廓整块变白，命中确认更干净
+      const fl = e.hitFlash || 0;
+      if (fl > 0) {
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = Math.min(0.85, fl) * 0.85;
+        drawShape(0, 0, e.r, sides, rot, "#ffffff", "#ffffff", 1);
+        ctx.globalAlpha = 1;
       }
       ctx.shadowBlur = 0;
 
@@ -8735,7 +8839,8 @@
     ctx.save();
     if (state === "playing" && shake > 0) {
       const s = shake * (lowFx ? 0.35 : 1);
-      ctx.translate(rand(-s, s), rand(-s, s));
+      // 重击带方向偏移，普通抖动仍保持随机
+      ctx.translate(rand(-s, s) + shakeDirX * s * 0.55, rand(-s, s) + shakeDirY * s * 0.55);
     }
 
     drawBackground(t);

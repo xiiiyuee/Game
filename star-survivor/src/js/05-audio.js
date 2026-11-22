@@ -3,6 +3,7 @@
    * ===================================================================*/
   const audio = { ctx: null, master: null, sfx: null, music: null, noise: null, muted: false };
   let lastShootSfx = 0;
+  let lastHitSfx = 0;
   let lastExplodeSfx = 0;
 
   function initAudio() {
@@ -95,11 +96,14 @@
     lastShootSfx = now;
     tone(880, 520, 0.06, "triangle", 0.09, 3200);
   }
-  function sfxHit() {
+  function sfxHit(crit, heavy) {
     if (!audio.ctx || audio.muted) return;
     const now = performance.now();
-    if (now - lastShootSfx < 30) return;
-    tone(320, 220, 0.035, "square", 0.035, 2200);
+    if (now - lastHitSfx < (heavy ? 55 : 32)) return;   // 独立限流，避免被射击音吞掉
+    lastHitSfx = now;
+    const base = crit ? 430 : 310;
+    tone(base, base * 0.62, crit ? 0.05 : 0.035, "square", crit ? 0.05 : 0.032, 2600);
+    if (heavy) tone(120, 62, 0.12, "sawtooth", 0.06, 480);   // 重击低频层
   }
   function sfxExplode(big) {
     if (!audio.ctx || audio.muted) return;

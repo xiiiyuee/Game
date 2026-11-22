@@ -271,6 +271,17 @@
         ctx.beginPath();
         ctx.arc(0, 0, e.r * 0.3, 0, TAU);
         ctx.fill();
+
+        // 受击闪白
+        const bf = e.hitFlash || 0;
+        if (bf > 0) {
+          ctx.globalAlpha = Math.min(0.85, bf) * 0.8;
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(0, 0, e.r * 0.86, 0, TAU);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
         ctx.restore();
 
         // ===== 机制表现 =====
@@ -344,14 +355,23 @@
       const detail = e.r * view.scale > 7;
       if (!lowFx) drawGlow(e.color, 0, 0, e.r * (e.type === "diamond" ? 3 : 2.4), e.type === "diamond" ? 0.55 : 0.42);
 
+      let sides = 4, rot = e.angle + Math.PI / 4, fillA = 0.24, lw = 2.4;
       if (e.type === "tri") {
-        drawShape(0, 0, e.r, 3, e.angle + Math.PI / 2, rgbaOf(e.color, 0.22), e.color, 2);
+        sides = 3; rot = e.angle + Math.PI / 2; fillA = 0.22; lw = 2;
       } else if (e.type === "square") {
-        drawShape(0, 0, e.r, 4, t * 0.9 + e.seed, rgbaOf(e.color, 0.2), e.color, 2);
+        rot = t * 0.9 + e.seed; fillA = 0.2; lw = 2;
       } else if (e.type === "penta") {
-        drawShape(0, 0, e.r, 5, t * 1.4 + e.seed, rgbaOf(e.color, 0.2), e.color, 2);
-      } else {
-        drawShape(0, 0, e.r, 4, e.angle + Math.PI / 4, rgbaOf(e.color, 0.24), e.color, 2.4);
+        sides = 5; rot = t * 1.4 + e.seed; fillA = 0.2; lw = 2;
+      }
+      drawShape(0, 0, e.r, sides, rot, rgbaOf(e.color, fillA), e.color, lw);
+
+      // 受击闪白：用同样的轮廓整块变白，命中确认更干净
+      const fl = e.hitFlash || 0;
+      if (fl > 0) {
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = Math.min(0.85, fl) * 0.85;
+        drawShape(0, 0, e.r, sides, rot, "#ffffff", "#ffffff", 1);
+        ctx.globalAlpha = 1;
       }
       ctx.shadowBlur = 0;
 
@@ -817,7 +837,8 @@
     ctx.save();
     if (state === "playing" && shake > 0) {
       const s = shake * (lowFx ? 0.35 : 1);
-      ctx.translate(rand(-s, s), rand(-s, s));
+      // 重击带方向偏移，普通抖动仍保持随机
+      ctx.translate(rand(-s, s) + shakeDirX * s * 0.55, rand(-s, s) + shakeDirY * s * 0.55);
     }
 
     drawBackground(t);

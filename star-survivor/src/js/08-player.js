@@ -190,6 +190,8 @@
     bossSpawned = false;
     spawnTimer = 0.7;
     shake = 0;
+    shakeDirX = 0;
+    shakeDirY = 0;
     hurtFlash = 0;
     nextEnemyId = 1;
     nextBulletId = 1;

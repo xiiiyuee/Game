@@ -46,6 +46,8 @@
   let bossSpawned = false;
   let spawnTimer = 1.2;
   let shake = 0;
+  let shakeDirX = 0;               // 重击震屏方向（单位向量，P0 打击感）
+  let shakeDirY = 0;
   let hurtFlash = 0;
   let hudAcc = 0;          // HUD 刷新节流（每帧写 DOM 会造成额外布局开销）
   let nextEnemyId = 1;
