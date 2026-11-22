@@ -4274,6 +4274,7 @@
     coopStats = { recv: 0, rate: 0, got: 0, lost: 0, lossPct: 0 };
     coopSeq = {};
     coopPosSeq = 0;
+    coopSnapSeq = 0;
     coopFatalActive = false;
     coopFatalPaused = false;
     if (coopDiscTimer) { clearTimeout(coopDiscTimer); coopDiscTimer = null; }
@@ -4486,6 +4487,8 @@
       if (!coopNet.host) coopFatal("房主已离开房间", data.reason || "房主已结束联机，请返回菜单或重新加入");
     } else if (data.t === "i") {
       coopApplyInput(data);
+    } else if (data.t === "snap") {
+      coopApplySnapshot(data);
     } else if (data.t === "p") {
       coopNoteSnapshot(data);
       coopApplyPlayerState(data);
@@ -4580,6 +4583,61 @@
 
   let coopPosTimer = null;
 
+  /* ===== 快照协议 v1（P3-02）：15Hz，只含玩家，坐标量化到 0.1 ===== */
+  const COOP_SNAP_VER = 1;
+  let coopSnapSeq = 0;
+
+  function coopSnapshotList() {
+    const arr = [];
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (p.eliminated) continue;
+      arr.push([
+        p.id,
+        Math.round(p.x * 10), Math.round(p.y * 10),
+        Math.round(p.facing * 100),
+        Math.round(p.hp), Math.round(p.hpMax),
+        Math.round(p.shield), Math.round(p.stats.shieldMax),
+      ]);
+    }
+    return arr;
+  }
+
+  function coopSendSnapshot() {
+    if (!coopNet.host || state !== "playing") return;
+    coopSnapSeq += 1;
+    coopSendState({ t: "snap", v: COOP_SNAP_VER, s: coopSnapSeq, pl: coopSnapshotList() });
+  }
+
+  function coopApplySnapshot(d) {
+    if (coopNet.host || !d || d.v !== COOP_SNAP_VER || !d.pl || !d.pl.length) return;
+    if (state !== "playing" || !player) return;
+    for (let i = 0; i < d.pl.length; i++) {
+      const e = d.pl[i];
+      if (!e || e.length < 4) continue;
+      const id = e[0];
+      if (!id || id === localPlayerId) continue;
+      let p = null;
+      for (let j = 0; j < players.length; j++) if (players[j].id === id) { p = players[j]; break; }
+      if (!p) p = coopAddRemote(id, e[1] / 10, e[2] / 10);
+      if (!p) continue;
+      p.x = e[1] / 10;
+      p.y = e[2] / 10;
+      p.facing = e[3] / 100;
+      if (e.length >= 8) {
+        p.hp = e[4];
+        p.hpMax = e[5];
+        p.shield = e[6];
+        p.stats.shieldMax = e[7];
+      }
+    }
+  }
+
+  function coopPosTick() {
+    if (coopNet.host) coopSendSnapshot();
+    else coopSendPositions();
+  }
+
   function coopAddRemote(id, x, y) {
     if (!id || id === localPlayerId) return null;
     for (let i = 0; i < players.length; i++) if (players[i].id === id) return players[i];
@@ -4621,7 +4679,8 @@
     if (coopPosTimer) return;
     coopSeq = {};
     coopPosSeq = 0;
-    coopPosTimer = setInterval(coopSendPositions, 66);
+    coopSnapSeq = 0;
+    coopPosTimer = setInterval(coopPosTick, 66);
   }
 
   function coopStopPosLoop() {
