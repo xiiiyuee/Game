@@ -4621,7 +4621,8 @@
       const e = d.pl[i];
       if (!e || e.length < 4) continue;
       const id = e[0];
-      if (!id || id === localPlayerId) continue;
+      if (!id) continue;
+      if (id === localPlayerId) { coopCorrectLocal(e); continue; }
       let p = null;
       for (let j = 0; j < players.length; j++) if (players[j].id === id) { p = players[j]; break; }
       if (!p) p = coopAddRemote(id, e[1] / 10, e[2] / 10);
@@ -4636,6 +4637,28 @@
         p.stats.shieldMax = e[7];
       }
       coopInterpPush(id, p.x, p.y, p.facing);
+    }
+  }
+
+  /* ===== 本地预测与校正（P3-05）：房主快照逐步纠偏，不做瞬移 ===== */
+  const COOP_SNAP_SNAP_DIST = 180;   // 超过这个误差视为掉队，直接对齐
+  const COOP_SNAP_CORRECT = 0.25;    // 每次快照纠偏 25%
+
+  function coopCorrectLocal(e) {
+    if (!player) return;
+    const ax = e[1] / 10;
+    const ay = e[2] / 10;
+    const dx = ax - player.x;
+    const dy = ay - player.y;
+    const d = Math.hypot(dx, dy);
+    if (d > COOP_SNAP_SNAP_DIST) {
+      player.x = ax;
+      player.y = ay;
+      return;
+    }
+    if (d > 0.5) {
+      player.x += dx * COOP_SNAP_CORRECT;
+      player.y += dy * COOP_SNAP_CORRECT;
     }
   }
 
