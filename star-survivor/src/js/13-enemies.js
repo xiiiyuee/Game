@@ -195,6 +195,7 @@
     hurtFlash = 0.7;
     emit(x, y, 46, "#ff3b6b", 260, 5, 1.1);
     sfxBoss();
+    coopSendEvent("boss-spawn", { ch: chapter, hp: boss.hp });
   }
 
   function bossLabel(b) {
@@ -241,6 +242,7 @@
         if (Math.random() < 0.45) ebullets.splice(i, 1);
       }
       sfxBoss();
+      coopSendEvent("boss-phase", { p: nextPhase });
     }
 
     const dx = tgt.x - b.x;
@@ -552,6 +554,7 @@
       sfxExplode(true);
       boss = null;
       hideBossBar();
+      coopSendEvent("boss-down", { ch: chapter });
       for (let i = 0; i < 3; i++) dropCore(e.x + rand(-24, 24), e.y + rand(-24, 24));
       // Boss 必定掉落 2 枚芯片
       for (let i = 0; i < 2; i++) dropChip(e.x + rand(-30, 30), e.y + rand(-30, 30));

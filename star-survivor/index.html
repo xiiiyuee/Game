@@ -3074,6 +3074,7 @@
     hurtFlash = 0.7;
     emit(x, y, 46, "#ff3b6b", 260, 5, 1.1);
     sfxBoss();
+    coopSendEvent("boss-spawn", { ch: chapter, hp: boss.hp });
   }
 
   function bossLabel(b) {
@@ -3120,6 +3121,7 @@
         if (Math.random() < 0.45) ebullets.splice(i, 1);
       }
       sfxBoss();
+      coopSendEvent("boss-phase", { p: nextPhase });
     }
 
     const dx = tgt.x - b.x;
@@ -3431,6 +3433,7 @@
       sfxExplode(true);
       boss = null;
       hideBossBar();
+      coopSendEvent("boss-down", { ch: chapter });
       for (let i = 0; i < 3; i++) dropCore(e.x + rand(-24, 24), e.y + rand(-24, 24));
       // Boss 必定掉落 2 枚芯片
       for (let i = 0; i < 2; i++) dropChip(e.x + rand(-30, 30), e.y + rand(-30, 30));
@@ -4074,6 +4077,7 @@
 
   function endGame(win, reason) {
     if (state === "over") return;
+    if (coopNet.host) coopSendEvent("over", { win: !!win, reason });
     coopStopPosLoop();
     state = "over";
     clearKeys();
@@ -4226,6 +4230,7 @@
   let coopGuests = {};       // 房主侧：peer -> { ctrl, state, slot, id, lastSeen, ping }
   let coopFallbackId = 0;
   let coopHelloSent = false;
+  let coopEventSeq = 0;      // 可靠事件序号（P3-12）
 
   /* ===== 心跳（P2-05）：1 秒一次，5 秒无响应判定掉线 ===== */
   const COOP_HEARTBEAT_MS = 1000;
@@ -4524,6 +4529,8 @@
     } else if (data.t === "p") {
       coopNoteSnapshot(data);
       coopApplyPlayerState(data);
+    } else if (data.t === "ev") {
+      coopOnEvent(data);
     }
   }
 
@@ -5468,6 +5475,54 @@
       return;
     }
     if (coopNet.state && coopNet.state.open) coopNet.state.send(msg);
+  }
+
+  /* ===== 可靠事件通道（P3-12）：关键事件走 ctrl，不随状态包丢失 ===== */
+  function coopSendEvent(kind, data, exceptPid) {
+    if (!roomCode || !kind) return;
+    coopEventSeq += 1;
+    const msg = { t: "ev", id: coopEventSeq, k: kind, d: data || null };
+    if (coopNet.host) {
+      for (const pid in coopGuests) {
+        if (pid === exceptPid) continue;
+        const c = coopGuests[pid].ctrl;
+        if (c && c.open) c.send(msg);
+      }
+      return;
+    }
+    coopSendCtrl(msg);
+  }
+
+  function coopOnEvent(d) {
+    if (!d || !d.k || coopNet.host) return;   // 事件由房主下发
+    const p = d.d || {};
+    if (d.k === "boss-spawn") {
+      addText(player.x, player.y - 64, "虚空之眼降临", "#ff4d6d", 20);
+      shake = Math.max(shake, 12 * CFG.FX.SHAKE);
+    } else if (d.k === "boss-phase") {
+      if (boss) {
+        const label = ["", "I", "II", "III"][p.p || 1] || "?";
+        addText(boss.x, boss.y - boss.r - 26, "阶段 " + label, "#ffc857", 16);
+        document.getElementById("ui-boss-name").textContent = bossLabel(boss);
+      }
+    } else if (d.k === "boss-down") {
+      slowmo = Math.max(slowmo, 1.0);
+      victoryFlash = 1;
+      emit(player.x, player.y, 30, "#ffc857", 320, 4, 1.0);
+    } else if (d.k === "chapter") {
+      chapter = p.c || chapter + 1;
+      chapterMod = CHAPTER_MODS.find((m) => m.id === p.mod) || null;
+      waveNum = 1;
+      bossSpawned = false;
+      boss = null;
+      hideBossBar();
+      enemies = enemies.filter((e) => !e.synced);
+      ebullets = [];
+      addText(player.x, player.y - 64, "第 " + chapter + " 星域", "#ffd666", 24);
+      refreshHud(true);
+    } else if (d.k === "over") {
+      if (state !== "over") endGame(!!p.win, p.reason);
+    }
   }
 
 
@@ -6518,6 +6573,7 @@
     slowmo = 0;
     chapter += 1;
     chapterMod = pick(CHAPTER_MODS.filter((m) => !chapterMod || m.id !== chapterMod.id));
+    coopSendEvent("chapter", { c: chapter, mod: chapterMod ? chapterMod.id : "" });
     chapterStartElapsed = elapsed;
     waveNum = 1;
     bossSpawned = false;

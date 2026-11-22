@@ -710,6 +710,7 @@
     slowmo = 0;
     chapter += 1;
     chapterMod = pick(CHAPTER_MODS.filter((m) => !chapterMod || m.id !== chapterMod.id));
+    coopSendEvent("chapter", { c: chapter, mod: chapterMod ? chapterMod.id : "" });
     chapterStartElapsed = elapsed;
     waveNum = 1;
     bossSpawned = false;
