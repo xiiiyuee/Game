@@ -125,6 +125,7 @@
   }
 
   function newRoom() {
+    if (coopNet.host && coopNet.peer) coopBroadcastCtrl({ t: "bye", reason: "房主已离开房间" });
     coopReset();
     roomCode = genRoomCode();
     roomHost = true;
@@ -198,6 +199,11 @@
   let coopSeq = {};       // 发送方 id -> 最近快照序号
   let coopPosSeq = 0;     // 本地快照序号
 
+  /* ===== 连接失败兜底（P2-09）===== */
+  let coopFatalActive = false;
+  let coopFatalPaused = false;
+  let coopDiscTimer = null;
+
   function setCoopStatus(status, text) {
     coopNet.status = status;
     const el = document.getElementById("coop-status");
@@ -240,10 +246,11 @@
   }
 
   function coopReset(keepStatus) {
-    if (coopNet.peer) {
-      try { coopNet.peer.destroy(); } catch (err) {}
-    }
+    const oldPeer = coopNet.peer;
     coopNet.peer = null;
+    if (oldPeer) {
+      try { oldPeer.destroy(); } catch (err) {}
+    }
     coopNet.ctrl = null;
     coopNet.state = null;
     coopNet.error = "";
@@ -257,6 +264,9 @@
     coopStats = { recv: 0, rate: 0, got: 0, lost: 0, lossPct: 0 };
     coopSeq = {};
     coopPosSeq = 0;
+    coopFatalActive = false;
+    coopFatalPaused = false;
+    if (coopDiscTimer) { clearTimeout(coopDiscTimer); coopDiscTimer = null; }
     coopStopHeartbeat();
     coopStopPosLoop();
     if (!keepStatus) setCoopStatus("idle", "未连接");
@@ -276,12 +286,16 @@
     coopStopHeartbeat();
     coopNet.error = msg;
     setCoopStatus("error", "连接失败：" + msg);
+    if (type === "peer-unavailable" || type === "network" || type === "server-error" || type === "socket-error") {
+      coopFatal("连接失败", msg);
+    }
   }
 
   function onLoadError(err) {
     coopStopHeartbeat();
     coopNet.error = err && err.message ? err.message : "信令库加载失败";
     setCoopStatus("error", "连接失败：" + coopNet.error);
+    coopFatal("连接失败", "无法加载信令库，请检查网络后重试");
   }
 
   function refreshChannelStatus() {
@@ -382,7 +396,7 @@
     if (coopNet.lastSeen && now - coopNet.lastSeen > COOP_TIMEOUT_MS) {
       coopStopHeartbeat();
       coopNet.error = "与房主连接超时";
-      setCoopStatus("error", "连接失败：与房主连接超时");
+      coopFatal("与房主连接超时", "5 秒内没有收到房主数据，请检查网络后重试");
       return;
     }
     coopSendCtrl({ t: "ping", ts: now });
@@ -452,6 +466,8 @@
         coopRemoteAway = false;
         coopResumeLocal();
       }
+    } else if (data.t === "bye") {
+      if (!coopNet.host) coopFatal("房主已离开房间", data.reason || "房主已结束联机，请返回菜单或重新加入");
     } else if (data.t === "p") {
       coopNoteSnapshot(data);
       coopApplyPlayerState(data);
@@ -531,8 +547,12 @@
       if (kind === "ctrl" && !coopNet.host) coopSayHello();
     });
     conn.on("close", () => {
+      if (!coopNet.peer) return;
       if (coopNet[kind] === conn) coopNet[kind] = null;
       refreshChannelStatus();
+      if (!coopNet.host && !coopNet.ctrl && !coopNet.state && !coopFatalActive) {
+        coopFatal("连接中断", "与房主的连接已断开，请重试或返回菜单");
+      }
     });
     conn.on("error", () => {});
     conn.on("data", (data) => coopOnData(conn, data));
@@ -652,6 +672,47 @@
 
   document.addEventListener("visibilitychange", coopOnVisibility);
 
+  function coopFatal(title, text) {
+    if (coopFatalActive) return;
+    coopFatalActive = true;
+    coopStopHeartbeat();
+    if (state === "playing") {
+      togglePause();
+      coopFatalPaused = true;
+    }
+    const ov = document.getElementById("ov-coop");
+    if (ov) {
+      ov.classList.remove("hidden");
+      const t = document.getElementById("coop-err-title");
+      const d = document.getElementById("coop-err-text");
+      if (t) t.textContent = title || "连接中断";
+      if (d) d.textContent = text || "";
+      const pause = document.getElementById("ov-pause");
+      if (pause) pause.classList.add("hidden");
+    }
+    setCoopStatus("error", title || "连接中断");
+  }
+
+  function coopRetry() {
+    const ov = document.getElementById("ov-coop");
+    if (ov) ov.classList.add("hidden");
+    if (coopFatalPaused && state === "paused") togglePause();
+    coopFatalActive = false;
+    coopFatalPaused = false;
+    if (!roomCode) {
+      location.href = location.pathname;
+      return;
+    }
+    connectCoop();
+  }
+
+  function coopBackToMenu() {
+    if (coopNet.host && coopNet.peer) coopBroadcastCtrl({ t: "bye", reason: "房主已离开房间" });
+    coopStopHeartbeat();
+    coopStopPosLoop();
+    location.href = location.pathname;
+  }
+
   function connectHost() {
     if (!roomCode) return;
     coopReset(true);
@@ -677,6 +738,17 @@
         const label = conn.label === "state" ? "state" : "ctrl";
         wireChannel(label, conn);
       });
+      peer.on("close", () => {
+        if (coopNet.peer === peer) coopFatal("连接已关闭", "信令服务连接已断开，请重试或返回菜单");
+      });
+      peer.on("disconnected", () => {
+        if (coopNet.peer !== peer) return;
+        setCoopStatus("connecting", "连接中断，正在尝试恢复…");
+        if (coopDiscTimer) clearTimeout(coopDiscTimer);
+        coopDiscTimer = setTimeout(() => {
+          if (coopNet.peer === peer) coopFatal("连接中断", "与信令服务的连接已断开，请重试或返回菜单");
+        }, 4000);
+      });
       peer.on("error", onPeerError);
     }).catch(onLoadError);
   }
@@ -699,9 +771,21 @@
       }
       coopNet.peer = peer;
       peer.on("open", () => {
+        if (coopDiscTimer) { clearTimeout(coopDiscTimer); coopDiscTimer = null; }
         const target = PEER_ID_PREFIX + roomCode;
         wireChannel("ctrl", peer.connect(target, { label: "ctrl", reliable: true, serialization: "json" }));
         wireChannel("state", peer.connect(target, { label: "state", reliable: false, serialization: "json" }));
+      });
+      peer.on("close", () => {
+        if (coopNet.peer === peer) coopFatal("连接已关闭", "与信令服务的连接已断开，请重试或返回菜单");
+      });
+      peer.on("disconnected", () => {
+        if (coopNet.peer !== peer) return;
+        setCoopStatus("connecting", "连接中断，正在尝试恢复…");
+        if (coopDiscTimer) clearTimeout(coopDiscTimer);
+        coopDiscTimer = setTimeout(() => {
+          if (coopNet.peer === peer) coopFatal("连接中断", "与信令服务的连接已断开，请重试或返回菜单");
+        }, 4000);
       });
       peer.on("error", onPeerError);
     }).catch(onLoadError);

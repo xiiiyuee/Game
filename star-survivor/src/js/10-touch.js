@@ -101,6 +101,8 @@
     else if (act === "coop-copy") copyRoom();
     else if (act === "coop-connect") connectCoop();
     else if (act === "coop-new") newRoom();
+    else if (act === "coop-retry") coopRetry();
+    else if (act === "coop-back") coopBackToMenu();
   });
 
   // 成长档案购买
