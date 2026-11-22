@@ -313,8 +313,9 @@ window.SS_COOP_CONFIG = {
 ```
 
 ```
-?sig=localhost:9000&sigsecure=0&sigpath=/peerjs   // 本地信令
-?sig=wss://sig.example.com/peerjs                  // 线上信令
+?sig=localhost:9000&sigsecure=0&sigpath=/peerjs   // 本地信令（/peerjs 会被自动归一化）
+?sig=wss://sig.example.com/peerjs                  // 线上信令（完整 /peerjs 地址可直接粘贴）
+?sig=wss://sig.example.com&sigpath=/rtc            // 反代前缀 /rtc 时
 ?turn=turn:u:p@turn.example.com:3478,turns:turn.example.com:5349
 ?peersrc=https://cdn.example.com/peerjs.min.js
 ```
@@ -369,7 +370,7 @@ window.SS_COOP_CONFIG = {
 日期：2026-11-22
 完成：Phase 0/1/2/3；Phase 4 全部（P4-01 ~ P4-08、P4-10；P4-09 按 D-08 跳过）；P5-03 配置注入
 当前：P5-03 已完成。信令地址、TURN/ICE、PeerJS 客户端库不再写死：优先级为默认值 → `window.SS_COOP_CONFIG` → URL（`?sig=` / `?sigport=` / `?sigpath=` / `?sigsecure=` / `?turn=` / `?peersrc=`）。本地信令示例：`?sig=localhost:9000&sigsecure=0&sigpath=/peerjs`；线上：`?sig=wss://sig.example.com/peerjs`。TURN 支持 `?turn=turn:user:pass@host:3478,turns:host:5349`。
-验证：npm test 通过（单文件 303.4 KB；CSS 27.5 KB / JS 264.8 KB）；无头 Chrome 156 项全 PASS（含 P5-03 默认/全局/URL 覆盖），联机 0 JS 报错
+验证：npm test 通过（单文件 303.9 KB；CSS 27.5 KB / JS 265.3 KB）；无头 Chrome 157 项全 PASS（含 P5-03 默认/全局/URL 覆盖/完整 WSS 地址归一化），联机 0 JS 报错
 下一步：P5-01 自建信令服务（需确定 WSS 部署位置），随后 P5-02 TURN/coturn
 阻塞：自建信令/TURN 需要域名、证书与服务器；真实双设备公网联机仍需手动验证
 约束：不提交 Git、不部署

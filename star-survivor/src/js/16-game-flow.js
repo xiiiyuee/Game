@@ -302,7 +302,8 @@
        peerSrc: ["https://.../peerjs.min.js"],
      }
      URL：?sig=host:port/path | wss://host/path  ?sigport= ?sigpath= ?sigsecure=0/1
-          ?turn=turn:user:pass@host:3478,turns:host:5349  ?peersrc=url1,url2 */
+          ?turn=turn:user:pass@host:3478,turns:host:5349  ?peersrc=url1,url2
+     注意：PeerJS 会自动在 path 后追加 "peerjs"，所以直接粘贴完整 /peerjs 地址也能识别 */
   function coopConfig() {
     const g = typeof window !== "undefined" ? window.SS_COOP_CONFIG : null;
     return g && typeof g === "object" ? g : {};
@@ -312,37 +313,48 @@
     try { return new URLSearchParams(location.search); } catch (err) { return null; }
   }
 
+  // PeerJS 会在 path 后自动追加 "peerjs"；去掉用户误带的 /peerjs 后缀
+  function coopSignalPath(p) {
+    let v = typeof p === "string" && p ? p : "/";
+    if (v[0] !== "/") v = "/" + v;
+    v = v.replace(/\/+$/, "");
+    if (/\/peerjs$/i.test(v)) v = v.slice(0, -7);
+    return v || "/";
+  }
+
   function coopSignalConfig() {
     const out = Object.assign({}, COOP_DEFAULT_SIGNAL);
     const g = coopConfig();
     if (g.signal && typeof g.signal === "object") Object.assign(out, g.signal);
     const q = coopQuery();
-    if (!q) return out;
-    const sig = q.get("sig");
-    if (sig) {
-      if (sig.indexOf("://") >= 0) {
-        try {
-          const u = new URL(sig);
-          out.host = u.hostname;
-          out.secure = u.protocol === "wss:" || u.protocol === "https:";
-          out.port = u.port ? Number(u.port) : (out.secure ? 443 : 80);
-          if (u.pathname && u.pathname !== "/") out.path = u.pathname;
-        } catch (err) {}
-      } else {
-        const m = /^([^\/:]+)(?::(\d+))?(\/.*)?$/.exec(sig);
-        if (m) {
-          out.host = m[1];
-          if (m[2]) out.port = Number(m[2]);
-          if (m[3]) out.path = m[3];
+    if (q) {
+      const sig = q.get("sig");
+      if (sig) {
+        if (sig.indexOf("://") >= 0) {
+          try {
+            const u = new URL(sig);
+            out.host = u.hostname;
+            out.secure = u.protocol === "wss:" || u.protocol === "https:";
+            out.port = u.port ? Number(u.port) : (out.secure ? 443 : 80);
+            if (u.pathname && u.pathname !== "/") out.path = u.pathname;
+          } catch (err) {}
+        } else {
+          const m = /^([^\/:]+)(?::(\d+))?(\/.*)?$/.exec(sig);
+          if (m) {
+            out.host = m[1];
+            if (m[2]) out.port = Number(m[2]);
+            if (m[3]) out.path = m[3];
+          }
         }
       }
+      const port = Number(q.get("sigport"));
+      if (port > 0) out.port = port;
+      if (q.get("sigpath")) out.path = q.get("sigpath");
+      const secure = q.get("sigsecure");
+      if (secure === "1" || secure === "true") out.secure = true;
+      else if (secure === "0" || secure === "false") out.secure = false;
     }
-    const port = Number(q.get("sigport"));
-    if (port > 0) out.port = port;
-    if (q.get("sigpath")) out.path = q.get("sigpath");
-    const secure = q.get("sigsecure");
-    if (secure === "1" || secure === "true") out.secure = true;
-    else if (secure === "0" || secure === "false") out.secure = false;
+    out.path = coopSignalPath(out.path);
     return out;
   }
 
