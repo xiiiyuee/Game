@@ -2093,6 +2093,7 @@
     hideBossBar();
     snapCamera();
     coopResetSimClock();
+    coopClearInterp();
     updateBuffPanel();
     refreshHud(true);
   }
@@ -4283,6 +4284,7 @@
     coopStopPosLoop();
     coopStopInputLoop();
     coopResetSimClock();
+    coopClearInterp();
     coopEdge.dash = false;
     coopEdge.ult = false;
     coopInSeq = 0;
@@ -4584,6 +4586,7 @@
   }
 
   let coopPosTimer = null;
+  let coopInterp = {};       // 加入方：玩家 id -> 位置样本缓冲
 
   /* ===== 快照协议 v1（P3-02）：15Hz，只含玩家，坐标量化到 0.1 ===== */
   const COOP_SNAP_VER = 1;
@@ -4632,6 +4635,63 @@
         p.shield = e[6];
         p.stats.shieldMax = e[7];
       }
+      coopInterpPush(id, p.x, p.y, p.facing);
+    }
+  }
+
+  /* ===== 远端插值（P3-04）：120ms 缓冲，按接收时间平滑 ===== */
+  const COOP_INTERP_MS = 120;
+
+  function coopClearInterp() {
+    for (const id in coopInterp) delete coopInterp[id];
+  }
+
+  function coopInterpPush(id, x, y, f) {
+    const now = performance.now();
+    const buf = coopInterp[id] || (coopInterp[id] = []);
+    const last = buf[buf.length - 1];
+    if (last && now - last.t < 4) {
+      last.x = x;
+      last.y = y;
+      last.f = f;
+      return;
+    }
+    buf.push({ t: now, x, y, f });
+    if (buf.length > 15) buf.shift();
+  }
+
+  function coopLerpAngle(a, b, k) {
+    let d = (b - a) % (Math.PI * 2);
+    if (d > Math.PI) d -= Math.PI * 2;
+    if (d < -Math.PI) d += Math.PI * 2;
+    return a + d * k;
+  }
+
+  function coopInterpTick() {
+    if (!roomCode || coopNet.host || state !== "playing") return;
+    const target = performance.now() - COOP_INTERP_MS;
+    for (const id in coopInterp) {
+      const buf = coopInterp[id];
+      if (!buf || !buf.length) continue;
+      while (buf.length > 2 && buf[1].t <= target) buf.shift();
+      const a = buf[0];
+      let x = a.x;
+      let y = a.y;
+      let f = a.f;
+      if (buf.length >= 2) {
+        const b = buf[1];
+        const span = b.t - a.t;
+        const k = span > 0 ? Math.max(0, Math.min(1, (target - a.t) / span)) : 1;
+        x = a.x + (b.x - a.x) * k;
+        y = a.y + (b.y - a.y) * k;
+        f = coopLerpAngle(a.f, b.f, k);
+      }
+      let p = null;
+      for (let j = 0; j < players.length; j++) if (players[j].id === id) { p = players[j]; break; }
+      if (!p) continue;
+      p.x = x;
+      p.y = y;
+      p.facing = f;
     }
   }
 
@@ -7022,6 +7082,7 @@
       }
     }
     updateStars(dt, t);
+    if (state === "playing") coopInterpTick();
 
     // 暂停/升级/结算时画面静止，降低绘制频率，避免选卡界面卡顿
     if (state === "playing" || state === "menu") {

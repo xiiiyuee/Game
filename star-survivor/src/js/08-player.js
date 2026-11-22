@@ -202,6 +202,7 @@
     hideBossBar();
     snapCamera();
     coopResetSimClock();
+    coopClearInterp();
     updateBuffPanel();
     refreshHud(true);
   }

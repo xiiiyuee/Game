@@ -64,6 +64,7 @@
       }
     }
     updateStars(dt, t);
+    if (state === "playing") coopInterpTick();
 
     // 暂停/升级/结算时画面静止，降低绘制频率，避免选卡界面卡顿
     if (state === "playing" || state === "menu") {
