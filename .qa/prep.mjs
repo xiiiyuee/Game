@@ -24,6 +24,7 @@ const hook = `
     get combo() { return combo; }, set combo(v) { combo = v; },
     spawnEnemy, damagePlayer, updateEnemies, coopAddRemote, coopEnemyPacket,
     startIceWatchdog, get coopNet() { return coopNet; },
+    CFG, gainXpFor,
     startGame,
   };
 `;
