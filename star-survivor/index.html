@@ -2664,10 +2664,17 @@
 
   function spawnGem(x, y, value) {
     if (gems.length >= CFG.LIMITS.GEMS) {
-      // 经验球满时把溢出经验均摊到现有球：避免所有经验堆进最后一颗，
-      // 捡起来一次连升十几级、被迫连选十几次战备
-      const share = value / gems.length;
-      for (let i = 0; i < gems.length; i++) gems[i].value += share;
+      // 经验球已满：把经验直接结算给最近的存活玩家。
+      // 不要摊到现有球上——那会让地上的球越喂越肥，捡一颗就连升好几级。
+      let target = null;
+      let best = Infinity;
+      for (let i = 0; i < players.length; i++) {
+        const q = players[i];
+        if (q.eliminated) continue;
+        const dd = dist2(q.x, q.y, x, y);
+        if (dd < best) { best = dd; target = q; }
+      }
+      if (target) gainXpFor(target, Math.max(1, Math.round(value * target.stats.xpMul)));
       return;
     }
     const a = Math.random() * TAU;
