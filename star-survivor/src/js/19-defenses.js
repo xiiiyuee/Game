@@ -143,6 +143,7 @@
   }
 
   function updateCores(dt) {
+    if (coopIsGuest()) return;           // 联机客户端：核心掉落由房主同步
     const magnet = CFG.RUN.CORE_MAGNET * view.scale;
     const pickup = CFG.RUN.CORE_PICKUP;
     for (let i = coreDrops.length - 1; i >= 0; i--) {
@@ -278,6 +279,7 @@
   }
 
   function updateChipDrops(dt) {
+    if (coopIsGuest()) return;           // 联机客户端：芯片掉落由房主同步
     const magnet = 150 * view.scale;
     const pickup = 34;
     for (let i = chipDrops.length - 1; i >= 0; i--) {
@@ -371,6 +373,12 @@
   }
 
   function updateAsteroids(dt) {
+    if (coopIsGuest()) {                 // 联机客户端：陨石由房主同步
+      for (let i = 0; i < asteroids.length; i++) {
+        asteroids[i].flash = Math.max(0, asteroids[i].flash - dt);
+      }
+      return;
+    }
     asteroidTimer -= dt;
     if (asteroidTimer <= 0) {
       asteroidTimer = CFG.ASTEROID.INTERVAL * rand(0.8, 1.25);
@@ -457,6 +465,10 @@
   }
 
   function updateTrader(dt) {
+    if (coopIsGuest()) {                 // 联机客户端：游商由房主同步，不触发本地商店
+      if (trader) trader.seed += dt;
+      return;
+    }
     if (!trader) {
       traderTimer -= dt;
       if (traderTimer <= 0) {

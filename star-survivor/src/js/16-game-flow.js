@@ -855,11 +855,133 @@
     boss.spin = s[13];
   }
 
+  /* ===== 场景物件同步（P3-10）：陨石 / 游商 / 经验 / 核心 / 芯片 ===== */
+  function coopAsteroidList() {
+    const arr = [];
+    for (let i = 0; i < asteroids.length && arr.length < 12; i++) {
+      const a = asteroids[i];
+      arr.push([a.id, Math.round(a.x * 10), Math.round(a.y * 10), Math.round(a.r),
+        Math.round(a.hp), Math.round(a.maxHp), Math.round(a.seed * 100) / 100]);
+    }
+    return arr;
+  }
+
+  function coopApplyAsteroids(list) {
+    if (coopNet.host || !list) return;
+    const seen = {};
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      if (!s || s.length < 7) continue;
+      let a = null;
+      for (let j = 0; j < asteroids.length; j++) {
+        if (asteroids[j].id === s[0]) { a = asteroids[j]; break; }
+      }
+      if (!a) {
+        const r = s[3];
+        const n = 7 + randInt(3);
+        const verts = [];
+        for (let k = 0; k < n; k++) verts.push({ a: (k / n) * TAU, r: r * rand(0.78, 1.12) });
+        a = { id: s[0], x: s[1] / 10, y: s[2] / 10, r, hp: s[4], maxHp: s[5], verts, seed: s[6], flash: 0, synced: true };
+        asteroids.push(a);
+      }
+      a.x = s[1] / 10;
+      a.y = s[2] / 10;
+      a.hp = s[4];
+      a.maxHp = s[5];
+      seen[s[0]] = 1;
+    }
+    asteroids = asteroids.filter((a) => seen[a.id]);
+  }
+
+  function coopTraderState() {
+    const t = trader;
+    if (!t) return null;
+    return [Math.round(t.x * 10), Math.round(t.y * 10), Math.round(t.r),
+      Math.round(t.life * 10) / 10, Math.round(t.seed * 100) / 100];
+  }
+
+  function coopApplyTrader(s) {
+    if (coopNet.host || s === undefined) return;
+    if (!s) { trader = null; return; }
+    trader = {
+      x: s[0] / 10, y: s[1] / 10, r: s[2], life: s[3], seed: s[4] || 0, synced: true,
+    };
+  }
+
+  function coopGemList() {
+    const arr = [];
+    for (let i = 0; i < gems.length && arr.length < 150; i++) {
+      arr.push([Math.round(gems[i].x * 10), Math.round(gems[i].y * 10), gems[i].value]);
+    }
+    return arr;
+  }
+
+  function coopApplyGems(list) {
+    if (coopNet.host || !list) return;
+    const next = [];
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      if (!s) continue;
+      next.push({
+        x: s[0] / 10, y: s[1] / 10, vx: 0, vy: 0, value: s[2],
+        r: 4.5, pulse: i * 0.7, synced: true,
+      });
+    }
+    gems = next;
+  }
+
+  function coopCoreList() {
+    const arr = [];
+    for (let i = 0; i < coreDrops.length && arr.length < 30; i++) {
+      const c = coreDrops[i];
+      arr.push([Math.round(c.x * 10), Math.round(c.y * 10), Math.round(c.seed * 100) / 100, Math.round(c.life * 10) / 10]);
+    }
+    return arr;
+  }
+
+  function coopApplyCores(list) {
+    if (coopNet.host || !list) return;
+    const next = [];
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      if (!s) continue;
+      next.push({ x: s[0] / 10, y: s[1] / 10, seed: s[2], life: s[3], synced: true });
+    }
+    coreDrops = next;
+  }
+
+  function coopChipList() {
+    const arr = [];
+    for (let i = 0; i < chipDrops.length && arr.length < 10; i++) {
+      const d = chipDrops[i];
+      arr.push([Math.round(d.x * 10), Math.round(d.y * 10), Math.round(d.seed * 100) / 100,
+        Math.round(d.life * 10) / 10, d.chip ? d.chip.tier : 0]);
+    }
+    return arr;
+  }
+
+  function coopApplyChips(list) {
+    if (coopNet.host || !list) return;
+    const next = [];
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      if (!s) continue;
+      next.push({
+        x: s[0] / 10, y: s[1] / 10, seed: s[2], life: s[3],
+        chip: { tier: s[4] || 0, kind: "dmg", name: "", icon: "", value: 0 },
+        synced: true,
+      });
+    }
+    chipDrops = next;
+  }
+
   function coopSendEnemies() {
     if (!coopNet.host || state !== "playing") return;
     coopSendState({
       t: "en", s: coopSnapSeq, list: coopEnemyList(),
       eb: coopBulletList(), pb: coopPlayerBulletList(), bs: coopBossState(),
+      as: coopAsteroidList(), tr: coopTraderState(),
+      gm: coopGemList(), cd: coopCoreList(), ch: coopChipList(),
     });
   }
 
@@ -902,6 +1024,11 @@
     coopApplyEnemyBullets(d.eb);
     coopApplyPlayerBullets(d.pb);
     coopApplyBoss(d.bs);
+    coopApplyAsteroids(d.as);
+    coopApplyTrader(d.tr);
+    coopApplyGems(d.gm);
+    coopApplyCores(d.cd);
+    coopApplyChips(d.ch);
   }
 
   function coopPosTick() {

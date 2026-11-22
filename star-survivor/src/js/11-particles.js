@@ -61,6 +61,10 @@
   }
 
   function updateGems(dt) {
+    if (coopIsGuest()) {                 // 联机客户端：经验球位置由房主同步
+      for (let i = 0; i < gems.length; i++) gems[i].pulse = (gems[i].pulse || 0) + dt * 4;
+      return;
+    }
     const pickup = CFG.XP.PICKUP * view.scale;
     const collect = CFG.XP.COLLECT;
     for (let i = gems.length - 1; i >= 0; i--) {
