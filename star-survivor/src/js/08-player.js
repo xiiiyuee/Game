@@ -82,6 +82,13 @@
       grazeStacks: 0,            // 擦弹层数（强化射击）
       grazeAwakenCount: 0,       // 觉醒：擦弹返还计数
       phaseTime: 0,              // 相位冲刺剩余时间
+      phaseHold: 0,              // 起步定身（强调起冲瞬间）
+      phaseAimT: 0,              // 方向宽限剩余时间
+      phaseCarryT: 0,            // 冲刺结束后的惯性滑行
+      phaseRing: 0,              // 起步空气扭曲环
+      phaseRingX: 0,
+      phaseRingY: 0,
+      phaseRefundT: 0,           // 冲刺后击杀充能窗口
       phaseLeft: 0,              // 待生成残影数
       phaseSpawn: 0,             // 残影生成计时
       phaseDir: { x: 1, y: 0 },

@@ -561,6 +561,23 @@
       ctx.stroke();
     }
 
+    // 相位冲刺起步：从起点扩散的空气扭曲环（三重反馈之一）
+    if (p.phaseRing > 0) {
+      const k = 1 - p.phaseRing;
+      const rx = p.phaseRingX || p.x;
+      const ry = p.phaseRingY || p.y;
+      ctx.strokeStyle = rgbaOf(THEME.cyanSoft, p.phaseRing * 0.75);
+      ctx.lineWidth = 2 + p.phaseRing * 2;
+      ctx.beginPath();
+      ctx.arc(rx, ry, p.r + 8 + k * 54, 0, TAU);
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,255,${p.phaseRing * 0.32})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(rx, ry, p.r + 4 + k * 34, 0, TAU);
+      ctx.stroke();
+    }
+
     // 受击方向指示：在来向画一段高亮弧，解决“不知道哪来的伤害”
     if (p.hitDirT > 0) {
       const k = clamp(p.hitDirT / 0.8, 0, 1);

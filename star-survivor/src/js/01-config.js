@@ -285,7 +285,14 @@
       CAST_LOCK: 0.4,        // 施放后的短锁，避免连按
       // 相位冲刺：穿越弹幕与敌人，沿路留下残影补射
       PHASE: {
-        TIME: 0.32, SPEED: 1080, SHADOWS: 3, SHADOW_DELAY: 0.16, SHADOW_DMG: 0.45, SHADOW_LIFE: 0.7,
+        TIME: 0.365, SPEED: 1080, SHADOWS: 3, SHADOW_DELAY: 0.16, SHADOW_DMG: 0.45, SHADOW_LIFE: 0.7,
+        // 手感：起步顿挫、方向宽限、冲刺惯性
+        HOLD: 0.045,            // 起步先定身一小段，强调起冲瞬间
+        AIM_GRACE: 0.09,        // 起步后仍接受方向修正的窗口
+        CARRY_TIME: 0.14,       // 冲刺结束后的惯性滑行时长
+        CARRY_SPEED: 0.42,      // 惯性初速（相对冲刺速度）
+        // 冲刺后短时间内击杀可回充一次技能能量（对应“落地即充能”）
+        REFUND_TIME: 1.1, REFUND: 0.32,
         // 改装「冰痕」：残影不射击，沿路径留下冰区
         ICE_RADIUS: 62, ICE_TIME: 2.0, ICE_SLOW: 0.55,
         // 改装「爆痕」：残影延迟爆炸

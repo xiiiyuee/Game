@@ -954,6 +954,19 @@
     const killer = coopPlayerById(e.lastHit);
     if (killer) killer.kills += 1;
 
+    // 冲刺窗口内击杀：回充一部分技能能量，奖励“冲进去收人头”的连招
+    if (killer && (killer.phaseRefundT || 0) > 0) {
+      killer.phaseRefundT = 0;
+      killer.skillEnergy = Math.min(
+        CFG.SKILL.MAX,
+        (killer.skillEnergy || 0) + CFG.SKILL.MAX * CFG.SKILL.PHASE.REFUND
+      );
+      if (killer.local) {
+        addText(killer.x, killer.y - 36, "冲刺充能", THEME.cyanSoft, 14);
+        emit(killer.x, killer.y, 14, THEME.cyanSoft, 190, 2.6, 0.5);
+      }
+    }
+
     // 连杀：3 秒内连续击杀提升分数与经验
     combo += 1;
     comboTimer = CFG.COMBO.TIME;

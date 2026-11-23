@@ -11,6 +11,7 @@
     if (player.dashDir.x === 0 && player.dashDir.y === 0) player.dashDir = { x: 0, y: -1 };
     player.dashTime = CFG.PLAYER.DASH_TIME;
     player.dashCd = CFG.PLAYER.DASH_CD;
+    player.phaseCarryT = 0;
     player.invuln = Math.max(player.invuln, CFG.PLAYER.DASH_INVULN);
     emit(player.x, player.y, 12, "#7ef0ff", 180, 3, 0.45);
     sfxDash();
@@ -31,6 +32,9 @@
     p.hitFlash = Math.max(0, p.hitFlash - dt * 2.6);
     p.hitDirT = Math.max(0, (p.hitDirT || 0) - dt * 1.4);
     p.shieldBreak = Math.max(0, (p.shieldBreak || 0) - dt * 2.2);
+    // 冲刺手感：起步扭曲环淡出、击杀充能窗口倒计时
+    p.phaseRing = Math.max(0, (p.phaseRing || 0) - dt * 2.2);
+    p.phaseRefundT = Math.max(0, (p.phaseRefundT || 0) - dt);
 
     // 低血量心跳：生命越低越急促，与屏幕边缘脉冲同步
     if (p === player && state === "playing") {
@@ -65,26 +69,52 @@
     else p.shield = Math.min(s.shieldMax, p.shield + s.shieldRegen * dt);
 
     const v = p.local ? readMoveInput() : { x: p.intent.mx || 0, y: p.intent.my || 0 };
+    const hasMove = v.x !== 0 || v.y !== 0;
+    // 冲后惯性遇到新输入立即交还操控权
+    if (hasMove) p.phaseCarryT = 0;
 
     if (p.phaseTime > 0) {
-      // 相位冲刺：高速位移、沿途留影，冲刺帧内几乎无敌
+      // 相位冲刺：起步定身强调起冲 → 高速位移 → 沿途留影
+      const PH = CFG.SKILL.PHASE;
       const phaseBefore = p.phaseTime;
       p.phaseTime = Math.max(0, p.phaseTime - dt);
-      const sp = CFG.SKILL.PHASE.SPEED * view.scale;
+      p.phaseHold = Math.max(0, (p.phaseHold || 0) - dt);
+      // 方向晚点定：起步后极短窗口内仍用当前输入修正方向
+      if (p.phaseAimT > 0 && hasMove) {
+        const len = Math.hypot(v.x, v.y) || 1;
+        p.phaseDir = { x: v.x / len, y: v.y / len };
+      }
+      p.phaseAimT = Math.max(0, (p.phaseAimT || 0) - dt);
+      p.invuln = Math.max(p.invuln, 0.05);
+      if (p.phaseHold > 0) {
+        // 先停一下：起冲瞬间定身，玩家能清晰感知冲刺起始
+      } else {
+        const sp = PH.SPEED * view.scale;
+        p.x += p.phaseDir.x * sp * dt;
+        p.y += p.phaseDir.y * sp * dt;
+        p.phaseSpawn -= dt;
+        if (p.phaseSpawn <= 0 && p.phaseLeft > 0) {
+          p.phaseSpawn = PH.TIME / PH.SHADOWS;
+          p.phaseLeft -= 1;
+          spawnSkillShadow(p);
+        }
+      }
+      // 冲完不急停：结束后保留一段惯性滑行
+      if (phaseBefore > 0 && p.phaseTime === 0) {
+        p.phaseCarryT = PH.CARRY_TIME;
+        // 觉醒「残像终焉」：冲刺终点爆发
+        if (p.skillAwaken === "awaken_phase" && !coopIsGuest()) {
+          phaseAwakenBurst(p);
+        }
+      }
+    } else if (p.phaseCarryT > 0) {
+      // 无输入时沿冲刺方向顺势滑行，速度逐帧回落
+      const PH = CFG.SKILL.PHASE;
+      const k = Math.max(0.25, p.phaseCarryT / PH.CARRY_TIME);
+      const sp = PH.SPEED * PH.CARRY_SPEED * k * view.scale;
+      p.phaseCarryT = Math.max(0, p.phaseCarryT - dt);
       p.x += p.phaseDir.x * sp * dt;
       p.y += p.phaseDir.y * sp * dt;
-      p.invuln = Math.max(p.invuln, 0.05);
-      p.phaseSpawn -= dt;
-      if (p.phaseSpawn <= 0 && p.phaseLeft > 0) {
-        p.phaseSpawn = CFG.SKILL.PHASE.TIME / CFG.SKILL.PHASE.SHADOWS;
-        p.phaseLeft -= 1;
-        spawnSkillShadow(p);
-      }
-      // 觉醒「残像终焉」：冲刺终点爆发
-      if (phaseBefore > 0 && p.phaseTime === 0 &&
-        p.skillAwaken === "awaken_phase" && !coopIsGuest()) {
-        phaseAwakenBurst(p);
-      }
     } else if (p.dashTime > 0) {
       p.dashTime -= dt;
       const sp = P.DASH_SPEED * view.scale;

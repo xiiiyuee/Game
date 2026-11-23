@@ -93,6 +93,7 @@
         p.phaseLeft = CFG.SKILL.PHASE.SHADOWS;
         p.phaseSpawn = 0;
         p.invuln = Math.max(p.invuln, CFG.SKILL.PHASE.TIME + 0.08);
+        phaseStartFeel(p);
       } else if (p.skill === "graze") {
         p.grazeActive = CFG.SKILL.GRAZE.TIME * (p.stats.skillDurationMul || 1);
         p.grazeStacks = 0;
@@ -107,11 +108,27 @@
       }
       emit(p.x, p.y, 14, THEME.cyanSoft, 200, 3, 0.5);
       if (p.skill === "beam") sfxBeamStart();
+      else if (p.skill === "phase") sfxDash();
       coopEventSeq += 1;
       coopSendCtrl({ t: "ev", id: coopEventSeq, k: "skill", d: { x: tx, y: ty } });
       return;
     }
     castSkill(p);
+  }
+
+  // 相位冲刺起手手感：起步定身、方向宽限、空气扭曲环、方向震屏与触觉
+  function phaseStartFeel(p) {
+    const PH = CFG.SKILL.PHASE;
+    p.phaseHold = PH.HOLD;
+    p.phaseAimT = PH.AIM_GRACE;
+    p.phaseRing = 1;
+    p.phaseRingX = p.x;
+    p.phaseRingY = p.y;
+    p.phaseRefundT = PH.REFUND_TIME;
+    shakeDirX = p.phaseDir.x;
+    shakeDirY = p.phaseDir.y;
+    shake = Math.max(shake, 9 * CFG.FX.SHAKE);
+    haptic(38);
   }
 
   // 实际施放：房主 / 单机执行，客机由房主代为执行
@@ -134,6 +151,7 @@
       p.phaseLeft = CFG.SKILL.PHASE.SHADOWS;
       p.phaseSpawn = 0;
       p.invuln = Math.max(p.invuln, CFG.SKILL.PHASE.TIME + 0.08);
+      phaseStartFeel(p);
       emit(p.x, p.y, 16, THEME.cyan, 220, 3, 0.5);
       sfxDash();
     } else if (p.skill === "well") {

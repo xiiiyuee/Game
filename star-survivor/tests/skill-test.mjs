@@ -68,6 +68,55 @@ ok("相位冲刺可施放并清空能量",
   { energy: phase.justAfter.energy, phaseTime: phase.justAfter.phaseTime });
 ok("相位冲刺产生残影", phase.shadows >= 1, phase.shadows);
 
+// 3b) 相位冲刺手感：起步定身 / 方向宽限 / 冲后惯性
+const feel = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  const p = S.getLocalPlayer();
+  p.skillEnergy = 100;
+  S.intent.mx = 1;
+  S.intent.my = 0;
+  S.castSkill(p);
+  // 起步定身：首帧不应位移
+  const x0 = p.x, y0 = p.y;
+  S.updatePlayer(0.016, p);
+  const holdDist = Math.hypot(p.x - x0, p.y - y0);
+  const holdActive = p.phaseHold > 0;
+  // 方向晚点定：宽限窗口内改按向下，冲刺方向应被覆盖
+  S.intent.mx = 0;
+  S.intent.my = 1;
+  S.updatePlayer(0.02, p);
+  S.updatePlayer(0.016, p);
+  const dirY = p.phaseDir.y;
+  // 跑完冲刺，检查结束后的惯性滑行
+  for (let i = 0; i < 60 && p.phaseTime > 0; i++) S.updatePlayer(0.016, p);
+  S.intent.mx = 0;
+  S.intent.my = 0;
+  const carryT = p.phaseCarryT;
+  const cx = p.x, cy = p.y;
+  S.updatePlayer(0.016, p);
+  const carryDist = Math.hypot(p.x - cx, p.y - cy);
+  return { holdDist, holdActive, dirY, carryT, carryDist };
+});
+ok("冲刺起步先定身（首帧不位移）", feel.holdActive && feel.holdDist === 0, feel);
+ok("冲刺方向在宽限窗口内被修正", feel.dirY > 0.9, feel.dirY);
+ok("冲刺结束后保留惯性滑行", feel.carryT > 0 && feel.carryDist > 1, feel);
+
+// 3c) 冲刺窗口内击杀回充技能能量
+const refund = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  const p = S.getLocalPlayer();
+  p.skillEnergy = 0;
+  p.phaseRefundT = 1;
+  const e = S.spawnEnemy("square", p.x + 40, p.y);
+  e.lastHit = p.id;
+  e.hp = 0;
+  S.killEnemy(e);
+  return { energy: p.skillEnergy, refundT: p.phaseRefundT, max: S.CFG.SKILL.MAX };
+});
+ok("冲刺窗口内击杀回充技能能量", refund.energy > 0 && refund.refundT === 0, refund);
+
 // 4) 重力井：生成 + 到期内爆移除
 const well = await page.evaluate(() => {
   const S = window.__SS__;
