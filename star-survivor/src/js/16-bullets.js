@@ -45,7 +45,7 @@
       else emit(e.x, e.y, n, color, sp * 0.85, crit ? 3 : 2.2, 0.4);
       addText(e.x + rand(-3, 3), e.y - e.r - 4, (crit ? "暴击 " : "") + Math.round(dmg), crit ? "#ffc857" : "#cfefff", crit ? 17 : 12);
 
-      const shakeAdd = punch ? 4.2 : crit ? 2.8 : 0;
+      const shakeAdd = punch ? 1.5 : crit ? 0.9 : 0;
       if (shakeAdd > 0) {
         shake = Math.max(shake, shakeAdd * CFG.FX.SHAKE);
         if (hasDir) { shakeDirX = Math.cos(ang); shakeDirY = Math.sin(ang); }
