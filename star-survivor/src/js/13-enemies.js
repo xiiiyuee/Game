@@ -9,15 +9,29 @@
   function waveScaleArmor() {
     return Math.min(CFG.RUN.ENEMY_ARMOR_MAX, (chapter - 1) * CFG.RUN.ENEMY_ARMOR_PER_CHAPTER);
   }
-  // 深渊适应：敌人生命随玩家武器伤害提升（次线性），避免后期一发清屏
+  // 深渊适应：按玩家实际 DPS（伤害 × 弹数 × 暴击 × 射速）次线性抬升敌人生命，
+  // 避免后期攻速/多重/暴击成长后敌人瞬间蒸发
+  function playerDpsRatio() {
+    const s = stats;
+    const dps = (s.damage || 1) * Math.max(1, s.bulletCount || 1) *
+      (1 + (s.crit || 0) * ((s.critMult || 2) - 1)) /
+      Math.max(0.08, s.fireInterval || 0.34);
+    const baseDps = (10 * 1.08) / 0.34;
+    return Math.max(1, dps / baseDps);
+  }
   function playerPowerMul() {
-    return Math.pow(Math.max(1, stats.damage / 10), CFG.RUN.POWER_ADAPT);
+    return Math.min(CFG.RUN.POWER_CAP,
+      Math.pow(playerDpsRatio(), CFG.RUN.POWER_ADAPT));
+  }
+  function bossPowerMul() {
+    return Math.min(CFG.RUN.BOSS_POWER_CAP,
+      Math.pow(playerDpsRatio(), CFG.RUN.BOSS_POWER_ADAPT));
   }
   function waveScaleSpeed() {
     return Math.min(CFG.RUN.ENEMY_SPEED_CAP, 1 + (waveNum - 1) * 0.028 + (chapter - 1) * 0.06);
   }
   function waveScaleDmg() {
-    return (1 + (waveNum - 1) * 0.045) * Math.pow(CFG.RUN.ENEMY_DMG_GROWTH, chapter - 1);
+    return (1 + (waveNum - 1) * 0.055) * Math.pow(CFG.RUN.ENEMY_DMG_GROWTH, chapter - 1);
   }
   function ebSpeedScale() {
     const base = 1 + (waveNum - 1) * 0.018 + (chapter - 1) * CFG.RUN.EBULLET_SPEED_PER_CHAPTER;
@@ -80,7 +94,7 @@
       speed: def.speed * waveScaleSpeed() * threatSpeedMul() * (chapterMod ? chapterMod.speedMul || 1 : 1),
       dmg: def.dmg * waveScaleDmg(),
       armor: waveScaleArmor(),
-      xp: def.xp,
+      xp: def.xp * (1 + (chapter - 1) * 0.3),
       score: def.score,
       color: THEME.enemy[typeKey] || def.color,
       angle: 0,
@@ -149,7 +163,7 @@
     y = clamp(y, 70, world.h - 70);
 
     const B = CFG.BOSS;
-    const hpMul = Math.pow(CFG.RUN.BOSS_HP_GROWTH, chapter - 1) * playerPowerMul() *
+    const hpMul = Math.pow(CFG.RUN.BOSS_HP_GROWTH, chapter - 1) * bossPowerMul() *
       partyScale(CFG.COOP.BOSS_HP_PER_EXTRA);
     const dmgMul = Math.pow(CFG.RUN.BOSS_DMG_GROWTH, chapter - 1);
     boss = {
@@ -863,7 +877,7 @@
     comboTimer = CFG.COMBO.TIME;
     if (combo > comboBest) comboBest = combo;
     // 击杀推高威胁等级（仅房主/单机记录）
-    if (!coopIsGuest()) threat = Math.min(CFG.THREAT.MAX, threat + CFG.THREAT.KILL_RATE);
+    if (!coopIsGuest()) threat = Math.min(threatMax(), threat + CFG.THREAT.KILL_RATE);
     const mul = comboMultiplier();
     score += Math.round(e.score * mul);
     credits += Math.round(

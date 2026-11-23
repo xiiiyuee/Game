@@ -7,14 +7,17 @@
       CHAPTER_WAVES: 10,          // 每章波数（第 10 波 Boss）
       BOSS_HP_GROWTH: 1.8,        // 章节 Boss 生命成长
       BOSS_DMG_GROWTH: 1.18,      // 章节 Boss 伤害成长
-      ENEMY_HP_GROWTH: 1.06,      // 每个等效波次生命成长（跨章节连续，不回落）
-      ENEMY_DMG_GROWTH: 1.16,     // 章节敌人伤害成长
+      ENEMY_HP_GROWTH: 1.065,     // 每个等效波次生命成长（跨章节连续，不回落）
+      ENEMY_DMG_GROWTH: 1.2,      // 章节敌人伤害成长
       ENEMY_ARMOR_PER_CHAPTER: 0.04, // 每章获得减伤
-      ENEMY_ARMOR_MAX: 0.45,      // 敌人减伤上限
+      ENEMY_ARMOR_MAX: 0.5,       // 敌人减伤上限
       ENEMY_SPEED_CAP: 1.9,       // 敌人移速成长上限
       EBULLET_SPEED_PER_CHAPTER: 0.05, // 每章敌方弹速成长
       EBULLET_SPEED_CAP: 1.6,     // 敌方弹速总上限（含风暴词条）
-      POWER_ADAPT: 0.22,          // 深渊适应指数（越大越克制高伤害）
+      POWER_ADAPT: 0.5,           // 深渊适应指数：按玩家实际 DPS 抬升敌人生命
+      POWER_CAP: 18,              // 深渊适应倍率上限，避免无限膨胀
+      BOSS_POWER_ADAPT: 0.28,     // Boss 的 DPS 适应更平缓，避免后期血条过长
+      BOSS_POWER_CAP: 3.2,
       CLEAR_HEAL: 0.25,           // 击破 Boss 后回复生命比例
       CLEAR_CREDITS: 60,          // 击破 Boss 星币奖励
       SHOP_WAVE: 3,               // 每 3 波进入星港
@@ -105,7 +108,10 @@
     },
     // 威胁等级：随时间与击杀上涨，受击回落；联动刷怪、弹速、精英率
     THREAT: {
-      MAX: 10,                    // 上限（等级 = 0~10 连续值）
+      MAX: 10,                    // 基础威胁上限（每章继续抬高）
+      CHAPTER_MAX: 1,             // 每章额外威胁上限
+      CHAPTER_FLOOR: 1.5,         // 每章压迫基准：低于该值时威胁恢复更快
+      RECOVER_MUL: 3,             // 低于压迫基准时的恢复倍率
       TIME_RATE: 0.05,            // 每秒自然上涨
       KILL_RATE: 0.035,           // 每次击杀上涨
       HIT_DROP: 1.5,              // 每次受伤回落

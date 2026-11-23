@@ -131,6 +131,8 @@
   }
 
   /* ===================== 威胁等级 ===================== */
+  function threatMax() { return CFG.THREAT.MAX + (chapter - 1) * CFG.THREAT.CHAPTER_MAX; }
+  function threatFloor() { return (chapter - 1) * CFG.THREAT.CHAPTER_FLOOR; }
   function threatSpawnMul() { return 1 + threat * CFG.THREAT.SPAWN; }
   function threatBulletMul() { return 1 + threat * CFG.THREAT.BULLET; }
   function threatSpeedMul() { return 1 + threat * CFG.THREAT.SPEED; }
@@ -138,7 +140,10 @@
 
   function updateThreat(dt) {
     if (coopIsGuest()) return;   // 房主权威，客机从快照读取
-    threat = Math.min(CFG.THREAT.MAX, threat + dt * CFG.THREAT.TIME_RATE);
+    const maxT = threatMax();
+    // 后期提高威胁上限；受击跌落后，低于本章压迫基准时快速回温
+    const recover = threat < Math.min(maxT, threatFloor()) ? CFG.THREAT.RECOVER_MUL : 1;
+    threat = Math.min(maxT, threat + dt * CFG.THREAT.TIME_RATE * recover);
   }
 
   /* ===================== 场地灾害 ===================== */

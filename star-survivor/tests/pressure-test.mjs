@@ -220,6 +220,40 @@ const bossBurn = await page.evaluate(() => {
 ok("陨星落地造成范围伤害并留下灼烧地面", bossBurn.afterImpact < 200 &&
   bossBurn.burning && bossBurn.afterBurn < bossBurn.afterImpact, bossBurn);
 
+/* ===== 后期压迫：DPS 适应与威胁上限 ===== */
+const latePower = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.chapter = 6;
+  S.waveNum = 9;
+  const s = S.stats;
+  s.damage = 80; s.fireInterval = 0.1; s.bulletCount = 3; s.crit = 0.4; s.critMult = 2;
+  const strongMul = S.playerPowerMul();
+  const strongEnemy = S.spawnEnemy("tri", 400, 400);
+  s.damage = 10; s.fireInterval = 0.34; s.bulletCount = 1; s.crit = 0.08;
+  const weakMul = S.playerPowerMul();
+  const weakEnemy = S.spawnEnemy("tri", 400, 400);
+  return {
+    hpStrong: strongEnemy.hp, hpWeak: weakEnemy.hp,
+    strongMul, weakMul, cap: S.CFG.RUN.POWER_CAP,
+  };
+});
+ok("后期敌人生命随玩家 DPS 适应性提升", latePower.hpStrong > latePower.hpWeak * 2.5 &&
+  latePower.strongMul > 2 && latePower.strongMul <= latePower.cap, latePower);
+
+const lateThreat = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.chapter = 6;
+  const max = S.threatMax();
+  const floor = S.threatFloor();
+  S.threat = 0;
+  S.updateThreat(10);
+  return { max, floor, base: S.CFG.THREAT.MAX, risen: S.threat };
+});
+ok("威胁上限随章节提高且低威胁快速回温", lateThreat.max > lateThreat.base + 4 &&
+  lateThreat.floor > 5 && lateThreat.risen > 1, lateThreat);
+
 const bossShard = await page.evaluate(() => {
   const S = window.__SS__;
   S.startGame("pulse", "phase");

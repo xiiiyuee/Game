@@ -69,6 +69,7 @@ const hook = `
     coopEnemyList, coopBulletList, coopApplyEnemies, coopApplyEnemyBullets,
     get threat() { return threat; }, set threat(v) { threat = v; },
     threatSpawnMul, threatBulletMul, threatSpeedMul, threatEliteChance, updateThreat,
+    threatMax, threatFloor, playerPowerMul,
     spawnHazard, updateHazards, hazardHit,
     get hazards() { return hazards; }, set hazards(v) { hazards = v; },
     killEnemy,

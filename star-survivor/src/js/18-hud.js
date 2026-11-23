@@ -105,7 +105,7 @@
       if (threat >= 0.6) {
         threatEl.classList.remove("hidden");
         threatEl.classList.toggle("hot", threat >= 6);
-        setText(document.getElementById("ui-threat-n"), Math.min(CFG.THREAT.MAX, Math.floor(threat) + 1));
+        setText(document.getElementById("ui-threat-n"), Math.min(threatMax(), Math.floor(threat) + 1));
       } else {
         threatEl.classList.add("hidden");
       }
