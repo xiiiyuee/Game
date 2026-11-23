@@ -220,6 +220,20 @@
         return "护盾上限 <b>+25</b>，每次擦弹 <b>+2</b> 护盾<br>但强化射击层数增伤 <b>减半</b>";
       },
     },
+    {
+      id: "mod_beam_focus", name: "聚能透镜", icon: "◈", max: 1, mod: true, modSkill: "beam", base: 0,
+      apply(s, m, p) { if (p) p.skillMod = "beam_focus"; },
+      desc() {
+        return "光束宽度 <b>-45%</b>，每跳伤害 <b>+60%</b><br>适合对单点与 Boss 持续熔穿";
+      },
+    },
+    {
+      id: "mod_beam_wide", name: "熔流扩散", icon: "≋", max: 1, mod: true, modSkill: "beam", base: 0,
+      apply(s, m, p) { if (p) p.skillMod = "beam_wide"; },
+      desc() {
+        return "光束宽度 <b>+70%</b>，引导移速惩罚降低<br>但每跳伤害 <b>-20%</b>";
+      },
+    },
   ];
 
   // 技能终极觉醒：对应技能已改装后才会出现，每个技能只能觉醒一次
@@ -243,6 +257,13 @@
       apply(s, m, p) { if (p) p.skillAwaken = "awaken_graze"; },
       desc() {
         return "每吸收 <b>2</b> 发敌弹额外返还一枚反射弹<br>反射弹命中后分裂为 <b>2</b> 枚";
+      },
+    },
+    {
+      id: "awaken_beam", name: "裂光棱镜", icon: "≋", max: 1, awaken: true, awakenSkill: "beam", base: 0,
+      apply(s, m, p) { if (p) p.skillAwaken = "awaken_beam"; },
+      desc() {
+        return "光束两侧分裂出 <b>2</b> 道次级光束<br>各造成 <b>38%</b> 伤害，覆盖更宽";
       },
     },
   ];

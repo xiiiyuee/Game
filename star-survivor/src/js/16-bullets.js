@@ -2,7 +2,7 @@
    * 13.5 子弹 / 碰撞
    * ===================================================================*/
   // 统一伤害结算：暴击反馈、伤害数字、死亡处理
-  function hurtEnemy(e, dmg, crit, silent, ownerId, ang) {
+  function hurtEnemy(e, dmg, crit, silent, ownerId, ang, noEnergy) {
     if (e.dead) return;
     // Boss「分裂护盾」：先消耗护盾层
     if (e.isBoss && e.shield > 0) {
@@ -24,7 +24,7 @@
       const op = coopPlayerById(ownerId);
       if (op) {
         op.damage += Math.max(0, dmg);
-        gainSkillEnergy(op, CFG.SKILL.HIT_GAIN);   // 命中返技能能量
+        if (!noEnergy) gainSkillEnergy(op, CFG.SKILL.HIT_GAIN);   // 命中返技能能量
       }
     }
 

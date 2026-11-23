@@ -93,7 +93,8 @@
     } else if (v.x !== 0 || v.y !== 0) {
       p.lastDir.x = v.x;
       p.lastDir.y = v.y;
-      const sp = s.moveSpeed * view.scale;
+      // 引导灼蚀光束时移速下降，形成输出与走位的取舍
+      const sp = s.moveSpeed * view.scale * (p.beamTime > 0 ? beamMoveMul(p) : 1);
       p.x += v.x * sp * dt;
       p.y += v.y * sp * dt;
     }
@@ -114,9 +115,18 @@
     if (target) p.facing = Math.atan2(target.y - p.y, target.x - p.x);
     else if (v.x !== 0 || v.y !== 0) p.facing = Math.atan2(v.y, v.x);
 
-    // 自动开火
+    // 光束平滑追踪，避免瞬间甩头
+    if (p.beamTime > 0) {
+      let da = p.facing - p.beamAng;
+      while (da > Math.PI) da -= TAU;
+      while (da < -Math.PI) da += TAU;
+      const rate = CFG.SKILL.BEAM.TRACK * dt;
+      p.beamAng += Math.max(-rate, Math.min(rate, da));
+    }
+
+    // 自动开火（引导光束期间暂停，伤害由光束承担）
     p.fireCd -= dt;
-    if (p.fireCd <= 0 && target) {
+    if (p.fireCd <= 0 && target && !(p.beamTime > 0)) {
       fireAt(target, p);
       // 防线联动：炮塔光环内射击间隔缩短
       p.fireCd = s.fireInterval * defenseFireMul(p);

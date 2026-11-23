@@ -17,7 +17,7 @@ await page.waitForFunction("window.__SS__", { timeout: 10000 });
 const checks = [];
 const ok = (name, cond, extra) => checks.push({ name, pass: !!cond, extra });
 
-// 1) 六个改装，每个技能一对互斥分支
+// 1) 八个改装，每个技能一对互斥分支
 const defs = await page.evaluate(() => {
   const S = window.__SS__;
   const bySkill = {};
@@ -28,8 +28,9 @@ const defs = await page.evaluate(() => {
     inAll: S.SKILL_MODS.every((d) => !!S.ALL_DEFS.find((x) => x.id === d.id)),
   };
 });
-ok("改装共 6 个，每个技能 2 个", defs.total === 6 &&
-  defs.bySkill.phase === 2 && defs.bySkill.well === 2 && defs.bySkill.graze === 2, defs);
+ok("改装共 8 个，每个技能 2 个", defs.total === 8 &&
+  defs.bySkill.phase === 2 && defs.bySkill.well === 2 && defs.bySkill.graze === 2 &&
+  defs.bySkill.beam === 2, defs);
 ok("改装已纳入 ALL_DEFS（联机裁决可用）", defs.inAll, defs.inAll);
 
 // 2) 改装互斥：已改装后不再出现该技能的改装卡

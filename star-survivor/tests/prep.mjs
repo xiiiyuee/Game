@@ -51,6 +51,7 @@ const hook = `
     get intent() { return intent; },
     SKILL_DEFS, UPGRADES, SKILL_MODS, ALL_DEFS, skillDef, skillModDef, skillDisplayName,
     castSkill, tryCastSkill, gainSkillEnergy, updateSkillEffects, spawnSkillShadow,
+    updateBeams, beamDamageTick, beamSpec, beamMoveMul,
     updateBullets, getLocalPlayer, buildCards,
     get chosenWeapon() { return chosenWeapon; },
     coopWellList, coopApplyWells, coopFrostList, coopApplyFrost, coopIsGuest,

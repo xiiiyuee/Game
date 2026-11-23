@@ -181,6 +181,60 @@ ok("选择技能后开始游戏并保留选择",
   flow.state === "playing" && flow.chosenWeapon === "rail" && flow.chosenSkill === "well", flow);
 ok("技能条在战斗中显示", !flow.skillBarHidden, flow.skillBarHidden);
 
+/* ===== 灼蚀光束 ===== */
+const beam = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "beam");
+  S.state = "playing";
+  const p = S.getLocalPlayer();
+  p.skillEnergy = S.CFG.SKILL.MAX;
+  const target = S.spawnEnemy("hex", p.x + 220, p.y);
+  target.hp = target.maxHp = 500;
+  const cast = S.castSkill(p);
+  const base = S.beamSpec(p);
+  const hp0 = target.hp;
+  p.beamTick = 0;
+  S.beamDamageTick(p);
+  const hp1 = target.hp;
+  // 光束两侧远处目标不应被主光束命中
+  const off = S.spawnEnemy("hex", p.x + 220, p.y + 220);
+  off.hp = off.maxHp = 500;
+  S.beamDamageTick(p);
+  return {
+    cast, time: p.beamTime, baseW: base.width, dmg: hp0 - hp1,
+    offHp: off.hp, slow: S.beamMoveMul(p),
+  };
+});
+ok("灼蚀光束施放后进入引导并造成穿透伤害", beam.cast === true && beam.time > 0 &&
+  beam.dmg > 0 && beam.offHp === 500, beam);
+
+const beamMods = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "beam");
+  const p = S.getLocalPlayer();
+  p.skillMod = "";
+  const base = S.beamSpec(p);
+  p.skillMod = "beam_focus";
+  const focus = S.beamSpec(p);
+  p.skillMod = "beam_wide";
+  const wide = S.beamSpec(p);
+  const wideSlow = S.beamMoveMul(p);
+  p.skillMod = "beam_focus";
+  p.skillAwaken = "awaken_beam";
+  // 主光束宽度收束后打不中侧偏目标，次级光束应能命中
+  p.beamAng = 0;
+  p.beamTick = 0;
+  const side = S.spawnEnemy("hex", p.x + 220, p.y + 25);
+  side.hp = side.maxHp = 500;
+  const before = side.hp;
+  S.beamDamageTick(p);
+  return { base, focus, wide, wideSlow, sideHit: before - side.hp };
+});
+ok("聚能收束增伤、熔流加宽减速更轻", beamMods.focus.width < beamMods.base.width &&
+  beamMods.focus.dmg > beamMods.base.dmg && beamMods.wide.width > beamMods.base.width &&
+  beamMods.wide.dmg < beamMods.base.dmg && beamMods.wideSlow > 0.5, beamMods);
+ok("裂光棱镜的次级光束覆盖主光束盲区", beamMods.sideHit > 0, beamMods.sideHit);
+
 await browser.close();
 const failed = checks.filter((c) => !c.pass);
 console.log(JSON.stringify({ checks, errors }, null, 2));

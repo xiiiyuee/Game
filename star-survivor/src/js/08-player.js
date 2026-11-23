@@ -67,6 +67,9 @@
       hitDir: 0,                 // 最近一次受击来向（弧度）
       hitDirT: 0,                // 受击方向指示剩余时间
       shieldBreak: 0,            // 护盾破碎反馈剩余时间
+      beamTime: 0,               // 灼蚀光束剩余引导时间
+      beamAng: 0,                // 光束当前角度
+      beamTick: 0,               // 光束伤害判定计时
       energy: 0,                 // 超载能量
       skill: chosenSkill || "phase", // 本局主动技能
       skillMod: "",              // 技能改装（互斥，见 SKILL_MODS）

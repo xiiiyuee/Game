@@ -935,6 +935,8 @@
         p.skill || "", Math.round(p.skillEnergy || 0),
         p.skillMod || "", p.skillAwaken || "",
         Math.round((p.grazeActive || 0) * 10),   // 擦弹剩余时间（含吸满饱和）
+        Math.round((p.beamTime || 0) * 10),      // 灼蚀光束剩余引导时间
+        Math.round((p.beamAng || 0) * 100),      // 光束角度
       ]);
     }
     return arr;
@@ -1086,6 +1088,10 @@
       if (e.length >= 16) p.skillMod = e[15] || "";
       if (e.length >= 17) p.skillAwaken = e[16] || "";
       if (e.length >= 18) p.grazeActive = (e[17] || 0) / 10;
+      if (e.length >= 20) {
+        p.beamTime = (e[18] || 0) / 10;
+        p.beamAng = (e[19] || 0) / 100;
+      }
       coopInterpPush(id, p.x, p.y, p.facing);
     }
     // 团队共享资源（D-03）：星币 / 核心 / 保险由房主同步
@@ -1134,6 +1140,14 @@
     if (e.length >= 16) player.skillMod = e[15] || "";
     if (e.length >= 17) player.skillAwaken = e[16] || "";
     if (e.length >= 18) player.grazeActive = (e[17] || 0) / 10;
+    // 灼蚀光束：本机先起束，房主快照只补足更长的剩余时间
+    if (e.length >= 20) {
+      const bt = (e[18] || 0) / 10;
+      if (bt > (player.beamTime || 0)) {
+        player.beamTime = bt;
+        player.beamAng = (e[19] || 0) / 100;
+      }
+    }
     if (player.hp < hpBefore - 0.5) {
       if (coopGuestShop) coopCloseShopUI();     // 受击关闭个人商店
       if (coopGuestTrade) coopCloseTradeUI();

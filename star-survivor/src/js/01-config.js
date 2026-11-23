@@ -309,6 +309,20 @@
         // 改装「护盾过载」：护盾上限与单发护盾提升，但增伤层数减半
         OVER_SHIELD_MAX: 25, OVER_SHIELD: 2, OVER_STACK_MUL: 0.5,
       },
+      // 灼蚀光束：持续引导的贯穿激光，路径上所有敌人持续受击
+      BEAM: {
+        TIME: 1.8,              // 引导时长
+        TICK: 0.12,             // 伤害判定间隔
+        DMG: 0.45,              // 每跳伤害 = 玩家伤害 × 该系数
+        WIDTH: 26,              // 光束宽度
+        LEN: 900,               // 光束长度（会乘 view.scale）
+        SLOW: 0.45,             // 引导期间移速倍率
+        TRACK: 2.4,             // 每秒追踪转向速度（弧度）
+        // 改装「聚能」：光束收束、伤害提高
+        FOCUS_WIDTH: 0.55, FOCUS_DMG: 1.6,
+        // 改装「熔流」：光束变宽、移速惩罚降低、单体伤害略降
+        WIDE_WIDTH: 1.7, WIDE_DMG: 0.8, WIDE_SLOW: 0.72,
+      },
       // 技能终极觉醒：改装后解锁，每技能唯一
       AWAKEN: {
         // 相位：冲刺终点爆发，冰痕同步留下冰区
@@ -318,6 +332,8 @@
         HOLE_CD: 0.6, HOLE_DMG: 6,
         // 擦弹：每吸收 2 发额外返还一枚可分裂反射弹
         GRAZE_EVERY: 2, SPLIT_COUNT: 2, SPLIT_DMG: 0.5,
+        // 光束觉醒：两侧分裂出次级光束，覆盖更宽
+        BEAM_SIDE_ANG: 0.16, BEAM_SIDE_MUL: 0.38,
         // 冰区觉醒：每秒冻结区域内敌人
         FREEZE_TIME: 0.35, FREEZE_CD: 1.1, FREEZE_BOSS: 0.2,
       },

@@ -1439,6 +1439,7 @@
       drawTrader(t);
       drawFrostZones(t);
       drawGravityWells(t);
+      drawSkillBeams(t);
       drawBullets();
       drawEnemies(t);
       drawSkillShadows(t);

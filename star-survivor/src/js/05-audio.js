@@ -166,6 +166,19 @@
       if (audio.ctx && !audio.muted) tone(420, 300, 0.14, "square", 0.05, 1600);
     }, 90);
   }
+  function sfxBeamStart() {
+    if (!audio.ctx || audio.muted) return;
+    tone(180, 920, 0.3, "sawtooth", 0.12, 3200);
+    noiseBurst(0.25, 0.12, 3000, 500);
+  }
+  let lastBeamTickSfx = 0;
+  function sfxBeamTick() {
+    if (!audio.ctx || audio.muted) return;
+    const now = performance.now();
+    if (now - lastBeamTickSfx < 150) return;
+    lastBeamTickSfx = now;
+    noiseBurst(0.07, 0.05, 4200, 1200);
+  }
   function sfxHeartbeat(intense) {
     if (!audio.ctx || audio.muted) return;
     tone(64, 40, 0.14, "sine", intense ? 0.17 : 0.11, 220);

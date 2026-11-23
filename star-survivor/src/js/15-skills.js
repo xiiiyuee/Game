@@ -18,6 +18,11 @@
       desc: "持续吸收擦过的子弹，转化为护盾与强化射击",
       short: "擦弹充能 · 护盾反击",
     },
+    beam: {
+      key: "beam", name: "灼蚀光束", icon: "≋", tag: "输出",
+      desc: "引导贯穿光束扫射，路径上所有敌人持续受击；引导期间移速下降并暂停自动射击",
+      short: "持续激光 · 贯穿压制",
+    },
   };
 
   function skillDef(p) {
@@ -69,7 +74,7 @@
     }
     if (roomCode && coopIsGuest()) {
       let tx = p.x, ty = p.y;
-      if (p.skill === "well") {
+      if (p.skill === "well" || p.skill === "beam") {
         const dist = CFG.SKILL.WELL.DIST * view.scale;
         const tgt = nearestEnemy(p);
         tx = tgt ? tgt.x : p.x + Math.cos(p.facing) * dist;
@@ -92,8 +97,14 @@
         p.grazeActive = CFG.SKILL.GRAZE.TIME * (p.stats.skillDurationMul || 1);
         p.grazeStacks = 0;
         p.grazeAbsorbed = 0;
+      } else if (p.skill === "beam") {
+        // 本地立即起束，实际伤害与命中仍由房主结算
+        p.beamAng = (tx !== p.x || ty !== p.y) ? Math.atan2(ty - p.y, tx - p.x) : p.facing;
+        p.beamTime = CFG.SKILL.BEAM.TIME * (p.stats.skillDurationMul || 1);
+        p.beamTick = 0;
       }
       emit(p.x, p.y, 14, THEME.cyanSoft, 200, 3, 0.5);
+      if (p.skill === "beam") sfxBeamStart();
       coopEventSeq += 1;
       coopSendCtrl({ t: "ev", id: coopEventSeq, k: "skill", d: { x: tx, y: ty } });
       return;
@@ -150,6 +161,16 @@
       emit(p.x, p.y, 20, THEME.mint, 220, 3, 0.65);
       addText(p.x, p.y - 40, "擦弹回流", THEME.mint, 15);
       sfxLevelUp();
+    } else if (p.skill === "beam") {
+      const tgt = nearestEnemy(p);
+      p.beamAng = isFinite(aimX) && isFinite(aimY)
+        ? Math.atan2(aimY - p.y, aimX - p.x)
+        : tgt ? Math.atan2(tgt.y - p.y, tgt.x - p.x) : p.facing;
+      p.beamTime = CFG.SKILL.BEAM.TIME * (p.stats.skillDurationMul || 1);
+      p.beamTick = 0;
+      emit(p.x, p.y, 18, "#ffb347", 230, 3.2, 0.6);
+      addText(p.x, p.y - 42, skillDisplayName(p), "#ffb347", 15);
+      sfxBeamStart();
     }
     // 防线联动：技能施放为附近炮塔叠加过载
     if (!coopIsGuest()) overclockNearbyTurrets(p);
@@ -296,6 +317,67 @@
     updateSkillShadows(dt);
     updateGravityWells(dt);
     updateFrostZones(dt);
+    updateBeams(dt);
+  }
+
+  /* ===== 灼蚀光束 ===== */
+  function beamMoveMul(p) {
+    const B = CFG.SKILL.BEAM;
+    return p && p.skillMod === "beam_wide" ? B.WIDE_SLOW : B.SLOW;
+  }
+
+  function beamSpec(p) {
+    const B = CFG.SKILL.BEAM;
+    let width = B.WIDTH * view.scale;
+    let dmg = B.DMG;
+    if (p.skillMod === "beam_focus") { width *= B.FOCUS_WIDTH; dmg *= B.FOCUS_DMG; }
+    else if (p.skillMod === "beam_wide") { width *= B.WIDE_WIDTH; dmg *= B.WIDE_DMG; }
+    return { width, dmg, len: B.LEN * view.scale };
+  }
+
+  function updateBeams(dt) {
+    const B = CFG.SKILL.BEAM;
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (!(p.beamTime > 0)) continue;
+      p.beamTime = Math.max(0, p.beamTime - dt);
+      p.beamTick = (p.beamTick || 0) - dt;
+      // 客机只播放表现，伤害由房主结算
+      if (coopIsGuest()) continue;
+      if (p.beamTick <= 0) {
+        p.beamTick += B.TICK;
+        beamDamageTick(p);
+        sfxBeamTick();
+        if (state !== "playing") return;
+      }
+    }
+  }
+
+  function beamDamageTick(p) {
+    const spec = beamSpec(p);
+    const baseDmg = (p.stats.damage || 1) * spec.dmg * (p.stats.skillPowerMul || 1);
+    const lines = [{ ang: p.beamAng, mul: 1, w: spec.width }];
+    if (p.skillAwaken === "awaken_beam") {
+      const A = CFG.SKILL.AWAKEN;
+      lines.push({ ang: p.beamAng + A.BEAM_SIDE_ANG, mul: A.BEAM_SIDE_MUL, w: spec.width * 0.6 });
+      lines.push({ ang: p.beamAng - A.BEAM_SIDE_ANG, mul: A.BEAM_SIDE_MUL, w: spec.width * 0.6 });
+    }
+    for (let k = 0; k < enemies.length; k++) {
+      const e = enemies[k];
+      if (e.dead) continue;
+      for (let li = 0; li < lines.length; li++) {
+        const L = lines[li];
+        const dx = Math.cos(L.ang), dy = Math.sin(L.ang);
+        const rx = e.x - p.x, ry = e.y - p.y;
+        const proj = rx * dx + ry * dy;
+        if (proj < -e.r || proj > spec.len + e.r) continue;
+        const perp = Math.abs(rx * dy - ry * dx);
+        if (perp > L.w * 0.5 + e.r) continue;
+        // 静默跳伤：避免每 0.12 秒刷屏数字；不回技能能量，防止引导期自充能
+        hurtEnemy(e, baseDmg * L.mul, false, true, p.id, L.ang, true);
+        break;
+      }
+    }
   }
 
   function updateSkillShadows(dt) {
@@ -558,6 +640,55 @@
         }
       }
       ctx.restore();
+    }
+  }
+
+  function drawSkillBeams(t) {
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (!(p.beamTime > 0)) continue;
+      const spec = beamSpec(p);
+      const drawOne = (ang, width, alpha) => {
+        const ex = p.x + Math.cos(ang) * spec.len;
+        const ey = p.y + Math.sin(ang) * spec.len;
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.lineCap = "round";
+        // 外层光晕
+        ctx.globalAlpha = 0.16 * alpha;
+        ctx.strokeStyle = "#ff7a2f";
+        ctx.lineWidth = width * 1.5;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
+        // 主体
+        ctx.globalAlpha = 0.7 * alpha;
+        ctx.strokeStyle = "#ffb347";
+        ctx.lineWidth = width * 0.55;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
+        // 亮芯
+        ctx.globalAlpha = 0.95 * alpha;
+        ctx.strokeStyle = "#fff4d6";
+        ctx.lineWidth = Math.max(1.4, width * 0.16);
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
+        drawGlow("#ffb347", p.x, p.y, width * 1.1, 0.5 * alpha);
+        // 沿光束流动的光点，强化持续引导感
+        const flow = (t * 2.2) % 1;
+        ctx.fillStyle = "#ffe2a8";
+        for (let k = 0; k < 3; k++) {
+          const f = (flow + k / 3) % 1;
+          ctx.globalAlpha = (1 - f) * 0.6 * alpha;
+          ctx.beginPath();
+          ctx.arc(p.x + Math.cos(ang) * spec.len * f, p.y + Math.sin(ang) * spec.len * f,
+            Math.max(1, width * 0.2), 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+      };
+      drawOne(p.beamAng, spec.width, 1);
+      if (p.skillAwaken === "awaken_beam") {
+        const A = CFG.SKILL.AWAKEN;
+        drawOne(p.beamAng + A.BEAM_SIDE_ANG, spec.width * 0.6, 0.55);
+        drawOne(p.beamAng - A.BEAM_SIDE_ANG, spec.width * 0.6, 0.55);
+      }
     }
   }
 

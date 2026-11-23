@@ -91,7 +91,7 @@ const eventEffect = await page.evaluate(() => {
 ok("兵工厂增益写入玩家子弹伤害", Math.abs(eventEffect.dmgMod - 1.12) < 0.001, eventEffect);
 ok("裂解空间降低经验获取", Math.abs(eventEffect.xp - 8.5) < 0.001, eventEffect);
 
-// 2) 技能终极觉醒：三技能各一张，改装后出现一次
+// 2) 技能终极觉醒：四技能各一张，改装后出现一次
 const awaken = await page.evaluate(() => {
   const S = window.__SS__;
   const bySkill = {};
@@ -114,8 +114,9 @@ const awaken = await page.evaluate(() => {
     flag: p.skillAwaken, name: S.skillDisplayName(p),
   };
 });
-ok("觉醒共 3 张，每技能 1 张", awaken.total === 3 &&
-  awaken.bySkill.phase === 1 && awaken.bySkill.well === 1 && awaken.bySkill.graze === 1, awaken);
+ok("觉醒共 4 张，每技能 1 张", awaken.total === 4 &&
+  awaken.bySkill.phase === 1 && awaken.bySkill.well === 1 && awaken.bySkill.graze === 1 &&
+  awaken.bySkill.beam === 1, awaken);
 ok("改装后觉醒卡会出现在升级池", awaken.seen > 0, awaken.seen);
 ok("觉醒后不再重复出现", !awaken.leaked, awaken.leaked);
 ok("技能名带觉醒后缀", /·觉醒$/.test(awaken.name), awaken.name);
