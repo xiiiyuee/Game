@@ -235,7 +235,10 @@
     upgradeCards = [];
     chapterMod = null;          // 首章无星域事件，章节切换时由玩家抉择
     hitStop = 0;
-    musicTimer = 0;
+    musicBeat = 0;
+    musicBeatIdx = 0;
+    musicArpIdx = 0;
+    musicIntensity = 0.12;
     ultTimer = 0;
     echoTimer = 0;
     zoneTimer = 7;

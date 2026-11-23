@@ -75,6 +75,8 @@ const hook = `
     climaxFactor, hazardInterval, spawnSquad,
     get hazards() { return hazards; }, set hazards(v) { hazards = v; },
     killEnemy,
+    musicTarget, updateMusic,
+    get musicIntensity() { return musicIntensity; }, set musicIntensity(v) { musicIntensity = v; },
   };
 `;
 html = html.slice(0, idx) + hook + html.slice(idx);

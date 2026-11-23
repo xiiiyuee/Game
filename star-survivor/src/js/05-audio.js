@@ -40,7 +40,7 @@
     startDrone();
   }
 
-  function tone(freq, to, dur, type, vol, filterHz) {
+  function tone(freq, to, dur, type, vol, filterHz, bus) {
     if (!audio.ctx || audio.muted) return;
     const ac = audio.ctx;
     const t0 = ac.currentTime;
@@ -64,12 +64,12 @@
       tail = f;
     }
     tail.connect(gain);
-    gain.connect(audio.sfx);
+    gain.connect(bus || audio.sfx);
     osc.start(t0);
     osc.stop(t0 + dur + 0.03);
   }
 
-  function noiseBurst(dur, vol, filterFrom, filterTo) {
+  function noiseBurst(dur, vol, filterFrom, filterTo, bus) {
     if (!audio.ctx || audio.muted) return;
     const ac = audio.ctx;
     const t0 = ac.currentTime;
@@ -84,7 +84,7 @@
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     src.connect(f);
     f.connect(g);
-    g.connect(audio.sfx);
+    g.connect(bus || audio.sfx);
     src.start(t0);
     src.stop(t0 + dur + 0.02);
   }
@@ -214,11 +214,15 @@
     [392, 330, 262, 196].forEach((f, i) => setTimeout(() => tone(f, f * 0.9, 0.3, "sawtooth", 0.12, 900), i * 150));
   }
 
-  // 低音持续背景 + 循环琶音
+  // ===== 动态音乐：低音铺底 + 随压力收紧的节拍与琶音 =====
   let droneNodes = null;
-  let musicTimer = 0;
-  let musicStep = 0;
-  const musicNotes = [110, 146.83, 164.81, 146.83, 130.81, 98, 130.81, 164.81];
+  let musicIntensity = 0.12;   // 平滑后的音乐强度 0..1
+  let musicBeat = 0;           // 节拍计时
+  let musicBeatIdx = 0;
+  let musicArpIdx = 0;
+
+  const MUSIC_SCALE = [0, 3, 5, 7, 10];       // 小调五声音阶
+  const MUSIC_BOSS_SCALE = [0, 1, 5, 6, 8];   // Boss 战半音压迫音阶
 
   function startDrone() {
     if (!audio.ctx || droneNodes) return;
@@ -243,14 +247,62 @@
     droneNodes = { o1, o2, g };
   }
 
+  // 目标强度：威胁等级为主，章节 / 高潮波 / Boss 逐层叠加
+  function musicTarget() {
+    const maxT = typeof threatMax === "function" ? threatMax() : CFG.THREAT.MAX;
+    let t = 0.12 + clamp((threat || 0) / Math.max(1, maxT), 0, 1) * 0.5;
+    t += Math.min(0.16, Math.max(0, (chapter - 1)) * 0.03);
+    if (boss && !boss.dead) t = Math.max(t, 0.88);
+    else if (waveNum >= 8) t += 0.12;
+    return clamp(t, 0, 1);
+  }
+
   function updateMusic(dt) {
-    if (!audio.ctx || state !== "playing" || audio.muted) return;
-    musicTimer -= dt;
-    if (musicTimer <= 0) {
-      musicTimer = 0.42;
-      const f = musicNotes[musicStep % musicNotes.length];
-      musicStep++;
-      tone(f, f, 0.24, "sine", 0.05, 1800);
+    if (state !== "playing") return;
+    // 强度平滑，避免章节切换时音乐突然跳变（无音频上下文时也保持可测）
+    musicIntensity += (musicTarget() - musicIntensity) * Math.min(1, dt * 0.5);
+    if (!audio.ctx || audio.muted) return;
+
+    const k = musicIntensity;
+    const inBoss = !!(boss && !boss.dead);
+    if (droneNodes) {
+      // 底噪随压力缓慢抬升，并加入轻微起伏
+      const pump = 0.03 + 0.055 * k + 0.006 * Math.sin(performance.now() * 0.0012);
+      droneNodes.g.gain.setTargetAtTime(pump, audio.ctx.currentTime, 0.25);
+    }
+
+    // 节拍：压力越大越快
+    musicBeat -= dt;
+    if (musicBeat > 0) return;
+    musicBeat = inBoss ? 0.3 : 0.64 - 0.3 * k;
+    musicBeatIdx++;
+
+    const root = inBoss ? 41.2 : 55;   // E1 / A1
+    // 底鼓
+    tone(120, 42, 0.16, "sine", 0.1 + 0.16 * k, 300, audio.music);
+    // 反拍镲：中高压力才出现
+    if (k > 0.3 && musicBeatIdx % 2 === 0) {
+      noiseBurst(0.05, 0.05 + 0.05 * k, 9000, 4200, audio.music);
+    }
+    // 低音线：每两拍换音
+    if (musicBeatIdx % 2 === 0) {
+      const scale = inBoss ? MUSIC_BOSS_SCALE : MUSIC_SCALE;
+      const semi = scale[Math.floor(musicBeatIdx / 2) % scale.length];
+      const f = root * Math.pow(2, semi / 12);
+      tone(f, f, 0.42, "triangle", 0.1 + 0.06 * k, 700, audio.music);
+    }
+    // 琶音：强度越高越密、音区越高
+    const arpEvery = k > 0.66 ? 1 : 2;
+    if (musicBeatIdx % arpEvery === 0) {
+      const scale = inBoss ? MUSIC_BOSS_SCALE : MUSIC_SCALE;
+      const semi = scale[musicArpIdx % scale.length] + (k > 0.55 ? 12 : 0);
+      musicArpIdx++;
+      const f = (inBoss ? 82.4 : 110) * 2 * Math.pow(2, semi / 12);
+      tone(f, f, 0.2, "sine", 0.03 + 0.05 * k, 2600, audio.music);
+    }
+    // Boss：每四拍叠一层不谐和长音
+    if (inBoss && musicBeatIdx % 4 === 0) {
+      tone(311, 233, 0.5, "sawtooth", 0.028, 1400, audio.music);
     }
   }
 

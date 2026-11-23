@@ -121,7 +121,27 @@ ok("改装后觉醒卡会出现在升级池", awaken.seen > 0, awaken.seen);
 ok("觉醒后不再重复出现", !awaken.leaked, awaken.leaked);
 ok("技能名带觉醒后缀", /·觉醒$/.test(awaken.name), awaken.name);
 
-// 3) 相位觉醒：冲刺终点爆发，冰痕留下冰区
+// 3) 动态音乐：压力越高强度越大，且平滑逼近目标
+const music = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  S.threat = 0; S.chapter = 1; S.waveNum = 1;
+  const calm = S.musicTarget();
+  S.chapter = 6; S.waveNum = 9;
+  S.threat = S.threatMax();
+  const hot = S.musicTarget();
+  S.musicIntensity = 0.1;
+  for (let i = 0; i < 160; i++) S.updateMusic(0.05);
+  const risen = S.musicIntensity;
+  S.waveNum = 1; S.chapter = 1; S.threat = 0;
+  for (let i = 0; i < 160; i++) S.updateMusic(0.05);
+  return { calm, hot, risen, cooled: S.musicIntensity };
+});
+ok("音乐强度随威胁 / 章节 / 高潮波上升", music.hot > music.calm + 0.3 && music.hot > 0.8, music);
+ok("音乐强度平滑跟进并能回落", music.risen > 0.6 && music.cooled < 0.35, music);
+
+// 4) 相位觉醒：冲刺终点爆发，冰痕留下冰区
 const phaseAwake = await page.evaluate(() => {
   const S = window.__SS__;
   S.startGame("pulse", "phase");
@@ -137,7 +157,7 @@ const phaseAwake = await page.evaluate(() => {
 ok("相位觉醒终点爆炸造成伤害", phaseAwake.hp1 < phaseAwake.hp0, phaseAwake);
 ok("冰痕相位觉醒额外留下冰区", phaseAwake.zones >= 1, phaseAwake);
 
-// 4) 重力井觉醒：结束后留下事件视界并持续伤害
+// 5) 重力井觉醒：结束后留下事件视界并持续伤害
 const wellAwake = await page.evaluate(() => {
   const S = window.__SS__;
   S.startGame("pulse", "well");
@@ -159,7 +179,7 @@ ok("重力井觉醒生成事件视界", wellAwake.hole, wellAwake);
 ok("事件视界持续造成伤害", wellAwake.hp1 < wellAwake.hp0, wellAwake);
 ok("事件视界纳入联机快照", wellAwake.synced, wellAwake.synced);
 
-// 5) 擦弹觉醒：每 2 发返还分裂反射弹
+// 6) 擦弹觉醒：每 2 发返还分裂反射弹
 const grazeAwake = await page.evaluate(() => {
   const S = window.__SS__;
   S.startGame("pulse", "graze");
@@ -196,7 +216,7 @@ const split = await page.evaluate(() => {
 ok("分裂反射弹命中后生成 2 枚子弹", split.after - split.before >= 2 ||
   split.kids >= 2, split);
 
-// 6) 防线联动：炮塔光环、过载、城墙充能
+// 7) 防线联动：炮塔光环、过载、城墙充能
 const aura = await page.evaluate(() => {
   const S = window.__SS__;
   S.startGame("pulse", "phase");
@@ -232,7 +252,7 @@ const wall = await page.evaluate(() => {
 });
 ok("擦弹为城墙充能并在满层释放冲击波", wall.charge === 0 && wall.hp1 < wall.hp0, wall);
 
-// 7) 觉醒与改装写入联机快照
+// 8) 觉醒与改装写入联机快照
 const snapshot = await page.evaluate(() => {
   const S = window.__SS__;
   S.startGame("pulse", "phase");
@@ -245,7 +265,7 @@ const snapshot = await page.evaluate(() => {
 ok("觉醒状态记录在玩家对象上", snapshot.mod === "phase_ice" &&
   snapshot.aw === "awaken_phase", snapshot);
 
-// 8) 压迫感回归：擦弹吸收上限 + 重力井控场递减
+// 9) 压迫感回归：擦弹吸收上限 + 重力井控场递减
 const grazeCap = await page.evaluate(() => {
   const S = window.__SS__;
   S.startGame("pulse", "graze");
