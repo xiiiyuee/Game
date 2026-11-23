@@ -102,6 +102,8 @@
         p.beamAng = (tx !== p.x || ty !== p.y) ? Math.atan2(ty - p.y, tx - p.x) : p.facing;
         p.beamTime = CFG.SKILL.BEAM.TIME * (p.stats.skillDurationMul || 1);
         p.beamTick = 0;
+        p.beamAcc = 0;
+        p.beamTextCd = 0;
       }
       emit(p.x, p.y, 14, THEME.cyanSoft, 200, 3, 0.5);
       if (p.skill === "beam") sfxBeamStart();
@@ -168,6 +170,8 @@
         : tgt ? Math.atan2(tgt.y - p.y, tgt.x - p.x) : p.facing;
       p.beamTime = CFG.SKILL.BEAM.TIME * (p.stats.skillDurationMul || 1);
       p.beamTick = 0;
+      p.beamAcc = 0;
+      p.beamTextCd = 0;
       emit(p.x, p.y, 18, "#ffb347", 230, 3.2, 0.6);
       addText(p.x, p.y - 42, skillDisplayName(p), "#ffb347", 15);
       sfxBeamStart();
@@ -350,6 +354,14 @@
         sfxBeamTick();
         if (state !== "playing") return;
       }
+      // 跳伤数字合并显示：每 0.36 秒汇总一次，避免每跳刷屏
+      p.beamTextCd = (p.beamTextCd || 0) - dt;
+      if (p.beamTextCd <= 0 && (p.beamAcc || 0) > 0) {
+        p.beamTextCd = 0.36;
+        addText(p.beamAccX || p.x, (p.beamAccY || p.y) - 8, Math.round(p.beamAcc), "#ffb37a", 13);
+        p.beamAcc = 0;
+      }
+      if (p.beamTime <= 0) p.beamAcc = 0;
     }
   }
 
@@ -362,6 +374,7 @@
       lines.push({ ang: p.beamAng + A.BEAM_SIDE_ANG, mul: A.BEAM_SIDE_MUL, w: spec.width * 0.6 });
       lines.push({ ang: p.beamAng - A.BEAM_SIDE_ANG, mul: A.BEAM_SIDE_MUL, w: spec.width * 0.6 });
     }
+    let dealt = 0, hx = 0, hy = 0;
     for (let k = 0; k < enemies.length; k++) {
       const e = enemies[k];
       if (e.dead) continue;
@@ -375,8 +388,16 @@
         if (perp > L.w * 0.5 + e.r) continue;
         // 静默跳伤：避免每 0.12 秒刷屏数字；不回技能能量，防止引导期自充能
         hurtEnemy(e, baseDmg * L.mul, false, true, p.id, L.ang, true);
+        dealt += baseDmg * L.mul;
+        if (!hx && !hy) { hx = e.x; hy = e.y; }
         break;
       }
+    }
+    // 每跳先把伤害累计起来，由 updateBeams 定期汇总显示一次
+    if (dealt > 0) {
+      p.beamAcc = (p.beamAcc || 0) + dealt;
+      p.beamAccX = hx;
+      p.beamAccY = hy;
     }
   }
 

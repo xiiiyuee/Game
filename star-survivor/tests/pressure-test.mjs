@@ -294,12 +294,13 @@ ok("灼光者会实际蓄力发射激光", lancerAi.found && lancerAi.warn > 0.5
 
 const laserHit = await page.evaluate(() => {
   const S = window.__SS__;
+  const L = S.CFG.ENEMY_LASER;
   S.startGame("pulse", "phase");
   S.state = "playing";
   const p = S.player;
   const mk = () => ({
     type: "laser", x: p.x - 200, y: p.y, ang: 0, len: 1000, width: 18,
-    warn: 0.01, maxWarn: 0.01, active: 0.36, life: 0, dmg: 20, pierceArmor: true,
+    warn: 0.01, maxWarn: 0.01, active: L.ACTIVE, life: 0, dmg: 20, pierceArmor: true,
   });
   p.hp = 200; p.hpMax = 200; p.shield = 0; p.invuln = 0; p.stats.armor = 0.5;
   S.hazards = [mk()];
@@ -314,26 +315,36 @@ const laserHit = await page.evaluate(() => {
   S.hazards = [off];
   S.updateHazards(0.02);
   const missed = p.hp;
-  return { armored, bare, missed };
+  const tick = Math.min(20 * L.TICK_DMG, 200 * L.TICK_CAP);
+  return { armored, bare, missed, tick };
 });
-ok("激光无视护甲减伤且只命中光束范围", laserHit.armored === 180 &&
-  laserHit.bare === 180 && laserHit.missed === 200, laserHit);
+ok("激光无视护甲减伤且只命中光束范围", Math.abs(laserHit.armored - (200 - laserHit.tick)) < 0.01 &&
+  Math.abs(laserHit.bare - (200 - laserHit.tick)) < 0.01 && laserHit.missed === 200, laserHit);
 
-/* ===== 激光公平性：伤害上限 / 打断 / 受击反馈 ===== */
+/* ===== 激光公平性：持续灼烧 / 单跳上限 / 打断 / 受击反馈 ===== */
 const laserFair = await page.evaluate(() => {
   const S = window.__SS__;
+  const L = S.CFG.ENEMY_LASER;
   S.startGame("pulse", "phase");
   S.state = "playing";
   const p = S.player;
   p.hp = 200; p.hpMax = 200; p.shield = 0; p.invuln = 0; p.stats.armor = 0.5;
   S.hazards = [{
     type: "laser", x: p.x - 200, y: p.y, ang: 0, len: 1000, width: 18,
-    warn: 0.01, maxWarn: 0.01, active: 0.36, life: 0, dmg: 999, pierceArmor: true,
+    warn: 0.01, maxWarn: 0.01, active: L.ACTIVE, life: 0, dmg: 999, pierceArmor: true,
   }];
   S.updateHazards(0.02);
-  return { hp: p.hp, dirT: p.hitDirT, warn: S.CFG.ENEMY_LASER.WARN, cap: S.CFG.ENEMY_LASER.DMG_CAP };
+  const first = p.hp;
+  for (let i = 0; i < 5; i++) S.updateHazards(0.1);
+  const sustained = p.hp;
+  return {
+    first, sustained, left: S.hazards.filter((h) => h.type === "laser").length,
+    dirT: p.hitDirT, warn: L.WARN, cap: L.TICK_CAP,
+    tickCap: 200 * L.TICK_CAP,
+  };
 });
-ok("激光单次伤害封顶且记录受击方向", laserFair.hp > 89.5 && laserFair.hp < 90.5 && laserFair.dirT > 0 &&
+ok("激光持续灼烧、单跳伤害封顶且光柱结束后消失", Math.abs(laserFair.first - (200 - laserFair.tickCap)) < 0.01 &&
+  laserFair.sustained < laserFair.first && laserFair.left === 0 && laserFair.dirT > 0 &&
   laserFair.warn >= 1.05 && laserFair.cap > 0 && laserFair.cap < 1, laserFair);
 
 const laserBreak = await page.evaluate(() => {

@@ -264,28 +264,37 @@
       }
       shake = Math.max(shake, 6 * CFG.FX.SHAKE);
     } else if (h.type === "laser") {
-      const dx = Math.cos(h.ang), dy = Math.sin(h.ang);
-      const half = (h.width || CFG.ENEMY_LASER.WIDTH) / 2;
-      const len = h.len || CFG.ENEMY_LASER.LEN;
+      const L = CFG.ENEMY_LASER;
       emit(h.x, h.y, 16, "#ff8a3c", 220, 3.2, 0.5);
       shake = Math.max(shake, 7 * CFG.FX.SHAKE);
       sfxLaserFire();
       if (!solid) return;
-      // 穿透：一次判定线路上所有玩家，且不受护甲减伤；单次伤害设上限，避免后期直接秒杀
-      const L = CFG.ENEMY_LASER;
-      for (let i = 0; i < players.length; i++) {
-        const q = players[i];
-        if (q.down || q.eliminated) continue;
-        const rx = q.x - h.x, ry = q.y - h.y;
-        const proj = rx * dx + ry * dy;
-        if (proj < -q.r || proj > len + q.r) continue;
-        const perp = Math.abs(rx * dy - ry * dx);
-        if (perp > half + q.r) continue;
-        const dmg = Math.min(h.dmg, q.hpMax * L.DMG_CAP);
-        const hurt = q.invuln <= 0;
-        damagePlayer(dmg, q, { pierceArmor: true, src: { x: h.x, y: h.y } });
-        if (hurt && q === getLocalPlayer()) addText(q.x, q.y - 36, "护甲被穿透", "#ffb37a", 12);
-      }
+      // 起束即结算第一跳，后续由 updateHazards 按 TICK 持续灼烧
+      h.tickCd = L.TICK;
+      laserHitPlayers(h, true);
+    }
+  }
+
+  // 敌方激光每跳伤害：穿透沿途所有玩家，无视护甲，按目标最大生命封顶
+  function laserHitPlayers(h, first) {
+    if (coopIsGuest() || h.ghost) return;
+    const L = CFG.ENEMY_LASER;
+    const dx = Math.cos(h.ang), dy = Math.sin(h.ang);
+    const half = (h.width || L.WIDTH) / 2;
+    const len = h.len || L.LEN;
+    for (let i = 0; i < players.length; i++) {
+      const q = players[i];
+      if (q.down || q.eliminated) continue;
+      const rx = q.x - h.x, ry = q.y - h.y;
+      const proj = rx * dx + ry * dy;
+      if (proj < -q.r || proj > len + q.r) continue;
+      const perp = Math.abs(rx * dy - ry * dx);
+      if (perp > half + q.r) continue;
+      const dmg = Math.min((h.dmg || 8) * L.TICK_DMG, q.hpMax * L.TICK_CAP);
+      const fresh = q.invuln <= 0;
+      damagePlayer(dmg, q, { pierceArmor: true, laserTick: !first, src: { x: h.x, y: h.y } });
+      emit(q.x, q.y, first ? 10 : 4, "#ffb37a", first ? 210 : 150, 2.6, 0.35);
+      if (first && fresh && q === getLocalPlayer()) addText(q.x, q.y - 36, "护甲被穿透", "#ffb37a", 12);
     }
   }
 
@@ -379,6 +388,15 @@
         h.active -= dt;
         h.life = Math.max(0, h.life - dt);
         if (h.active <= 0) hazards.splice(i, 1);
+      } else if (h.type === "laser") {
+        // 光束持续期间按固定间隔继续灼烧，站在光柱里会连续掉血
+        h.life -= dt;
+        h.tickCd = (h.tickCd || 0) - dt;
+        if (h.tickCd <= 0) {
+          h.tickCd += CFG.ENEMY_LASER.TICK;
+          laserHitPlayers(h, false);
+        }
+        if (h.life <= 0) hazards.splice(i, 1);
       } else {
         h.life -= dt;
         if (h.life <= 0) hazards.splice(i, 1);

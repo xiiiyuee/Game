@@ -287,7 +287,11 @@
     const s = p.stats;
     if (state !== "playing") return;
     if (p.down || p.eliminated) return;
-    if (p.invuln > 0) return;
+    const laserTick = !!(opts && opts.laserTick);
+    if (laserTick) {
+      // 光束持续灼烧：普通受击无敌帧不豁免，但相位冲刺等硬无敌仍可躲
+      if ((p.phaseTime || 0) > 0 || (p.dashTime || 0) > 0) return;
+    } else if (p.invuln > 0) return;
 
     // 穿透伤害（敌方激光）：跳过护甲减伤，但仍受易伤倍率影响
     const armor = opts && opts.pierceArmor ? 0 : s.armor;
@@ -317,26 +321,33 @@
       p.hitDirT = 0.8;
     }
 
-    p.invuln = CFG.PLAYER.INVULN_ON_HURT;
-    p.shieldDelay = CFG.PLAYER.SHIELD_DELAY;
-    p.hitFlash = 1;
-    emit(p.x, p.y, 14, "#ff4d6d", 220, 3, 0.5);
-    // 受击反馈只作用于本地玩家，队友受伤不再让全场红屏/震屏/断连杀
-    if (p === player) {
-      hurtFlash = 1;
-      shake = Math.max(shake, 12 * CFG.FX.SHAKE);
-      sfxHurt();
-      hitStop = Math.max(hitStop, 0.025);
-      // 激光穿透用更长震动，普通受击保持短促
-      haptic(opts && opts.pierceArmor ? [0, 42, 28, 70] : 28);
-      combo = 0;
-      comboTimer = 0;
-      // 受击会打断压迫节奏：威胁等级回落
-      if (!coopIsGuest()) threat = Math.max(0, threat - CFG.THREAT.HIT_DROP);
-    }
-    if (roomCode) {                        // P4-02：受击立即关闭个人商店/游商
-      if (p.shopOpen) coopCloseShop(p);
-      if (p.tradeOffer) coopCloseTrade(p);
+    if (laserTick) {
+      // 持续灼烧：只保留连续掉血与轻微反馈，不重复红屏/震屏/连杀中断
+      p.shieldDelay = CFG.PLAYER.SHIELD_DELAY;
+      p.hitFlash = Math.max(p.hitFlash || 0, 0.55);
+      emit(p.x, p.y, 5, "#ffb37a", 160, 2.4, 0.3);
+    } else {
+      p.invuln = CFG.PLAYER.INVULN_ON_HURT;
+      p.shieldDelay = CFG.PLAYER.SHIELD_DELAY;
+      p.hitFlash = 1;
+      emit(p.x, p.y, 14, "#ff4d6d", 220, 3, 0.5);
+      // 受击反馈只作用于本地玩家，队友受伤不再让全场红屏/震屏/断连杀
+      if (p === player) {
+        hurtFlash = 1;
+        shake = Math.max(shake, 12 * CFG.FX.SHAKE);
+        sfxHurt();
+        hitStop = Math.max(hitStop, 0.025);
+        // 激光穿透用更长震动，普通受击保持短促
+        haptic(opts && opts.pierceArmor ? [0, 42, 28, 70] : 28);
+        combo = 0;
+        comboTimer = 0;
+        // 受击会打断压迫节奏：威胁等级回落
+        if (!coopIsGuest()) threat = Math.max(0, threat - CFG.THREAT.HIT_DROP);
+      }
+      if (roomCode) {                        // P4-02：受击立即关闭个人商店/游商
+        if (p.shopOpen) coopCloseShop(p);
+        if (p.tradeOffer) coopCloseTrade(p);
+      }
     }
 
     if (p.hp <= 0) {

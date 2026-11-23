@@ -70,6 +70,8 @@
       beamTime: 0,               // 灼蚀光束剩余引导时间
       beamAng: 0,                // 光束当前角度
       beamTick: 0,               // 光束伤害判定计时
+      beamAcc: 0,                // 光束跳伤累计（用于合并显示）
+      beamTextCd: 0,             // 跳伤数字刷新计时
       energy: 0,                 // 超载能量
       skill: chosenSkill || "phase", // 本局主动技能
       skillMod: "",              // 技能改装（互斥，见 SKILL_MODS）
