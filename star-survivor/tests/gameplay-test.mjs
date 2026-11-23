@@ -244,6 +244,45 @@ const snapshot = await page.evaluate(() => {
 ok("觉醒状态记录在玩家对象上", snapshot.mod === "phase_ice" &&
   snapshot.aw === "awaken_phase", snapshot);
 
+// 8) 压迫感回归：擦弹吸收上限 + 重力井控场递减
+const grazeCap = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "graze");
+  const p = S.getLocalPlayer();
+  p.grazeActive = 5;
+  p.grazeAbsorbed = 0;
+  const b = { x: p.x + 10, y: p.y };
+  for (let i = 0; i < S.CFG.SKILL.GRAZE.MAX_ABSORB; i++) S.grazeAbsorb(p, b);
+  return {
+    active: p.grazeActive, absorbed: p.grazeAbsorbed,
+    max: S.CFG.SKILL.GRAZE.MAX_ABSORB,
+  };
+});
+ok("擦弹吸满上限后光环饱和消散",
+  grazeCap.absorbed === grazeCap.max && grazeCap.active === 0, grazeCap);
+
+const pullResist = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "well");
+  const p = S.getLocalPlayer();
+  const e = S.spawnEnemy("square", p.x + 300, p.y);
+  S.gravityWells.push({
+    owner: p.id, x: p.x, y: p.y, r: 500, t: 99, maxT: 99,
+    mod: "", awaken: "", pulseCd: 1, seed: 0, synced: false,
+  });
+  const x0 = e.x;
+  S.updateSkillEffects(0.1);
+  const first = x0 - e.x;
+  for (let i = 0; i < 25; i++) S.updateSkillEffects(0.1);
+  const xa = e.x;
+  S.updateSkillEffects(0.1);
+  const last = xa - e.x;
+  return { first, last, ccRes: e.ccRes || 0 };
+});
+ok("重力井持续吸附产生控场递减",
+  pullResist.first > 0 && pullResist.last < pullResist.first * 0.6 &&
+  pullResist.ccRes >= 0.6, pullResist);
+
 await browser.close();
 const failed = checks.filter((c) => !c.pass);
 console.log(JSON.stringify({ checks, errors }, null, 2));

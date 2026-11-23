@@ -259,8 +259,8 @@
     const dy = tgt.y - b.y;
     const d = Math.hypot(dx, dy) || 1;
     b.angle = Math.atan2(dy, dx);
-    // 超载期间：Boss 移动、攻击频率与弹幕同步减速
-    const es = ultTimer > 0 ? CFG.ULT.SLOW : 1;
+    // 超载期间：Boss 移动、攻击频率与弹幕同步减速（Boss 对超载减速有抗性）
+    const es = ultTimer > 0 ? Math.max(CFG.ULT.SLOW, 0.72) : 1;
     const slowDt = dt * es;
 
     // ===== 机制：限时狂暴 =====
@@ -601,6 +601,8 @@
       e.slowT = Math.max(0, (e.slowT || 0) - sdt);
       e.frostT = Math.max(0, (e.frostT || 0) - sdt);
       e.freezeT = Math.max(0, (e.freezeT || 0) - sdt);
+      // 控场抗性：离开引力场后逐步消退，重新可被吸附
+      if (e.ccRes > 0) e.ccRes = Math.max(0, e.ccRes - CFG.SKILL.WELL.CC_RESIST_DECAY * dt);
       e.x += Math.cos(ang) * sp * sdt;
       e.y += Math.sin(ang) * sp * sdt;
       e.angle = ang;

@@ -91,6 +91,7 @@
       } else if (p.skill === "graze") {
         p.grazeActive = CFG.SKILL.GRAZE.TIME * (p.stats.skillDurationMul || 1);
         p.grazeStacks = 0;
+        p.grazeAbsorbed = 0;
       }
       emit(p.x, p.y, 14, THEME.cyanSoft, 200, 3, 0.5);
       coopEventSeq += 1;
@@ -143,6 +144,7 @@
     } else if (p.skill === "graze") {
       p.grazeActive = CFG.SKILL.GRAZE.TIME * (p.stats.skillDurationMul || 1);
       p.grazeStacks = 0;
+      p.grazeAbsorbed = 0;
       p.grazeReflect = 0;
       p.grazeAwakenCount = 0;
       emit(p.x, p.y, 20, THEME.mint, 220, 3, 0.65);
@@ -233,6 +235,7 @@
   function grazeAbsorb(p, b) {
     const over = p.skillMod === "graze_overcharge";
     const shieldGain = over ? CFG.SKILL.GRAZE.OVER_SHIELD : CFG.SKILL.GRAZE.SHIELD;
+    p.grazeAbsorbed = (p.grazeAbsorbed || 0) + 1;
     p.shield = Math.min(p.stats.shieldMax, p.shield + shieldGain);
     p.grazeStacks = Math.min(CFG.SKILL.GRAZE.MAX_STACKS, (p.grazeStacks || 0) + 1);
     gainSkillEnergy(p, CFG.SKILL.GRAZE.ENERGY);
@@ -255,6 +258,12 @@
     // 防线联动：擦弹同时为附近城墙充能
     if (!coopIsGuest()) chargeNearbyWalls(p);
     emit(b.x, b.y, 4, THEME.mint, 150, 2, 0.3);
+    // 吸收达到上限：光环饱和消散，需要重新施放才能继续吞弹
+    if (p.grazeAbsorbed >= CFG.SKILL.GRAZE.MAX_ABSORB) {
+      p.grazeActive = 0;
+      p.grazeStacks = 0;
+      addText(p.x, p.y - 34, "擦弹饱和", "#8fb8d8", 12);
+    }
   }
 
   function fireReflectBullet(p, splitCount) {
@@ -368,8 +377,12 @@
         const d = Math.hypot(w.x - e.x, w.y - e.y);
         if (d > w.r || d < 0.001) continue;
         const mul = e.isBoss ? 0.3 : 1;
-        e.x += ((w.x - e.x) / d) * pe * mul * dt;
-        e.y += ((w.y - e.y) / d) * pe * mul * dt;
+        // 持续控场递减：吸附越久拉力越弱，避免无限聚怪
+        const resist = 1 - Math.min(CFG.SKILL.WELL.CC_RESIST_MAX, e.ccRes || 0);
+        e.x += ((w.x - e.x) / d) * pe * mul * resist * dt;
+        e.y += ((w.y - e.y) / d) * pe * mul * resist * dt;
+        e.ccRes = Math.min(CFG.SKILL.WELL.CC_RESIST_MAX,
+          (e.ccRes || 0) + CFG.SKILL.WELL.CC_RESIST_GAIN * dt);
       }
       // 吸附敌弹
       for (let k = 0; k < ebullets.length; k++) {

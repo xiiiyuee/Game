@@ -218,8 +218,8 @@
     // 主动技能：能量靠被动回复与命中敌人积累，冷却期间仍可继续蓄能
     SKILL: {
       MAX: 100,              // 技能能量上限
-      PASSIVE: 2.6,          // 每秒被动回复
-      HIT_GAIN: 2,           // 命中敌人返能量
+      PASSIVE: 2.2,          // 每秒被动回复
+      HIT_GAIN: 0.7,         // 命中敌人返能量
       CAST_LOCK: 0.4,        // 施放后的短锁，避免连按
       // 相位冲刺：穿越弹幕与敌人，沿路留下残影补射
       PHASE: {
@@ -231,7 +231,9 @@
       },
       // 重力井：吸附敌人与弹幕，结束时内爆
       WELL: {
-        DIST: 190, RADIUS: 120, TIME: 2.4, PULL_ENEMY: 90, PULL_BULLET: 140, DMG: 26,
+        DIST: 190, RADIUS: 120, TIME: 2.4, PULL_ENEMY: 90, PULL_BULLET: 90, DMG: 26,
+        // 持续控场递减：同一敌人被吸附越久，拉力越弱
+        CC_RESIST_GAIN: 0.9, CC_RESIST_MAX: 0.65, CC_RESIST_DECAY: 0.5,
         // 改装「奇点」：半径缩小、吸附更强、内爆翻倍
         SINGULARITY_R: 0.8, SINGULARITY_PULL: 1.6, SINGULARITY_DMG: 2,
         // 改装「脉冲井」：取消内爆，周期性脉冲伤害
@@ -239,7 +241,9 @@
       },
       // 擦弹回流：近距离掠过敌弹时吸收，转为护盾与强化射击
       GRAZE: {
-        TIME: 4.5, RADIUS: 38, MAX_STACKS: 10, DMG_PER: 0.06, SHIELD: 1, ENERGY: 1.5,
+        TIME: 4.5, RADIUS: 38, MAX_STACKS: 10, DMG_PER: 0.06, SHIELD: 1, ENERGY: 0.4,
+        // 单次施放最多吸收弹数：吸满后光环饱和，避免长期无弹压
+        MAX_ABSORB: 36,
         // 改装「反射装甲」：每吸收 N 发返还一发强化弹
         REFLECT_EVERY: 3, REFLECT_DMG: 0.6,
         // 改装「护盾过载」：护盾上限与单发护盾提升，但增伤层数减半
@@ -251,22 +255,22 @@
         PHASE_DMG: 2.2, PHASE_RADIUS: 86, PHASE_FROST: true,
         // 重力井：结束后留下 2 秒事件视界，持续吸附与脉冲
         HOLE_TIME: 2.0, HOLE_R: 0.85, HOLE_PULL: 1.5,
-        HOLE_CD: 0.45, HOLE_DMG: 8,
+        HOLE_CD: 0.6, HOLE_DMG: 6,
         // 擦弹：每吸收 2 发额外返还一枚可分裂反射弹
         GRAZE_EVERY: 2, SPLIT_COUNT: 2, SPLIT_DMG: 0.5,
         // 冰区觉醒：每秒冻结区域内敌人
-        FREEZE_TIME: 0.45, FREEZE_CD: 0.9, FREEZE_BOSS: 0.2,
+        FREEZE_TIME: 0.35, FREEZE_CD: 1.1, FREEZE_BOSS: 0.2,
       },
     },
     ULT: {
       MAX: 100,              // 能量上限
-      GAIN_KILL: 7,          // 普通敌人击杀充能
-      GAIN_ELITE: 18,        // 精英击杀充能
+      GAIN_KILL: 4,          // 普通敌人击杀充能
+      GAIN_ELITE: 11,        // 精英击杀充能
       RADIUS: 360,           // 爆发伤害半径
       DAMAGE: 120,           // 爆发伤害
-      SLOW: 0.38,            // 敌人在超载期间的移速/弹速倍率
-      SLOW_TIME: 3.0,        // 减速持续时间
-      INVULN: 1.0,           // 释放时的无敌时间
+      SLOW: 0.5,             // 敌人在超载期间的移速/弹速倍率
+      SLOW_TIME: 2.2,        // 减速持续时间
+      INVULN: 0.5,           // 释放时的无敌时间
       CLEAR_MARGIN: 140,     // 清弹范围：镜头外扩边距
     },
     // 大世界随机事件：风险星域 / 能量水晶 / 补给舱

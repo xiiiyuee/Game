@@ -934,6 +934,7 @@
         p.level || 1, p.kills || 0,
         p.skill || "", Math.round(p.skillEnergy || 0),
         p.skillMod || "", p.skillAwaken || "",
+        Math.round((p.grazeActive || 0) * 10),   // 擦弹剩余时间（含吸满饱和）
       ]);
     }
     return arr;
@@ -1083,6 +1084,7 @@
       }
       if (e.length >= 16) p.skillMod = e[15] || "";
       if (e.length >= 17) p.skillAwaken = e[16] || "";
+      if (e.length >= 18) p.grazeActive = (e[17] || 0) / 10;
       coopInterpPush(id, p.x, p.y, p.facing);
     }
     // 团队共享资源（D-03）：星币 / 核心 / 保险由房主同步
@@ -1129,6 +1131,7 @@
     }
     if (e.length >= 16) player.skillMod = e[15] || "";
     if (e.length >= 17) player.skillAwaken = e[16] || "";
+    if (e.length >= 18) player.grazeActive = (e[17] || 0) / 10;
     if (player.hp < hpBefore - 0.5) {
       if (coopGuestShop) coopCloseShopUI();     // 受击关闭个人商店
       if (coopGuestTrade) coopCloseTradeUI();
