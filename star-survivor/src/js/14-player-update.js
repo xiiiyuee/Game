@@ -29,6 +29,8 @@
     p.invuln = Math.max(0, p.invuln - dt);
     p.dashCd = Math.max(0, p.dashCd - dt);
     p.hitFlash = Math.max(0, p.hitFlash - dt * 2.6);
+    p.hitDirT = Math.max(0, (p.hitDirT || 0) - dt * 1.4);
+    p.shieldBreak = Math.max(0, (p.shieldBreak || 0) - dt * 2.2);
 
     // 主动技能：被动蓄能（冷却/施放锁期间照常积累）
     p.skillLock = Math.max(0, (p.skillLock || 0) - dt);
@@ -266,12 +268,24 @@
     const dmg = baseDmg * (1 - armor) * s.takenMul *
       (chapterMod && chapterMod.dmgTakenMul ? chapterMod.dmgTakenMul : 1);
     let remain = dmg;
+    const shieldBefore = p.shield;
     if (p.shield > 0) {
       const absorbed = Math.min(p.shield, remain);
       p.shield -= absorbed;
       remain -= absorbed;
     }
     if (remain > 0) p.hp -= remain;
+    // 护盾被打破：给一次明确反馈，避免玩家误以为伤害异常
+    if (shieldBefore > 0 && p.shield <= 0) {
+      p.shieldBreak = 1;
+      emit(p.x, p.y, 16, THEME.cyan, 200, 3, 0.5);
+      if (p === player) addText(p.x, p.y - 30, "护盾破碎", "#8ff6ff", 12);
+    }
+    // 记录受击来向（来自激光/炮弹/接触），用于屏幕上的方向指示
+    if (opts && opts.src) {
+      p.hitDir = Math.atan2(p.y - opts.src.y, p.x - opts.src.x);
+      p.hitDirT = 0.8;
+    }
 
     p.invuln = CFG.PLAYER.INVULN_ON_HURT;
     p.shieldDelay = CFG.PLAYER.SHIELD_DELAY;

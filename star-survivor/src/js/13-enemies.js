@@ -392,7 +392,7 @@
           const proj = px * Math.cos(a) + py * Math.sin(a);
           if (proj <= 0) continue;
           const perp = Math.abs(-px * Math.sin(a) + py * Math.cos(a));
-          if (perp < tgt.r + 9) { damagePlayer(b.dmg * CFG.BOSS.LASER_DMG, tgt); break; }
+          if (perp < tgt.r + 9) { damagePlayer(b.dmg * CFG.BOSS.LASER_DMG, tgt, { src: { x: b.x, y: b.y } }); break; }
         }
       } else {
         b.laserCd -= slowDt;
@@ -521,7 +521,7 @@
     // ===== 接触伤害（冲刺撞击更痛）=====
     const rr = b.r + tgt.r;
     if (dist2(b.x, b.y, tgt.x, tgt.y) < rr * rr) {
-      damagePlayer(b.dmg * (b.dashTime > 0 ? 1 : 0.6), tgt);
+      damagePlayer(b.dmg * (b.dashTime > 0 ? 1 : 0.6), tgt, { src: { x: b.x, y: b.y } });
     }
 
     // ===== 碾压防线：Boss 靠近时直接拆塔 / 撞塌城墙 =====
@@ -861,7 +861,7 @@
           e.x -= Math.cos(ang) * 4;
           e.y -= Math.sin(ang) * 4;
         } else {
-          damagePlayer(e.dmg, tgt);
+          damagePlayer(e.dmg, tgt, { src: { x: e.x, y: e.y } });
           e.x -= Math.cos(ang) * 10;
           e.y -= Math.sin(ang) * 10;
         }

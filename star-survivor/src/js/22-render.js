@@ -551,6 +551,26 @@
       ctx.stroke();
     }
 
+    // 护盾破碎：向外扩散的青蓝色冲击环
+    if (p.shieldBreak > 0) {
+      const k = 1 - p.shieldBreak;
+      ctx.strokeStyle = rgbaOf(THEME.cyan, p.shieldBreak * 0.65);
+      ctx.lineWidth = 3 * p.shieldBreak + 1;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r + 8 + k * 26, 0, TAU);
+      ctx.stroke();
+    }
+
+    // 受击方向指示：在来向画一段高亮弧，解决“不知道哪来的伤害”
+    if (p.hitDirT > 0) {
+      const k = clamp(p.hitDirT / 0.8, 0, 1);
+      ctx.strokeStyle = `rgba(255, 70, 90, ${0.8 * k})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r + 15, p.hitDir - 0.42, p.hitDir + 0.42);
+      ctx.stroke();
+    }
+
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.facing + Math.PI / 2);
@@ -1338,6 +1358,55 @@
     }
   }
 
+  // 屏幕外威胁指示：激光蓄力 / Boss / 追猎者靠近时在屏幕边缘给出方向
+  function drawThreatArrows(t) {
+    const me = getLocalPlayer();
+    if (!me || state !== "playing") return;
+    const m = 30;
+    const list = [];
+    for (let i = 0; i < hazards.length; i++) {
+      const h = hazards[i];
+      if (h.type === "laser" && h.warn > 0) {
+        list.push({ x: h.x, y: h.y, color: "#ff9a4a", label: "激光" });
+      }
+    }
+    if (boss && !boss.dead) list.push({ x: boss.x, y: boss.y, color: "#ff4d6d", label: "BOSS" });
+    for (let i = 0; i < enemies.length && list.length < 4; i++) {
+      const e = enemies[i];
+      if (!e.dead && e.type === "hunter") list.push({ x: e.x, y: e.y, color: "#ff2d55", label: "追猎者" });
+    }
+    for (let i = 0; i < list.length && i < 4; i++) {
+      const it = list[i];
+      const sx = it.x - camera.x, sy = it.y - camera.y;
+      if (sx >= m && sx <= view.w - m && sy >= m && sy <= view.h - m) continue;
+      const ang = Math.atan2(sy - view.h / 2, sx - view.w / 2);
+      const ex = clamp(sx, m, view.w - m);
+      const ey = clamp(sy, m, view.h - m);
+      const pulse = 0.6 + 0.35 * Math.sin(t * 7 + i);
+      ctx.save();
+      ctx.translate(ex, ey);
+      ctx.rotate(ang);
+      ctx.fillStyle = it.color;
+      ctx.globalAlpha = pulse;
+      ctx.beginPath();
+      ctx.moveTo(13, 0);
+      ctx.lineTo(-7, -9);
+      ctx.lineTo(-7, 9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.font = "600 10px system-ui, -apple-system, sans-serif";
+      ctx.fillStyle = it.color;
+      ctx.globalAlpha = pulse;
+      const lx = clamp(ex, 34, view.w - 34);
+      const ly = clamp(ey + (sy > view.h / 2 ? -18 : 20), 14, view.h - 8);
+      ctx.fillText(it.label, lx, ly);
+      ctx.restore();
+    }
+  }
+
   function render(t) {
     const me = getLocalPlayer();
     cull.x0 = camera.x - 120;
@@ -1393,6 +1462,7 @@
       drawTexts();
       ctx.restore();
       drawTeamArrows();
+      drawThreatArrows(t);
     }
 
     // 超载减速期间的青蓝滤镜
@@ -1407,6 +1477,21 @@
       const a = clamp(hurtFlash, 0, 1) * 0.2 * CFG.FX.FLASH;
       ctx.fillStyle = `rgba(255, 40, 70, ${a})`;
       ctx.fillRect(-40, -40, view.w + 80, view.h + 80);
+    }
+
+    // 低血量：屏幕边缘红色脉冲，强化濒危感知
+    if (state === "playing" && me && !me.down && !me.eliminated) {
+      const hpPct = clamp(me.hp / me.hpMax, 0, 1);
+      if (hpPct < 0.35) {
+        const px = me.x - camera.x, py = me.y - camera.y;
+        const a = clamp((0.35 - hpPct) / 0.35, 0, 1) * (0.12 + 0.05 * Math.sin(t * 7));
+        const g = ctx.createRadialGradient(px, py, Math.min(view.w, view.h) * 0.22,
+          px, py, Math.max(view.w, view.h) * 0.72);
+        g.addColorStop(0, "rgba(255, 40, 70, 0)");
+        g.addColorStop(1, `rgba(255, 30, 60, ${a})`);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, view.w, view.h);
+      }
     }
 
     // Boss 击杀白闪

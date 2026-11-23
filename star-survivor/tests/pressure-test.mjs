@@ -319,6 +319,51 @@ const laserHit = await page.evaluate(() => {
 ok("激光无视护甲减伤且只命中光束范围", laserHit.armored === 180 &&
   laserHit.bare === 180 && laserHit.missed === 200, laserHit);
 
+/* ===== 激光公平性：伤害上限 / 打断 / 受击反馈 ===== */
+const laserFair = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  const p = S.player;
+  p.hp = 200; p.hpMax = 200; p.shield = 0; p.invuln = 0; p.stats.armor = 0.5;
+  S.hazards = [{
+    type: "laser", x: p.x - 200, y: p.y, ang: 0, len: 1000, width: 18,
+    warn: 0.01, maxWarn: 0.01, active: 0.36, life: 0, dmg: 999, pierceArmor: true,
+  }];
+  S.updateHazards(0.02);
+  return { hp: p.hp, dirT: p.hitDirT, warn: S.CFG.ENEMY_LASER.WARN, cap: S.CFG.ENEMY_LASER.DMG_CAP };
+});
+ok("激光单次伤害封顶且记录受击方向", laserFair.hp > 89.5 && laserFair.hp < 90.5 && laserFair.dirT > 0 &&
+  laserFair.warn >= 1.05 && laserFair.cap > 0 && laserFair.cap < 1, laserFair);
+
+const laserBreak = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  const p = S.player;
+  p.invuln = 5;
+  const e = S.spawnEnemy("lancer", p.x + 200, p.y);
+  e.laserAng = 0;
+  const h = S.startEnemyLaser(e);
+  S.killEnemy(e);
+  S.hazards = [h];
+  S.updateHazards(0.02);
+  return { owner: h.ownerId, left: S.hazards.filter((z) => z.type === "laser").length };
+});
+ok("蓄力期击杀灼光者会打断激光", laserBreak.owner !== undefined && laserBreak.left === 0, laserBreak);
+
+const shieldBreak = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  const p = S.player;
+  p.hp = 100; p.shield = 5; p.invuln = 0;
+  S.damagePlayer(6, p, { src: { x: p.x - 60, y: p.y } });
+  return { shield: p.shield, hp: p.hp, flash: p.shieldBreak, dirT: p.hitDirT, dir: p.hitDir };
+});
+ok("护盾破碎有反馈并记录来向", shieldBreak.shield === 0 && shieldBreak.hp === 99 &&
+  shieldBreak.flash > 0 && shieldBreak.dirT > 0 && Math.abs(shieldBreak.dir) < 0.1, shieldBreak);
+
 const bossShard = await page.evaluate(() => {
   const S = window.__SS__;
   S.startGame("pulse", "phase");

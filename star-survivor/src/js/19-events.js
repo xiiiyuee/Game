@@ -195,6 +195,7 @@
       len: L.LEN, width: L.WIDTH,
       warn: L.WARN, maxWarn: L.WARN, active: L.ACTIVE, life: 0,
       dmg: e.dmg * L.DMG_MUL, pierceArmor: true,
+      ownerId: e.id,               // 蓄力期间击杀灼光者可打断激光
     };
     hazards.push(h);
     emit(e.x, e.y, 12, "#ff8a3c", 180, 2.6, 0.5);
@@ -223,7 +224,7 @@
       const q = players[i];
       if (q.down || q.eliminated) continue;
       const rr = m.r + q.r;
-      if (dist2(m.x, m.y, q.x, q.y) <= rr * rr) damagePlayer(dmg, q);
+      if (dist2(m.x, m.y, q.x, q.y) <= rr * rr) damagePlayer(dmg, q, { src: { x: m.x, y: m.y } });
     }
     // 落地炸裂：向外扩散的碎片弹，封锁落点周围
     if (h.shards) {
@@ -250,7 +251,10 @@
           const q = players[i];
           if (q.down || q.eliminated) continue;
           const d = h.axis === "h" ? Math.abs(q.y - h.pos) : Math.abs(q.x - h.pos);
-          if (d <= half + q.r) damagePlayer(H.BEAM_DMG, q);
+          if (d <= half + q.r) {
+            const src = h.axis === "h" ? { x: q.x, y: h.pos } : { x: h.pos, y: q.y };
+            damagePlayer(H.BEAM_DMG, q, { src });
+          }
         }
       }
       shake = Math.max(shake, 6 * CFG.FX.SHAKE);
@@ -261,7 +265,8 @@
       emit(h.x, h.y, 16, "#ff8a3c", 220, 3.2, 0.5);
       shake = Math.max(shake, 7 * CFG.FX.SHAKE);
       if (!solid) return;
-      // 穿透：一次判定线路上所有玩家，且不受护甲减伤
+      // 穿透：一次判定线路上所有玩家，且不受护甲减伤；单次伤害设上限，避免后期直接秒杀
+      const L = CFG.ENEMY_LASER;
       for (let i = 0; i < players.length; i++) {
         const q = players[i];
         if (q.down || q.eliminated) continue;
@@ -269,7 +274,11 @@
         const proj = rx * dx + ry * dy;
         if (proj < -q.r || proj > len + q.r) continue;
         const perp = Math.abs(rx * dy - ry * dx);
-        if (perp <= half + q.r) damagePlayer(h.dmg, q, { pierceArmor: true });
+        if (perp > half + q.r) continue;
+        const dmg = Math.min(h.dmg, q.hpMax * L.DMG_CAP);
+        const hurt = q.invuln <= 0;
+        damagePlayer(dmg, q, { pierceArmor: true, src: { x: h.x, y: h.y } });
+        if (hurt && q === getLocalPlayer()) addText(q.x, q.y - 36, "护甲被穿透", "#ffb37a", 12);
       }
     }
   }
@@ -328,7 +337,7 @@
                   const q = players[pi];
                   if (q.down || q.eliminated) continue;
                   const rr = m.r + q.r;
-                  if (dist2(m.x, m.y, q.x, q.y) <= rr * rr) damagePlayer(h.burnTick || 4, q);
+                  if (dist2(m.x, m.y, q.x, q.y) <= rr * rr) damagePlayer(h.burnTick || 4, q, { src: { x: m.x, y: m.y } });
                 }
               }
             }
@@ -341,6 +350,16 @@
         }
         if (h.burnLeft <= 0 && h.linger <= 0) hazards.splice(i, 1);
         continue;
+      }
+      // 蓄力期击杀灼光者：激光被打断（仅房主判定，客机跟随同步结果）
+      if (h.warn > 0 && h.type === "laser" && !coopIsGuest() && h.ownerId !== undefined) {
+        const owner = enemies.find((e) => e.id === h.ownerId);
+        if (!owner || owner.dead) {
+          emit(h.x, h.y, 10, "#ffb37a", 150, 2.4, 0.4);
+          hazards.splice(i, 1);
+          if (roomCode) coopSendEvent("hazard-cancel", { ownerId: h.ownerId });
+          continue;
+        }
       }
       if (h.warn > 0) {
         h.warn -= dt;

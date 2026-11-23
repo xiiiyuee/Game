@@ -318,7 +318,7 @@
           if (p.down || p.eliminated) continue;
           const rr = b.r + p.r;
           if (dist2(b.x, b.y, p.x, p.y) <= rr * rr) {
-            damagePlayer(b.dmg, p);
+            damagePlayer(b.dmg, p, { src: { x: b.x, y: b.y } });
             b.dead = true;
             emit(b.x, b.y, 8, b.color, 160, 2.4, 0.4);
             break;
