@@ -3146,7 +3146,10 @@
     const lp = getLocalPlayer() || player;
     card.def.apply(lp.stats, card.mult, lp);
     lp.stacks[card.def.id] = (lp.stacks[card.def.id] || 0) + 1;
-    pendingLevels -= 1;
+    // 全局 pendingLevels 只是本地玩家的镜像：必须先扣玩家自身，否则下次拾取经验
+    // 会用旧的 pendingLevels 覆盖全局，导致同一级反复弹升级
+    lp.pendingLevels = Math.max(0, lp.pendingLevels - 1);
+    syncProgressGlobals(lp);
 
     document.getElementById("ov-upgrade").classList.add("hidden");
     updateBuffPanel();

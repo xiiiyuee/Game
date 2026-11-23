@@ -25,6 +25,8 @@ const hook = `
     spawnEnemy, damagePlayer, updateEnemies, coopAddRemote, coopEnemyPacket,
     startIceWatchdog, get coopNet() { return coopNet; },
     CFG, gainXpFor, rollRarity, rarityWeights, RARITIES,
+    get pendingLevels() { return pendingLevels; },
+    chooseUpgrade,
     startGame,
   };
 `;

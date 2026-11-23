@@ -37,7 +37,19 @@ const r = await page.evaluate(() => {
   const after300 = { level: p.level, xp: p.xp, need: p.xpNeed, pending: p.pendingLevels };
   let need = base;
   for (let i = 1; i < 20; i++) need = Math.round(need * S.CFG.XP.GROWTH);
-  return { base, growth: S.CFG.XP.GROWTH, after60, after100, after300, level20Need: need };
+
+  // 回归：选完卡后 pendingLevels 必须真正归零，否则下一次拾取经验会重复弹升级
+  reset();
+  S.state = "playing";
+  S.gainXpFor(p, base);
+  const levelUp = { state: S.state, level: p.level, pending: p.pendingLevels };
+  S.chooseUpgrade(0);
+  const afterChoose = { state: S.state, pending: p.pendingLevels, global: S.pendingLevels };
+  S.gainXpFor(p, 1);
+  const afterOneXp = { state: S.state, level: p.level, pending: p.pendingLevels, global: S.pendingLevels };
+
+  return { base, growth: S.CFG.XP.GROWTH, after60, after100, after300, level20Need: need,
+    levelUp, afterChoose, afterOneXp };
 });
 
 await browser.close();
@@ -54,6 +66,10 @@ ok("100 经验只到 5 级", r.after100.level === 5, r.after100);
 ok("300 经验只到 8 级", r.after300.level === 8, r.after300);
 ok("升级需求递增", r.after100.need > r.after60.need && r.after60.need > r.base, r);
 ok("20 级需求接近原曲线（<5400）", r.level20Need < 5400, r.level20Need);
+ok("升到 2 级后进入选卡", r.levelUp.state === "upgrade" && r.levelUp.level === 2 && r.levelUp.pending === 1, r.levelUp);
+ok("选卡后玩家待升级归零", r.afterChoose.pending === 0 && r.afterChoose.global === 0, r.afterChoose);
+ok("选卡后恢复游戏", r.afterChoose.state === "playing", r.afterChoose);
+ok("再拾取 1 点经验不再弹升级", r.afterOneXp.state === "playing" && r.afterOneXp.pending === 0 && r.afterOneXp.level === 2, r.afterOneXp);
 ok("无页面报错", errors.length === 0, errors);
 
 console.log(`\n${pass} PASS / ${fail} FAIL`);
