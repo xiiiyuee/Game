@@ -182,6 +182,26 @@
     return { type: "beam", axis, pos, warn: H.BEAM_WARN, maxWarn: H.BEAM_WARN, active: H.BEAM_ACTIVE, life: 0 };
   }
 
+  // 灼光者激光：蓄力期画出预警线，结束时穿透沿途所有玩家（无视护甲）
+  function startEnemyLaser(e) {
+    if (coopIsGuest() || !e) return;
+    const L = CFG.ENEMY_LASER;
+    let active = 0;
+    for (let i = 0; i < hazards.length; i++) if (hazards[i].type === "laser") active++;
+    if (active >= 6) return;
+    const h = {
+      type: "laser", x: e.x, y: e.y,
+      ang: e.laserAng !== undefined ? e.laserAng : e.angle,
+      len: L.LEN, width: L.WIDTH,
+      warn: L.WARN, maxWarn: L.WARN, active: L.ACTIVE, life: 0,
+      dmg: e.dmg * L.DMG_MUL, pierceArmor: true,
+    };
+    hazards.push(h);
+    emit(e.x, e.y, 12, "#ff8a3c", 180, 2.6, 0.5);
+    if (roomCode) coopSendEvent("hazard", h);   // 客机同步预警与光束表现
+    return h;
+  }
+
   function spawnHazard() {
     if (hazards.length >= CFG.EVENTS.HAZARD.MAX_ACTIVE) return;
     const h = Math.random() < 0.6 ? spawnMeteorHazard() : spawnBeamHazard();
@@ -234,6 +254,23 @@
         }
       }
       shake = Math.max(shake, 6 * CFG.FX.SHAKE);
+    } else if (h.type === "laser") {
+      const dx = Math.cos(h.ang), dy = Math.sin(h.ang);
+      const half = (h.width || CFG.ENEMY_LASER.WIDTH) / 2;
+      const len = h.len || CFG.ENEMY_LASER.LEN;
+      emit(h.x, h.y, 16, "#ff8a3c", 220, 3.2, 0.5);
+      shake = Math.max(shake, 7 * CFG.FX.SHAKE);
+      if (!solid) return;
+      // 穿透：一次判定线路上所有玩家，且不受护甲减伤
+      for (let i = 0; i < players.length; i++) {
+        const q = players[i];
+        if (q.down || q.eliminated) continue;
+        const rx = q.x - h.x, ry = q.y - h.y;
+        const proj = rx * dx + ry * dy;
+        if (proj < -q.r || proj > len + q.r) continue;
+        const perp = Math.abs(rx * dy - ry * dx);
+        if (perp <= half + q.r) damagePlayer(h.dmg, q, { pierceArmor: true });
+      }
     }
   }
 

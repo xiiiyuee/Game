@@ -108,6 +108,9 @@
       huntT: 0,                 // 追猎者追击时长（越久越快）
       salvo: 0,                 // 交叉齐射窗口
       shotCd: rand(1.6, 3.4),   // 小怪首次开火延迟
+      laserCd: rand(2.8, 4.6),  // 灼光者蓄力冷却
+      laserWarn: 0,             // 灼光者蓄力剩余时间
+      laserAng: 0,              // 激光锁定角度
       isBoss: false,
       dead: false,
       affixes: [],
@@ -661,6 +664,31 @@
         else if (pd < desired * 1.25) ang += Math.PI / 2 * Math.sin(t * 1.1 + e.seed);
       }
 
+      // 灼光者：远距离游走，蓄力后发射穿透激光
+      if (e.type === "lancer") {
+        e.laserCd -= sdt;
+        const pd = Math.hypot(playerTgt.x - e.x, playerTgt.y - e.y) || 1;
+        if (e.laserWarn > 0) {
+          e.laserWarn -= sdt;
+          ang = Math.atan2(playerTgt.y - e.y, playerTgt.x - e.x);
+        } else if (e.laserCd <= 0) {
+          if (pd < CFG.ENEMY_LASER.RANGE * view.scale) {
+            e.laserWarn = CFG.ENEMY_LASER.WARN;
+            e.laserAng = Math.atan2(playerTgt.y - e.y, playerTgt.x - e.x);
+            e.laserCd = rand(CFG.ENEMY_LASER.CD_MIN, CFG.ENEMY_LASER.CD_MAX);
+            startEnemyLaser(e);
+          } else {
+            e.laserCd = 0.5;
+          }
+        }
+        // 保持中远距离：过近后撤，中距离横向游走
+        if (!defTgt) {
+          const desired = 360 * view.scale;
+          if (pd < desired * 0.8) ang += Math.PI;
+          else if (pd < desired * 1.2) ang += Math.PI / 2 * Math.sin(t * 1.3 + e.seed);
+        }
+      }
+
       // 突刺者：原地蓄力预警，随后短暂高速冲刺
       if (e.type === "dart") {
         e.dashCd -= sdt;
@@ -719,6 +747,7 @@
       const sp = e.speed * view.scale * stats.enemySpeedMul * (e.dashTime > 0 ? 3.1 : 1) *
         (e.type === "hunter" ? Math.min(1.75, 1 + (e.huntT || 0) * 0.012) : 1) *
         (e.warn > 0 ? 0.12 : 1) *
+        (e.laserWarn > 0 ? CFG.ENEMY_LASER.STOP_MOVE : 1) *
         (e.freezeT > 0 ? 0 : 1) *
         (e.slowT > 0 ? CFG.RUN.FIELD_SLOW : 1) *
         (e.frostT > 0 ? CFG.SKILL.PHASE.ICE_SLOW : 1);

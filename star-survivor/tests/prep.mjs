@@ -70,7 +70,7 @@ const hook = `
     get threat() { return threat; }, set threat(v) { threat = v; },
     threatSpawnMul, threatBulletMul, threatSpeedMul, threatEliteChance, updateThreat,
     threatMax, threatFloor, playerPowerMul,
-    spawnHazard, updateHazards, hazardHit,
+    spawnHazard, updateHazards, hazardHit, startEnemyLaser,
     get hazards() { return hazards; }, set hazards(v) { hazards = v; },
     killEnemy,
   };

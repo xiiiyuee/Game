@@ -386,6 +386,8 @@
         sides = 6; rot = -t * 0.8 + e.seed; fillA = 0.2; lw = 2;
       } else if (e.type === "hunter") {
         sides = 8; rot = e.angle; fillA = 0.3; lw = 3;
+      } else if (e.type === "lancer") {
+        sides = 3; rot = e.angle + Math.PI / 2; fillA = 0.26; lw = 2.6;
       }
       drawShape(0, 0, e.r, sides, rot, rgbaOf(e.color, fillA), e.color, lw);
 
@@ -417,6 +419,20 @@
         ctx.moveTo(0, 0);
         ctx.lineTo(Math.cos(e.dashAng) * e.r * 3.2, Math.sin(e.dashAng) * e.r * 3.2);
         ctx.stroke();
+      }
+
+      // 灼光者蓄力：核心升温 + 枪口聚焦
+      if (e.type === "lancer" && e.laserWarn > 0) {
+        const ck = 1 - e.laserWarn / CFG.ENEMY_LASER.WARN;
+        ctx.strokeStyle = rgbaOf("#ff8a3c", 0.35 + 0.45 * ck);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, e.r + 6 + ck * 8, 0, TAU);
+        ctx.stroke();
+        ctx.fillStyle = rgbaOf("#fff1cf", 0.4 + 0.4 * Math.sin(t * 24));
+        ctx.beginPath();
+        ctx.arc(0, 0, 3 + ck * 3, 0, TAU);
+        ctx.fill();
       }
 
       // 修补者治疗脉冲：自身扩散环 + 治疗范围提示
@@ -1095,6 +1111,50 @@
             ctx.restore();
           }
         }
+      } else if (h.type === "laser") {
+        const dx = Math.cos(h.ang), dy = Math.sin(h.ang);
+        const half = (h.width || CFG.ENEMY_LASER.WIDTH) / 2;
+        const len = h.len || CFG.ENEMY_LASER.LEN;
+        const ex = h.x + dx * len, ey = h.y + dy * len;
+        ctx.save();
+        ctx.lineCap = "round";
+        if (h.warn > 0) {
+          const pulse = 0.5 + 0.5 * Math.sin(t * 18);
+          const ck = 1 - h.warn / Math.max(0.01, h.maxWarn);
+          // 预警走廊：先铺一层半透明带宽，再叠虚线与聚焦核心
+          ctx.strokeStyle = `rgba(255, 120, 40, ${0.06 + 0.05 * pulse + ck * 0.05})`;
+          ctx.lineWidth = half * 2;
+          ctx.beginPath();
+          ctx.moveTo(h.x, h.y); ctx.lineTo(ex, ey);
+          ctx.stroke();
+          ctx.strokeStyle = `rgba(255, 170, 90, ${0.35 + 0.45 * pulse})`;
+          ctx.lineWidth = 2 + ck * 2;
+          ctx.setLineDash([16, 10]);
+          ctx.beginPath();
+          ctx.moveTo(h.x, h.y); ctx.lineTo(ex, ey);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = `rgba(255, 210, 150, ${0.5 + 0.4 * pulse})`;
+          ctx.beginPath();
+          ctx.arc(h.x, h.y, 4 + ck * 5, 0, TAU);
+          ctx.fill();
+        } else {
+          const f = Math.max(0, h.life / Math.max(0.01, h.active));
+          ctx.shadowColor = "#ff7a3c";
+          ctx.shadowBlur = 18;
+          ctx.strokeStyle = `rgba(255, 110, 40, ${0.3 * f})`;
+          ctx.lineWidth = half * 2 + 12;
+          ctx.beginPath();
+          ctx.moveTo(h.x, h.y); ctx.lineTo(ex, ey);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = `rgba(255, 245, 220, ${0.85 * f})`;
+          ctx.lineWidth = half * 0.8;
+          ctx.beginPath();
+          ctx.moveTo(h.x, h.y); ctx.lineTo(ex, ey);
+          ctx.stroke();
+        }
+        ctx.restore();
       } else if (h.type === "beam") {
         const half = W.BEAM_WIDTH / 2;
         const x = h.axis === "h" ? camera.x : h.pos;

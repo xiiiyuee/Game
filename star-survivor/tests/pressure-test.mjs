@@ -254,6 +254,71 @@ const lateThreat = await page.evaluate(() => {
 ok("威胁上限随章节提高且低威胁快速回温", lateThreat.max > lateThreat.base + 4 &&
   lateThreat.floor > 5 && lateThreat.risen > 1, lateThreat);
 
+/* ===== 敌方激光：穿透 / 无视护甲 ===== */
+const lancer = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  const e = S.spawnEnemy("lancer", 400, 400);
+  const h = S.startEnemyLaser({ x: 300, y: 300, angle: 0, laserAng: 0, dmg: 20 });
+  return {
+    type: e && e.type, minWave: S.CFG.ENEMIES.lancer.minWave,
+    hasCd: !!e && typeof e.laserCd === "number",
+    hazard: h && h.type, warn: h && h.warn, pierce: h && h.pierceArmor,
+    width: h && h.width,
+  };
+});
+ok("灼光者后期刷出并生成带预警的穿透激光", lancer.type === "lancer" &&
+  lancer.minWave >= 20 && lancer.hasCd && lancer.hazard === "laser" &&
+  lancer.warn > 0.5 && lancer.pierce === true && lancer.width > 0, lancer);
+
+const lancerAi = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  S.chapter = 5;
+  S.waveNum = 8;
+  S.hazards = [];
+  const p = S.player;
+  p.invuln = 5;
+  const e = S.spawnEnemy("lancer", p.x + 220, p.y);
+  e.laserCd = 0;
+  let h = null;
+  for (let i = 0; i < 30 && !h; i++) {
+    S.updateEnemies(0.05, 1 + i * 0.05);
+    h = S.hazards.find((z) => z.type === "laser");
+  }
+  return { found: !!h, warn: h && h.warn, ang: h && h.ang, cd: e.laserCd };
+});
+ok("灼光者会实际蓄力发射激光", lancerAi.found && lancerAi.warn > 0.5 &&
+  typeof lancerAi.ang === "number" && lancerAi.cd > 0, lancerAi);
+
+const laserHit = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  const p = S.player;
+  const mk = () => ({
+    type: "laser", x: p.x - 200, y: p.y, ang: 0, len: 1000, width: 18,
+    warn: 0.01, maxWarn: 0.01, active: 0.36, life: 0, dmg: 20, pierceArmor: true,
+  });
+  p.hp = 200; p.hpMax = 200; p.shield = 0; p.invuln = 0; p.stats.armor = 0.5;
+  S.hazards = [mk()];
+  S.updateHazards(0.02);
+  const armored = p.hp;
+  p.invuln = 0; p.hp = 200; p.stats.armor = 0;
+  S.hazards = [mk()];
+  S.updateHazards(0.02);
+  const bare = p.hp;
+  p.invuln = 0; p.hp = 200;
+  const off = mk(); off.y = p.y + 200;
+  S.hazards = [off];
+  S.updateHazards(0.02);
+  const missed = p.hp;
+  return { armored, bare, missed };
+});
+ok("激光无视护甲减伤且只命中光束范围", laserHit.armored === 180 &&
+  laserHit.bare === 180 && laserHit.missed === 200, laserHit);
+
 const bossShard = await page.evaluate(() => {
   const S = window.__SS__;
   S.startGame("pulse", "phase");

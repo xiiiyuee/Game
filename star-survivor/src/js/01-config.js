@@ -139,6 +139,20 @@
       mender:  { name: "修补者", hp: 26, speed: 74,  dmg: 6,  xp: 5,  score: 18, r: 13,   color: "#6dffc9", weight: 6,  minWave: 8 },
       // 追猎者：每章锁定玩家持续追击，越拖越快，击杀有额外奖励
       hunter:  { name: "追猎者", hp: 130, speed: 84, dmg: 16, xp: 26, score: 130, r: 19,  color: "#ff2d55", weight: 0,  minWave: 4 },
+      // 灼光者：后期远程激光，蓄力后发射穿透光束（无视护甲减伤）
+      lancer:  { name: "灼光者", hp: 34, speed: 54,  dmg: 20, xp: 9,  score: 36, r: 15,   color: "#ff8a3c", weight: 7,  minWave: 26 },
+    },
+    // 敌方激光：长距离预警后发射，穿透沿途所有玩家并绕过护甲
+    ENEMY_LASER: {
+      WARN: 0.95,             // 蓄力预警时长（秒）
+      ACTIVE: 0.36,           // 光束持续时长
+      WIDTH: 18,              // 光束宽度
+      LEN: 1000,              // 光束长度（世界单位）
+      RANGE: 560,             // 进入该距离才会蓄力
+      CD_MIN: 5.2,            // 冷却下限
+      CD_MAX: 7.2,            // 冷却上限
+      DMG_MUL: 0.9,           // 光束伤害 = 敌人接触伤害 × 该倍率
+      STOP_MOVE: 0.12,        // 蓄力期间移速倍率
     },
     // 小怪远程弹幕：间隔范围（秒）、弹速、伤害倍率、每次弹数、扇形角（三角怪不射击）
     ENEMY_GUN: {

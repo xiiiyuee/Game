@@ -254,14 +254,16 @@
     });
   }
 
-  function damagePlayer(baseDmg, p) {
+  function damagePlayer(baseDmg, p, opts) {
     p = p || player;
     const s = p.stats;
     if (state !== "playing") return;
     if (p.down || p.eliminated) return;
     if (p.invuln > 0) return;
 
-    const dmg = baseDmg * (1 - s.armor) * s.takenMul *
+    // 穿透伤害（敌方激光）：跳过护甲减伤，但仍受易伤倍率影响
+    const armor = opts && opts.pierceArmor ? 0 : s.armor;
+    const dmg = baseDmg * (1 - armor) * s.takenMul *
       (chapterMod && chapterMod.dmgTakenMul ? chapterMod.dmgTakenMul : 1);
     let remain = dmg;
     if (p.shield > 0) {
