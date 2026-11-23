@@ -224,6 +224,21 @@
     for (let i = ebullets.length - 1; i >= 0; i--) {
       const b = ebullets[i];
       if (b.synced) continue;                 // 联机客户端：敌弹由房主同步
+      // 追猎弹：缓慢转向最近玩家，但保留足够的闪避窗口
+      if (b.home) {
+        const tgt = nearestPlayer(b.x, b.y);
+        if (tgt) {
+          const desired = Math.atan2(tgt.y - b.y, tgt.x - b.x);
+          const cur = Math.atan2(b.vy, b.vx);
+          let diff = desired - cur;
+          diff = ((diff + Math.PI) % TAU + TAU) % TAU - Math.PI;
+          const step = Math.min(Math.abs(diff), b.home * dt * slow);
+          const na = cur + (diff < 0 ? -step : step);
+          const sp = Math.hypot(b.vx, b.vy);
+          b.vx = Math.cos(na) * sp;
+          b.vy = Math.sin(na) * sp;
+        }
+      }
       b.x += b.vx * dt * slow;
       b.y += b.vy * dt * slow;
       b.life -= dt * slow;

@@ -381,7 +381,7 @@
     comboTimer = 0;
     for (let i = 0; i < ebullets.length; i++) ebullets[i].dead = true;
     emit(p.x, p.y, 36, "#8bffdc", 300, 4, 0.9);
-    addText(p.x, p.y - 44, "应急保险启动 · 50% 生命", "#8bffdc", 18);
+    addText(p.x, p.y - 44, roomCode ? "全队应急保险启动 · 50% 生命" : "应急保险启动 · 50% 生命", "#8bffdc", 18);
     shake = Math.max(shake, 10 * CFG.FX.SHAKE);
     sfxLevelUp();
     refreshHud(true);

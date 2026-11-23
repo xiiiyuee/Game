@@ -181,10 +181,26 @@
       const b = ebullets[i];
       if (b.x < cull.x0 || b.x > cull.x1 || b.y < cull.y0 || b.y > cull.y1) continue;
       if (!lowFx) drawGlow(b.color, b.x, b.y, b.r * 3.6, 0.55);
+      if (b.home && (b.vx || b.vy)) {
+        // 追猎弹：拖尾 + 内核，和普通敌弹区分开
+        const sp = Math.hypot(b.vx, b.vy) || 1;
+        ctx.strokeStyle = rgbaOf(b.color, 0.42);
+        ctx.lineWidth = b.r * 0.9;
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(b.x - (b.vx / sp) * b.r * 3.2, b.y - (b.vy / sp) * b.r * 3.2);
+        ctx.stroke();
+      }
       ctx.fillStyle = b.color;
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, TAU);
       ctx.fill();
+      if (b.home) {
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r * 0.38, 0, TAU);
+        ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -381,14 +397,20 @@
         ctx.stroke();
       }
 
-      // 修补者治疗脉冲
+      // 修补者治疗脉冲：自身扩散环 + 治疗范围提示
       if (e.type === "mender" && e.healPulse > 0) {
-        const hk = e.healPulse / 0.6;
+        const hk = Math.max(0, Math.min(1, e.healPulse / 0.6));
         ctx.strokeStyle = rgbaOf(THEME.mint, 0.55 * hk);
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(0, 0, e.r + 6 + (1 - hk) * 16, 0, TAU);
         ctx.stroke();
+        ctx.strokeStyle = rgbaOf(THEME.mint, 0.22 * hk);
+        ctx.setLineDash([5, 7]);
+        ctx.beginPath();
+        ctx.arc(0, 0, CFG.ENEMY_SUPPORT.MENDER_RADIUS * view.scale, 0, TAU);
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
 
       // 受击闪白：用同样的轮廓整块变白，命中确认更干净

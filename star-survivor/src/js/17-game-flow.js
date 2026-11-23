@@ -1232,6 +1232,7 @@
         e.id, e.type,
         Math.round(e.x * 10), Math.round(e.y * 10),
         Math.round(e.hp), Math.round(e.maxHp), Math.round(e.r),
+        Math.round((e.healPulse || 0) * 10) / 10,
       ]);
     }
     return arr;
@@ -1245,7 +1246,7 @@
       if (!coopInRange(b.x, b.y, cx, cy, rad)) continue;
       arr.push([
         Math.round(b.x * 10), Math.round(b.y * 10), Math.round(b.r),
-        Math.round(b.dmg * 10) / 10, b.color, b.heavy ? 1 : 0,
+        Math.round(b.dmg * 10) / 10, b.color, b.heavy ? 1 : 0, b.home ? 1 : 0,
       ]);
     }
     return arr;
@@ -1260,6 +1261,7 @@
       next.push({
         x: s[0] / 10, y: s[1] / 10, vx: 0, vy: 0,
         r: s[2], dmg: s[3], color: s[4], heavy: !!s[5],
+        home: !!s[6],
         life: 5, dead: false, synced: true,
       });
     }
@@ -1567,6 +1569,7 @@
       e.hp = s[4];
       e.maxHp = s[5];
       if (s[6]) e.r = s[6];
+      e.healPulse = s.length >= 8 ? (s[7] || 0) : 0;
       e.dead = false;
       seen[id] = 1;
     }

@@ -54,11 +54,14 @@ const hook = `
     updateBullets, getLocalPlayer, buildCards,
     get chosenWeapon() { return chosenWeapon; },
     coopWellList, coopApplyWells, coopFrostList, coopApplyFrost, coopIsGuest,
-    get roomCode() { return roomCode; },
     spawnPlayerBullet, fireWeaponPattern, makeStats,
     buyShopItem, openShop, closeShop, shopOfferFor,
     get credits() { return credits; }, set credits(v) { credits = v; },
     get revives() { return revives; }, set revives(v) { revives = v; },
+    get boss() { return boss; }, spawnBoss, updateBoss, fireEnemyBullet,
+    get bossSpawned() { return bossSpawned; }, set bossSpawned(v) { bossSpawned = v; },
+    get roomCode() { return roomCode; }, set roomCode(v) { roomCode = v; },
+    coopEnemyList, coopBulletList, coopApplyEnemies, coopApplyEnemyBullets,
   };
 `;
 html = html.slice(0, idx) + hook + html.slice(idx);

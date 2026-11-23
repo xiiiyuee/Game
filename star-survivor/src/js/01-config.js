@@ -104,11 +104,11 @@
       penta:   { name: "游弋者", hp: 26, speed: 80,  dmg: 10, xp: 4,  score: 13, r: 13.5, color: "#b06bff", weight: 20 },
       diamond: { name: "裂星精英", hp: 82, speed: 108, dmg: 18, xp: 11, score: 40, r: 16,  color: "#ff9f2e", weight: 0 },
       // 棱堡：远程炮台，保持距离并三连射
-      hex:     { name: "棱堡",   hp: 72, speed: 46,  dmg: 14, xp: 6,  score: 22, r: 16,   color: "#8ea6ff", weight: 10, minWave: 6 },
+      hex:     { name: "棱堡",   hp: 66, speed: 46,  dmg: 14, xp: 6,  score: 22, r: 16,   color: "#8ea6ff", weight: 9,  minWave: 6 },
       // 突刺者：蓄力预警后高速冲刺
       dart:    { name: "突刺者", hp: 22, speed: 128, dmg: 11, xp: 4,  score: 15, r: 11,   color: "#ff3ea5", weight: 8,  minWave: 3 },
       // 修补者：为周围敌人持续回血，优先击杀目标
-      mender:  { name: "修补者", hp: 30, speed: 74,  dmg: 6,  xp: 5,  score: 18, r: 13,   color: "#6dffc9", weight: 6,  minWave: 8 },
+      mender:  { name: "修补者", hp: 26, speed: 74,  dmg: 6,  xp: 5,  score: 18, r: 13,   color: "#6dffc9", weight: 6,  minWave: 8 },
     },
     // 小怪远程弹幕：间隔范围（秒）、弹速、伤害倍率、每次弹数、扇形角（三角怪不射击）
     ENEMY_GUN: {
@@ -117,12 +117,12 @@
       diamond: { cd: [2.9, 4.0], speed: 200, dmgMul: 0.6,  count: 3, spread: 0.4 },
       hex:     { cd: [4.6, 6.0], speed: 155, dmgMul: 0.5,  count: 3, spread: 0.36 },
     },
-    // 修补者光环：同一时刻最多治疗 5 名友军
+    // 修补者光环：同一时刻最多治疗 4 名友军
     ENEMY_SUPPORT: {
-      MENDER_CD: 3.2,
-      MENDER_RADIUS: 170,
-      MENDER_HEAL: 0.06,
-      MENDER_MAX_TARGETS: 5,
+      MENDER_CD: 3.6,
+      MENDER_RADIUS: 160,
+      MENDER_HEAL: 0.05,
+      MENDER_MAX_TARGETS: 4,
     },
     BOSS: {
       name: "虚空之眼 · 吞噬者",
@@ -134,8 +134,15 @@
       DASH_WARN: 0.55,       // 冲刺预警时间
       DASH_TIME: 0.32,       // 冲刺持续时间
       RING_GAP: 0.55,        // 环形弹幕安全缺口半角（弧度）
-      // 每场随机 2 个机制变体
-      MECH_NAMES: { laser: "旋转激光", shield: "分裂护盾", summon: "召唤潮汐", rage: "限时狂暴" },
+      // 每章固定机制组合，形成不同的 Boss 战节奏
+      CHAPTER_KITS: [
+        ["laser", "shield"],     // 星域 1：激光 + 护盾
+        ["summon", "rage"],      // 星域 2：召唤 + 狂暴
+        ["laser", "homing"],     // 星域 3：激光 + 追猎弹
+        ["summon", "shield"],    // 星域 4：召唤 + 护盾
+        ["rage", "homing"],      // 星域 5：狂暴 + 追猎弹
+      ],
+      MECH_NAMES: { laser: "旋转激光", shield: "分裂护盾", summon: "召唤潮汐", rage: "限时狂暴", homing: "追猎弹" },
       SHIELD_PCT: 0.16,      // 分裂护盾：护盾量占最大生命比例
       SHIELD_CD: 13,         // 护盾重生冷却
       LASER_CD: 8.5,         // 旋转激光冷却
@@ -144,6 +151,11 @@
       RAGE_TIME: 5,          // 狂暴持续
       RAGE_CD: 19,           // 狂暴冷却
       RAGE_MUL: 1.5,         // 狂暴期速度 / 攻速倍率
+      HOMING_CD: 7.5,        // 追猎弹发射冷却
+      HOMING_COUNT: 3,       // 每次发射数量（三阶段 +1）
+      HOMING_SPEED: 125,     // 追猎弹初速
+      HOMING_DMG: 0.45,      // 追猎弹伤害（Boss 伤害倍率）
+      HOMING_TURN: 0.85,     // 追猎弹转向速度（弧度/秒）
     },
     // 开局武器：不同弹道 / 节奏决定本局玩法骨架
     WEAPONS: {

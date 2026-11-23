@@ -176,12 +176,15 @@
       dashAng: 0,
       phase: 1,
       spin: 0,
-      // ===== 机制变体（每场随机 2 个）=====
+      // ===== 机制组合：按星域固定，后期叠加额外机制 =====
       mechanics: (() => {
-        const pool = ["laser", "shield", "summon", "rage"];
-        const out = [];
-        for (let i = 0; i < 2 && pool.length; i++) out.push(pool.splice(randInt(pool.length), 1)[0]);
-        return out;
+        const kits = CFG.BOSS.CHAPTER_KITS;
+        const kit = kits[(chapter - 1) % kits.length].slice();
+        if (chapter > kits.length) {
+          const pool = ["laser", "shield", "summon", "rage", "homing"].filter((k) => !kit.includes(k));
+          if (pool.length) kit.push(pool[(chapter - kits.length - 1) % pool.length]);
+        }
+        return kit;
       })(),
       shield: 0,
       shieldCd: 7,
@@ -190,6 +193,7 @@
       laserAng: 0,
       rage: 0,
       rageCd: 12,
+      homingCd: 5,
     };
     enemies.push(boss);
 
@@ -236,6 +240,7 @@
       b.fireCd = 0.9;
       b.ringCd = 1.8;
       b.minionCd = 2.5;
+      b.homingCd = Math.min(b.homingCd || 99, 2.5);
       b.warn = 0;
       b.dashTime = 0;
       document.getElementById("ui-boss-name").textContent = bossLabel(b);
@@ -312,6 +317,26 @@
           b.laserAng = Math.atan2(dy, dx);
           addText(b.x, b.y - b.r - 22, "激光充能", "#ff9f2e", 14);
         }
+      }
+    }
+
+    // ===== 机制：追猎弹（缓慢转向，逼迫持续走位）=====
+    if (b.mechanics.includes("homing")) {
+      b.homingCd -= slowDt;
+      if (b.homingCd <= 0) {
+        b.homingCd = CFG.BOSS.HOMING_CD;
+        const cnt = CFG.BOSS.HOMING_COUNT + (b.phase === 3 ? 1 : 0);
+        const base = Math.atan2(dy, dx);
+        for (let k = 0; k < cnt; k++) {
+          const off = (k - (cnt - 1) / 2) * 0.55;
+          const orb = fireEnemyBullet(b.x, b.y, base + off, CFG.BOSS.HOMING_SPEED,
+            b.dmg * CFG.BOSS.HOMING_DMG, "#ff7ad9", 6, true);
+          if (orb) {
+            orb.home = CFG.BOSS.HOMING_TURN;
+            orb.life = 4.2;
+          }
+        }
+        addText(b.x, b.y - b.r - 22, "追猎弹", "#ff7ad9", 14);
       }
     }
 
@@ -434,9 +459,9 @@
   }
 
   function fireEnemyBullet(x, y, ang, speed, dmg, color, r, heavy) {
-    if (ebullets.length >= CFG.LIMITS.EBULLETS) return;
+    if (ebullets.length >= CFG.LIMITS.EBULLETS) return null;
     const sp = speed * view.scale * ebSpeedScale();
-    ebullets.push({
+    const b = {
       x, y,
       vx: Math.cos(ang) * sp,
       vy: Math.sin(ang) * sp,
@@ -446,7 +471,9 @@
       life: 5,
       dead: false,
       heavy: !!heavy,
-    });
+    };
+    ebullets.push(b);
+    return b;
   }
 
   function updateEnemies(dt, t) {
@@ -544,16 +571,22 @@
         if (e.healCd <= 0) {
           e.healCd = CFG.ENEMY_SUPPORT.MENDER_CD * rand(0.9, 1.1);
           const R = CFG.ENEMY_SUPPORT.MENDER_RADIUS * view.scale;
-          let healed = 0;
-          for (let k = 0; k < enemies.length && healed < CFG.ENEMY_SUPPORT.MENDER_MAX_TARGETS; k++) {
+          // 优先治疗血量比例最低的友军，避免把治疗浪费在满血目标上
+          const targets = [];
+          for (let k = 0; k < enemies.length; k++) {
             const o = enemies[k];
             if (o === e || o.dead || o.isBoss || o.hp >= o.maxHp) continue;
             if (dist2(e.x, e.y, o.x, o.y) > R * R) continue;
+            targets.push(o);
+          }
+          targets.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
+          const healedCount = Math.min(CFG.ENEMY_SUPPORT.MENDER_MAX_TARGETS, targets.length);
+          for (let k = 0; k < healedCount; k++) {
+            const o = targets[k];
             o.hp = Math.min(o.maxHp, o.hp + o.maxHp * CFG.ENEMY_SUPPORT.MENDER_HEAL);
-            healed += 1;
             emit(o.x, o.y, 2, THEME.mint, 90, 1.8, 0.35);
           }
-          if (healed > 0) {
+          if (healedCount > 0) {
             e.healPulse = 0.6;
             emit(e.x, e.y, 10, THEME.mint, 150, 2.4, 0.5);
           }
