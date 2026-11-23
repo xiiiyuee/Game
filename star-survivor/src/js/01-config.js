@@ -160,12 +160,17 @@
       DASH_TIME: 0.34,       // 冲刺持续时间
       RING_GAP: 0.55,        // 环形弹幕安全缺口半角（弧度）
       // 二阶段起专属：陨星召唤（砸向玩家当前位置，留下灼烧地面）
-      METEOR_CD: 8.5,        // 陨星召唤冷却（三阶段缩短）
-      METEOR_CD_P3: 5.8,
-      METEOR_WARN: 1.15,     // 落点预警时间
-      METEOR_R: 68,          // 陨石爆炸半径
+      METEOR_CD: 7.5,        // 陨星召唤冷却（三阶段缩短）
+      METEOR_CD_P3: 5.2,
+      METEOR_WARN: 1.0,      // 首颗落点预警时间
+      METEOR_DELAY: 0.55,    // 后续陨星的追加延迟（形成陨星雨）
+      METEOR_COUNT_P2: 2,    // 二阶段每位玩家落点数量
+      METEOR_COUNT_P3: 3,    // 三阶段每位玩家落点数量
+      METEOR_R: 66,          // 陨石爆炸半径
       METEOR_DMG: 22,        // 直接命中伤害
-      METEOR_BURN: 2.6,      // 灼烧地面持续时间
+      METEOR_SHARDS: 6,      // 落地炸裂的碎片弹数量
+      METEOR_SHARD_MUL: 0.3, // 碎片弹伤害 = Boss 伤害 × 该系数
+      METEOR_BURN: 2.2,      // 灼烧地面持续时间
       METEOR_TICK: 4,        // 灼烧每次伤害
       METEOR_TICK_CD: 0.6,   // 灼烧伤害间隔
       // 每章固定机制组合，形成不同的 Boss 战节奏

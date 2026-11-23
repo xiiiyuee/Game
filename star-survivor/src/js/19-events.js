@@ -159,6 +159,10 @@
         x: clamp(player.x + Math.cos(a) * off, 40, world.w - 40),
         y: clamp(player.y + Math.sin(a) * off, 40, world.h - 40),
         r: H.METEOR_R,
+        t: H.METEOR_WARN + i * 0.12,
+        maxT: H.METEOR_WARN + i * 0.12,
+        hit: false,
+        flash: 0,
       });
     }
     return { type: "meteor", list, warn: H.METEOR_WARN, maxWarn: H.METEOR_WARN, life: 0 };
@@ -180,26 +184,37 @@
     if (roomCode) coopSendEvent("hazard", h);   // 客机同步视觉，伤害仍由房主结算
   }
 
+  // 单颗陨石落地：范围伤害 + 可选炸裂碎片
+  function meteorImpact(h, m) {
+    m.hit = true;
+    m.flash = 0.5;
+    emit(m.x, m.y, 22, "#ff9f2e", 260, 3.4, 0.65);
+    emit(m.x, m.y, 10, "#ff4d6d", 180, 2.6, 0.5);
+    shake = Math.max(shake, (h.boss ? 11 : 8) * CFG.FX.SHAKE);
+    sfxExplode(false);
+    if (coopIsGuest() || h.ghost) return;
+    const dmg = h.dmg || CFG.EVENTS.HAZARD.METEOR_DMG;
+    for (let i = 0; i < players.length; i++) {
+      const q = players[i];
+      if (q.down || q.eliminated) continue;
+      const rr = m.r + q.r;
+      if (dist2(m.x, m.y, q.x, q.y) <= rr * rr) damagePlayer(dmg, q);
+    }
+    // 落地炸裂：向外扩散的碎片弹，封锁落点周围
+    if (h.shards) {
+      const cnt = h.shards;
+      const base = Math.random() * TAU;
+      for (let k = 0; k < cnt; k++) {
+        const a = base + (k / cnt) * TAU + rand(-0.12, 0.12);
+        fireEnemyBullet(m.x, m.y, a, 135, h.shardDmg || 8, "#ffb347", 5, true);
+      }
+    }
+  }
+
   function hazardHit(h) {
     const H = CFG.EVENTS.HAZARD;
     const solid = !coopIsGuest() && !h.ghost;
-    if (h.type === "meteor") {
-      for (let k = 0; k < h.list.length; k++) {
-        const m = h.list[k];
-        emit(m.x, m.y, 22, "#ff9f2e", 260, 3.4, 0.65);
-        emit(m.x, m.y, 10, "#ff4d6d", 180, 2.6, 0.5);
-        if (!solid) continue;
-        const dmg = h.dmg || H.METEOR_DMG;
-        for (let i = 0; i < players.length; i++) {
-          const q = players[i];
-          if (q.down || q.eliminated) continue;
-          const rr = m.r + q.r;
-          if (dist2(m.x, m.y, q.x, q.y) <= rr * rr) damagePlayer(dmg, q);
-        }
-      }
-      shake = Math.max(shake, 8 * CFG.FX.SHAKE);
-      sfxExplode(false);
-    } else if (h.type === "beam") {
+    if (h.type === "beam") {
       const half = H.BEAM_WIDTH / 2;
       const len = h.axis === "h" ? view.w : view.h;
       const cx = h.axis === "h" ? camera.x + view.w / 2 : h.pos;
@@ -228,20 +243,36 @@
     }
     for (let i = hazards.length - 1; i >= 0; i--) {
       const h = hazards[i];
-      if (h.warn > 0) {
-        h.warn -= dt;
-        if (h.warn <= 0) {
-          h.warn = 0;
-          h.life = h.type === "meteor" ? 0.5 : h.active;
-          h.burnLeft = h.burn || 0;     // Boss 陨星：开始灼烧地面
-          h.burnCd = 0.35;
-          hazardHit(h);
+      // ===== 陨石：逐颗预警、逐颗落地，形成陨星雨 =====
+      if (h.type === "meteor") {
+        let allHit = true;
+        for (let k = 0; k < h.list.length; k++) {
+          const m = h.list[k];
+          if (m.t === undefined) {
+            m.t = h.warn || H.METEOR_WARN;
+            m.maxT = h.maxWarn || m.t;
+            m.hit = false;
+            m.flash = 0;
+          }
+          if (!m.hit) {
+            m.t -= dt;
+            allHit = false;
+            if (m.t <= 0) {
+              m.t = 0;
+              meteorImpact(h, m);
+            }
+          } else if (m.flash > 0) {
+            m.flash -= dt;
+          }
         }
-      } else if (h.type === "beam") {
-        h.active -= dt;
-        h.life = Math.max(0, h.life - dt);
-        if (h.active <= 0) hazards.splice(i, 1);
-      } else {
+        if (!allHit) continue;
+        if (!h.lingerSet) {
+          h.lingerSet = true;
+          h.burnLeft = h.burn || 0;
+          h.burnCd = 0.35;
+          h.linger = 0.5;
+        }
+        h.linger -= dt;
         // 灼烧地面：每 0.6 秒对范围内玩家造成场地伤害
         if (h.burnLeft > 0) {
           h.burnLeft -= dt;
@@ -265,15 +296,24 @@
                 1, "#ff7a3c", 60, 2.2, 0.35);
             }
           }
-          h.life = Math.max(h.life, 0.1);
-          if (h.burnLeft <= 0) {
-            hazards.splice(i, 1);
-            continue;
-          }
-        } else {
-          h.life -= dt;
-          if (h.life <= 0) hazards.splice(i, 1);
         }
+        if (h.burnLeft <= 0 && h.linger <= 0) hazards.splice(i, 1);
+        continue;
+      }
+      if (h.warn > 0) {
+        h.warn -= dt;
+        if (h.warn <= 0) {
+          h.warn = 0;
+          h.life = h.active;
+          hazardHit(h);
+        }
+      } else if (h.type === "beam") {
+        h.active -= dt;
+        h.life = Math.max(0, h.life - dt);
+        if (h.active <= 0) hazards.splice(i, 1);
+      } else {
+        h.life -= dt;
+        if (h.life <= 0) hazards.splice(i, 1);
       }
     }
   }

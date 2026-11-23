@@ -191,11 +191,12 @@ const bossMeteor = await page.evaluate(() => {
     rocks: h ? h.list.length : 0,
     dist: m0 ? Math.hypot(m0.x - p.x, m0.y - p.y) : 999,
     warn: h && h.warn,
+    stagger: h ? h.list[1].t > h.list[0].t : false,
     ghost: h && !!h.ghost,
   };
 });
-ok("二阶段召唤陨星并锁定玩家位置", bossMeteor.count === 1 && bossMeteor.rocks >= 1 &&
-  bossMeteor.dist < 1 && bossMeteor.warn > 0.5 && !bossMeteor.ghost, bossMeteor);
+ok("二阶段召唤陨星并锁定玩家位置", bossMeteor.count === 1 && bossMeteor.rocks >= 2 &&
+  bossMeteor.dist < 1 && bossMeteor.warn > 0.5 && bossMeteor.stagger && !bossMeteor.ghost, bossMeteor);
 
 const bossBurn = await page.evaluate(() => {
   const S = window.__SS__;
@@ -210,6 +211,7 @@ const bossBurn = await page.evaluate(() => {
   }];
   S.updateHazards(0.02);
   const afterImpact = p.hp;
+  S.updateHazards(0.02);
   const burning = S.hazards[0] && S.hazards[0].burnLeft > 0;
   p.invuln = 0;
   S.updateHazards(0.7);
@@ -217,6 +219,23 @@ const bossBurn = await page.evaluate(() => {
 });
 ok("陨星落地造成范围伤害并留下灼烧地面", bossBurn.afterImpact < 200 &&
   bossBurn.burning && bossBurn.afterBurn < bossBurn.afterImpact, bossBurn);
+
+const bossShard = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  const p = S.getLocalPlayer();
+  p.hp = 200; p.hpMax = 200; p.invuln = 0;
+  S.ebullets.length = 0;
+  S.hazards = [{
+    type: "meteor", warn: 0.01, maxWarn: 1.15, life: 0, boss: true,
+    dmg: 22, burn: 2.2, burnTick: 4, shards: 6, shardDmg: 9,
+    list: [{ x: p.x + 260, y: p.y, r: 66 }],
+  }];
+  S.updateHazards(0.02);
+  return { bullets: S.ebullets.length };
+});
+ok("陨石落地炸裂碎片弹", bossShard.bullets >= 6, bossShard);
 
 const bossMeteor3 = await page.evaluate(() => {
   const S = window.__SS__;

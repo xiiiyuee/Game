@@ -260,26 +260,33 @@
     }
     if (!targets.length && player) targets.push(player);
     const list = [];
-    const per = b.phase === 3 ? 2 : 1;
+    const count = b.phase === 3 ? B.METEOR_COUNT_P3 : B.METEOR_COUNT_P2;
     for (let ti = 0; ti < targets.length; ti++) {
       const q = targets[ti];
-      for (let i = 0; i < per; i++) {
-        // 第一颗直接砸向目标脚下，第二颗封住其移动方向
-        const off = i === 0 ? 0 : rand(70, 150);
+      for (let i = 0; i < count; i++) {
+        // 第一颗直接砸向目标脚下，后续逐颗延迟并封住移动方向
+        const off = i === 0 ? 0 : rand(70 + i * 40, 130 + i * 55);
         const a = i === 0 ? 0 : Math.random() * TAU;
+        const delay = i * B.METEOR_DELAY;
         list.push({
           x: clamp(q.x + Math.cos(a) * off, 40, world.w - 40),
           y: clamp(q.y + Math.sin(a) * off, 40, world.h - 40),
-          r: B.METEOR_R,
+          r: B.METEOR_R * (i === 0 ? 1 : 0.82),
+          t: B.METEOR_WARN + delay,
+          maxT: B.METEOR_WARN + delay,
+          hit: false,
+          flash: 0,
         });
       }
     }
     if (!list.length) return;
     const h = {
       type: "meteor", list,
-      warn: B.METEOR_WARN, maxWarn: B.METEOR_WARN, life: 0,
-      boss: true, dmg: B.METEOR_DMG, burn: B.METEOR_BURN,
+      warn: B.METEOR_WARN + (count - 1) * B.METEOR_DELAY,
+      maxWarn: B.METEOR_WARN + (count - 1) * B.METEOR_DELAY,
+      life: 0, boss: true, dmg: B.METEOR_DMG, burn: B.METEOR_BURN,
       burnTick: B.METEOR_TICK, burnCd: 0, burnLeft: 0,
+      shards: B.METEOR_SHARDS, shardDmg: b.dmg * B.METEOR_SHARD_MUL,
     };
     hazards.push(h);
     if (roomCode) coopSendEvent("hazard", h);

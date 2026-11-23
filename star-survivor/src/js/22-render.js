@@ -1006,16 +1006,19 @@
       if (h.type === "meteor") {
         for (let k = 0; k < h.list.length; k++) {
           const m = h.list[k];
+          const tLeft = m.t === undefined ? (h.warn || 0) : m.t;
+          const maxT = m.maxT || h.maxWarn || 1;
           ctx.save();
           ctx.translate(m.x, m.y);
-          if (h.warn > 0) {
-            const prog = 1 - h.warn / h.maxWarn;
+          if (!m.hit) {
+            const prog = Math.max(0, Math.min(1, 1 - tLeft / maxT));
             const pulse = 0.5 + 0.5 * Math.sin(t * 14);
-            ctx.fillStyle = `rgba(255, 90, 60, ${0.06 + 0.1 * prog})`;
+            // 落点阴影
+            ctx.fillStyle = `rgba(255, 90, 60, ${0.1 + 0.16 * prog})`;
             ctx.beginPath();
             ctx.arc(0, 0, m.r, 0, TAU);
             ctx.fill();
-            ctx.strokeStyle = `rgba(255, 120, 80, ${0.4 + 0.35 * pulse})`;
+            ctx.strokeStyle = `rgba(255, 130, 90, ${0.55 + 0.35 * pulse})`;
             ctx.lineWidth = 2.5;
             ctx.setLineDash([9, 8]);
             ctx.beginPath();
@@ -1023,13 +1026,29 @@
             ctx.stroke();
             ctx.setLineDash([]);
             // 内圈随预警收缩，提示落地时机
-            ctx.strokeStyle = `rgba(255, 200, 120, ${0.5 + 0.3 * pulse})`;
+            ctx.strokeStyle = `rgba(255, 205, 130, ${0.65 + 0.3 * pulse})`;
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.arc(0, 0, m.r * (1 - prog * 0.72), 0, TAU);
             ctx.stroke();
+            // 下坠流星：拖尾越接近落地越短、越亮
+            const fall = (1 - prog) * 170;
+            const trail = 54 + prog * 46;
+            const lg = ctx.createLinearGradient(0, -fall - trail, 0, -fall);
+            lg.addColorStop(0, "rgba(255, 120, 60, 0)");
+            lg.addColorStop(1, `rgba(255, 210, 150, ${0.35 + 0.45 * prog})`);
+            ctx.strokeStyle = lg;
+            ctx.lineWidth = 6 + prog * 4;
+            ctx.beginPath();
+            ctx.moveTo(0, -fall - trail);
+            ctx.lineTo(0, -fall);
+            ctx.stroke();
+            ctx.fillStyle = `rgba(255, 235, 200, ${0.55 + 0.4 * prog})`;
+            ctx.beginPath();
+            ctx.arc(0, -fall, 4 + prog * 4, 0, TAU);
+            ctx.fill();
           } else {
-            const f = Math.max(0, h.life / 0.5);
+            const f = Math.max(0, (m.flash || 0) / 0.5);
             if (f > 0) {
               ctx.fillStyle = `rgba(255, 150, 60, ${0.42 * f})`;
               ctx.beginPath();
@@ -1041,25 +1060,40 @@
               ctx.arc(0, 0, m.r * (1.05 + (1 - f) * 0.5), 0, TAU);
               ctx.stroke();
             }
-            // 灼烧地面：持续封锁落点
-            if (h.burnLeft > 0) {
-              const bf = Math.max(0, h.burnLeft / (h.burn || 1));
-              ctx.fillStyle = `rgba(255, 80, 30, ${0.07 + 0.09 * bf})`;
-              ctx.beginPath();
-              ctx.arc(0, 0, m.r * 1.02, 0, TAU);
-              ctx.fill();
-              ctx.strokeStyle = `rgba(255, 130, 60, ${0.2 + 0.35 * bf})`;
-              ctx.lineWidth = 2;
-              ctx.setLineDash([6, 9]);
-              ctx.lineDashOffset = -(t * 26) % 15;
-              ctx.beginPath();
-              ctx.arc(0, 0, m.r * (0.72 + 0.28 * (1 - bf)), 0, TAU);
-              ctx.stroke();
-              ctx.setLineDash([]);
-              ctx.lineDashOffset = 0;
-            }
           }
           ctx.restore();
+        }
+        // 灼烧地面：持续封锁落点
+        if (h.burnLeft > 0) {
+          const bf = Math.max(0, h.burnLeft / (h.burn || 1));
+          for (let k = 0; k < h.list.length; k++) {
+            const m = h.list[k];
+            ctx.save();
+            ctx.translate(m.x, m.y);
+            ctx.fillStyle = `rgba(255, 80, 30, ${0.1 + 0.12 * bf})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, m.r * 1.02, 0, TAU);
+            ctx.fill();
+            // 余烬火星：随灼烧剩余时间闪烁
+            for (let j = 0; j < 3; j++) {
+              const ea = k * 2.4 + j * 2.1 + t * 0.6;
+              const er = m.r * (0.32 + 0.3 * ((j + k) % 3) / 2);
+              ctx.fillStyle = `rgba(255, 150, 70, ${(0.3 + 0.35 * bf) * (0.6 + 0.4 * Math.sin(t * 6 + j))})`;
+              ctx.beginPath();
+              ctx.arc(Math.cos(ea) * er, Math.sin(ea) * er, 2 + 1.5 * bf, 0, TAU);
+              ctx.fill();
+            }
+            ctx.strokeStyle = `rgba(255, 140, 70, ${0.3 + 0.4 * bf})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 9]);
+            ctx.lineDashOffset = -(t * 26) % 15;
+            ctx.beginPath();
+            ctx.arc(0, 0, m.r * (0.72 + 0.28 * (1 - bf)), 0, TAU);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.lineDashOffset = 0;
+            ctx.restore();
+          }
         }
       } else if (h.type === "beam") {
         const half = W.BEAM_WIDTH / 2;
