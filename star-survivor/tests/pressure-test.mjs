@@ -145,7 +145,97 @@ ok("追猎者不会进入随机刷怪池", hunter.exists && hunter.weight === 0,
 ok("追猎者持续追击玩家且累积追击时长", hunter.type === "hunter" &&
   hunter.huntT > 0.8 && hunter.closer, hunter);
 
-console.log("");
+/* ===== Boss 二阶段：属性 + 陨星召唤 ===== */
+const bossStats = await page.evaluate(() => {
+  const B = window.__SS__.CFG.BOSS;
+  return { hp: B.hp, dmg: B.dmg, p2: B.PHASE2, p3: B.PHASE3, meteorCd: B.METEOR_CD, p3Cd: B.METEOR_CD_P3 };
+});
+ok("Boss 基础属性与阶段阈值已强化", bossStats.hp >= 2800 && bossStats.dmg >= 30 &&
+  bossStats.p2 > 0.66 && bossStats.p3 > 0.33 && bossStats.p3Cd < bossStats.meteorCd, bossStats);
+
+const bossPhase = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  S.bossSpawned = false;
+  S.spawnBoss();
+  const b = S.boss;
+  b.hp = b.maxHp * 0.5;
+  S.updateBoss(b, 0.02, 1);
+  const p2 = b.phase;
+  b.hp = b.maxHp * 0.2;
+  S.updateBoss(b, 0.02, 1);
+  return { p2, p3: b.phase, label: document.getElementById("ui-boss-name").textContent };
+});
+ok("Boss 按血量进入二 / 三阶段", bossPhase.p2 === 2 && bossPhase.p3 === 3 &&
+  bossPhase.label.includes("阶段 III"), bossPhase);
+
+const bossMeteor = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  S.bossSpawned = false;
+  S.spawnBoss();
+  const b = S.boss;
+  const p = S.getLocalPlayer();
+  b.hp = b.maxHp * 0.6;
+  S.updateBoss(b, 0.02, 1);      // 进入二阶段
+  S.hazards = [];
+  b.meteorCd = 0;
+  S.updateBoss(b, 0.02, 1);      // 触发陨星
+  const list = S.hazards.filter((h) => h.boss && h.type === "meteor");
+  const h = list[0];
+  const m0 = h && h.list[0];
+  return {
+    count: list.length,
+    rocks: h ? h.list.length : 0,
+    dist: m0 ? Math.hypot(m0.x - p.x, m0.y - p.y) : 999,
+    warn: h && h.warn,
+    ghost: h && !!h.ghost,
+  };
+});
+ok("二阶段召唤陨星并锁定玩家位置", bossMeteor.count === 1 && bossMeteor.rocks >= 1 &&
+  bossMeteor.dist < 1 && bossMeteor.warn > 0.5 && !bossMeteor.ghost, bossMeteor);
+
+const bossBurn = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  const p = S.getLocalPlayer();
+  p.hp = 200; p.hpMax = 200; p.shield = 0; p.invuln = 0;
+  S.hazards = [{
+    type: "meteor", warn: 0.01, maxWarn: 1.15, life: 0,
+    boss: true, dmg: 22, burn: 2.6, burnTick: 4, burnCd: 0, burnLeft: 0,
+    list: [{ x: p.x, y: p.y, r: 68 }],
+  }];
+  S.updateHazards(0.02);
+  const afterImpact = p.hp;
+  const burning = S.hazards[0] && S.hazards[0].burnLeft > 0;
+  p.invuln = 0;
+  S.updateHazards(0.7);
+  return { afterImpact, afterBurn: p.hp, burning };
+});
+ok("陨星落地造成范围伤害并留下灼烧地面", bossBurn.afterImpact < 200 &&
+  bossBurn.burning && bossBurn.afterBurn < bossBurn.afterImpact, bossBurn);
+
+const bossMeteor3 = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  S.bossSpawned = false;
+  S.spawnBoss();
+  const b = S.boss;
+  b.hp = b.maxHp * 0.2;
+  S.updateBoss(b, 0.02, 1);      // 进入三阶段
+  S.hazards = [];
+  b.meteorCd = 0;
+  S.updateBoss(b, 0.02, 1);
+  const h = S.hazards.filter((x) => x.boss && x.type === "meteor")[0];
+  return { rocks: h ? h.list.length : 0, players: S.playersCount ? 1 : 1 };
+});
+ok("三阶段陨星数量加倍", bossMeteor3.rocks >= 2, bossMeteor3);
+
+/* ===== 输出 ===== */
 let pass = 0;
 for (const c of checks) {
   if (c.pass) pass++;

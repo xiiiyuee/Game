@@ -196,6 +196,7 @@
       rage: 0,
       rageCd: 12,
       homingCd: 5,
+      meteorCd: 5.5,     // 二阶段陨星召唤计时
     };
     enemies.push(boss);
 
@@ -210,9 +211,10 @@
   }
 
   function bossLabel(b) {
-    const names = (b.mechanics || []).map((k) => CFG.BOSS.MECH_NAMES[k] || k).join(" / ");
+    const names = (b.mechanics || []).map((k) => CFG.BOSS.MECH_NAMES[k] || k);
+    if (b.phase >= 2) names.push(CFG.BOSS.MECH_NAMES.meteor);
     return CFG.BOSS.name + " · 星域 " + chapter + " · 阶段 " + ["", "I", "II", "III"][b.phase] +
-      (names ? " · " + names : "");
+      (names.length ? " · " + names.join(" / ") : "");
   }
 
   function updateSpawner(dt) {
@@ -248,6 +250,45 @@
     }
   }
 
+  // 二阶段陨星召唤：砸向每位玩家当前位置，留下灼烧地面
+  function bossMeteorRain(b) {
+    const B = CFG.BOSS;
+    const targets = [];
+    for (let i = 0; i < players.length; i++) {
+      const q = players[i];
+      if (!q.down && !q.eliminated) targets.push(q);
+    }
+    if (!targets.length && player) targets.push(player);
+    const list = [];
+    const per = b.phase === 3 ? 2 : 1;
+    for (let ti = 0; ti < targets.length; ti++) {
+      const q = targets[ti];
+      for (let i = 0; i < per; i++) {
+        // 第一颗直接砸向目标脚下，第二颗封住其移动方向
+        const off = i === 0 ? 0 : rand(70, 150);
+        const a = i === 0 ? 0 : Math.random() * TAU;
+        list.push({
+          x: clamp(q.x + Math.cos(a) * off, 40, world.w - 40),
+          y: clamp(q.y + Math.sin(a) * off, 40, world.h - 40),
+          r: B.METEOR_R,
+        });
+      }
+    }
+    if (!list.length) return;
+    const h = {
+      type: "meteor", list,
+      warn: B.METEOR_WARN, maxWarn: B.METEOR_WARN, life: 0,
+      boss: true, dmg: B.METEOR_DMG, burn: B.METEOR_BURN,
+      burnTick: B.METEOR_TICK, burnCd: 0, burnLeft: 0,
+    };
+    hazards.push(h);
+    if (roomCode) coopSendEvent("hazard", h);
+    addText(b.x, b.y - b.r - 24, "陨星召唤", "#ffb347", 18);
+    emit(b.x, b.y, 28, "#ffb347", 300, 4, 0.85);
+    shake = Math.max(shake, 9 * CFG.FX.SHAKE);
+    sfxBoss();
+  }
+
   function updateBoss(b, dt, t) {
     const tgt = nearestPlayer(b.x, b.y);
     // ===== 阶段判定 =====
@@ -259,6 +300,7 @@
       b.ringCd = 1.8;
       b.minionCd = 2.5;
       b.homingCd = Math.min(b.homingCd || 99, 2.5);
+      b.meteorCd = Math.min(b.meteorCd || 99, 1.8);
       b.warn = 0;
       b.dashTime = 0;
       document.getElementById("ui-boss-name").textContent = bossLabel(b);
@@ -271,6 +313,7 @@
       }
       sfxBoss();
       coopSendEvent("boss-phase", { p: nextPhase });
+      if (nextPhase === 2) addText(b.x, b.y - b.r - 34, "二阶段 · 陨星觉醒", "#ffb347", 20);
     }
 
     const dx = tgt.x - b.x;
@@ -299,7 +342,7 @@
     }
     const rageMul = b.rage > 0 ? CFG.BOSS.RAGE_MUL : 1;
     const actDt = slowDt * rageMul;      // 攻击冷却推进
-    const spdMul = stats.enemySpeedMul * rageMul;
+    const spdMul = stats.enemySpeedMul * rageMul * (1 + (b.phase - 1) * 0.07);
     b.spin += actDt * (0.7 + b.phase * 0.35);
 
     // ===== 机制：分裂护盾 =====
@@ -358,6 +401,15 @@
       }
     }
 
+    // ===== 二阶段专属：陨星召唤（砸向玩家当前位置，留下灼烧地面）=====
+    if (b.phase >= 2) {
+      b.meteorCd -= slowDt;
+      if (b.meteorCd <= 0) {
+        b.meteorCd = b.phase === 3 ? CFG.BOSS.METEOR_CD_P3 : CFG.BOSS.METEOR_CD;
+        bossMeteorRain(b);
+      }
+    }
+
     // ===== 突进机制（二阶段起）：预警蓄力 → 高速冲刺 =====
     b.dashCd -= slowDt;
     if (b.dashTime > 0) {
@@ -379,7 +431,7 @@
       b.x += (dx / d) * b.speed * spdMul * dirSign * slowDt;
       b.y += (dy / d) * b.speed * spdMul * dirSign * slowDt;
       if (b.phase >= 2 && b.dashCd <= 0 && d < 560 * view.scale) {
-        b.dashCd = CFG.BOSS.DASH_CD;
+        b.dashCd = Math.max(3.4, CFG.BOSS.DASH_CD - (b.phase - 1) * 1.1);
         b.warn = CFG.BOSS.DASH_WARN;
         b.dashAng = Math.atan2(dy, dx);
         emit(b.x, b.y, 16, "#ffc857", 180, 3, 0.5);
@@ -390,8 +442,8 @@
     b.fireCd -= actDt;
     if (b.fireCd <= 0) {
       if (b.phase === 1) { b.fireCd = 2.2; bossVolley(b, 5, 0.55, 205, 9); }
-      else if (b.phase === 2) { b.fireCd = 1.7; bossVolley(b, 7, 0.75, 225, 10); }
-      else { b.fireCd = 1.25; bossVolley(b, 9, 0.95, 245, 11); }
+      else if (b.phase === 2) { b.fireCd = 1.7; bossVolley(b, 7, 0.75, 225, 11); }
+      else { b.fireCd = 1.25; bossVolley(b, 9, 0.95, 245, 13); }
     }
 
     // ===== 环形弹幕（带缓慢旋转的安全缺口）=====

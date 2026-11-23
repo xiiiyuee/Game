@@ -151,14 +151,23 @@
     },
     BOSS: {
       name: "虚空之眼 · 吞噬者",
-      hp: 2400, speed: 62, dmg: 28, xp: 140, score: 800, r: 44, color: "#ff3b6b",
-      PHASE2: 0.66,          // 血量低于 66% 进入二阶段
-      PHASE3: 0.33,          // 血量低于 33% 进入三阶段
-      DASH_SPEED: 620,       // 冲刺速度
-      DASH_CD: 7.5,          // 冲刺冷却
-      DASH_WARN: 0.55,       // 冲刺预警时间
-      DASH_TIME: 0.32,       // 冲刺持续时间
+      hp: 2800, speed: 66, dmg: 30, xp: 160, score: 900, r: 44, color: "#ff3b6b",
+      PHASE2: 0.7,           // 血量低于 70% 进入二阶段
+      PHASE3: 0.35,          // 血量低于 35% 进入三阶段
+      DASH_SPEED: 640,       // 冲刺速度
+      DASH_CD: 6.6,          // 冲刺冷却
+      DASH_WARN: 0.52,       // 冲刺预警时间
+      DASH_TIME: 0.34,       // 冲刺持续时间
       RING_GAP: 0.55,        // 环形弹幕安全缺口半角（弧度）
+      // 二阶段起专属：陨星召唤（砸向玩家当前位置，留下灼烧地面）
+      METEOR_CD: 8.5,        // 陨星召唤冷却（三阶段缩短）
+      METEOR_CD_P3: 5.8,
+      METEOR_WARN: 1.15,     // 落点预警时间
+      METEOR_R: 68,          // 陨石爆炸半径
+      METEOR_DMG: 22,        // 直接命中伤害
+      METEOR_BURN: 2.6,      // 灼烧地面持续时间
+      METEOR_TICK: 4,        // 灼烧每次伤害
+      METEOR_TICK_CD: 0.6,   // 灼烧伤害间隔
       // 每章固定机制组合，形成不同的 Boss 战节奏
       CHAPTER_KITS: [
         ["laser", "shield"],     // 星域 1：激光 + 护盾
@@ -167,7 +176,7 @@
         ["summon", "shield"],    // 星域 4：召唤 + 护盾
         ["rage", "homing"],      // 星域 5：狂暴 + 追猎弹
       ],
-      MECH_NAMES: { laser: "旋转激光", shield: "分裂护盾", summon: "召唤潮汐", rage: "限时狂暴", homing: "追猎弹" },
+      MECH_NAMES: { laser: "旋转激光", shield: "分裂护盾", summon: "召唤潮汐", rage: "限时狂暴", homing: "追猎弹", meteor: "陨星召唤" },
       SHIELD_PCT: 0.16,      // 分裂护盾：护盾量占最大生命比例
       SHIELD_CD: 13,         // 护盾重生冷却
       LASER_CD: 8.5,         // 旋转激光冷却

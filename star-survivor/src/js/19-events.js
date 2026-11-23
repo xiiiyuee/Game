@@ -189,11 +189,12 @@
         emit(m.x, m.y, 22, "#ff9f2e", 260, 3.4, 0.65);
         emit(m.x, m.y, 10, "#ff4d6d", 180, 2.6, 0.5);
         if (!solid) continue;
+        const dmg = h.dmg || H.METEOR_DMG;
         for (let i = 0; i < players.length; i++) {
           const q = players[i];
           if (q.down || q.eliminated) continue;
           const rr = m.r + q.r;
-          if (dist2(m.x, m.y, q.x, q.y) <= rr * rr) damagePlayer(H.METEOR_DMG, q);
+          if (dist2(m.x, m.y, q.x, q.y) <= rr * rr) damagePlayer(dmg, q);
         }
       }
       shake = Math.max(shake, 8 * CFG.FX.SHAKE);
@@ -232,6 +233,8 @@
         if (h.warn <= 0) {
           h.warn = 0;
           h.life = h.type === "meteor" ? 0.5 : h.active;
+          h.burnLeft = h.burn || 0;     // Boss 陨星：开始灼烧地面
+          h.burnCd = 0.35;
           hazardHit(h);
         }
       } else if (h.type === "beam") {
@@ -239,8 +242,38 @@
         h.life = Math.max(0, h.life - dt);
         if (h.active <= 0) hazards.splice(i, 1);
       } else {
-        h.life -= dt;
-        if (h.life <= 0) hazards.splice(i, 1);
+        // 灼烧地面：每 0.6 秒对范围内玩家造成场地伤害
+        if (h.burnLeft > 0) {
+          h.burnLeft -= dt;
+          h.burnCd -= dt;
+          if (h.burnCd <= 0) {
+            h.burnCd = CFG.BOSS.METEOR_TICK_CD;
+            if (!h.ghost && !coopIsGuest()) {
+              for (let k = 0; k < h.list.length; k++) {
+                const m = h.list[k];
+                for (let pi = 0; pi < players.length; pi++) {
+                  const q = players[pi];
+                  if (q.down || q.eliminated) continue;
+                  const rr = m.r + q.r;
+                  if (dist2(m.x, m.y, q.x, q.y) <= rr * rr) damagePlayer(h.burnTick || 4, q);
+                }
+              }
+            }
+            for (let k = 0; k < h.list.length; k++) {
+              const m = h.list[k];
+              if (Math.random() < 0.7) emit(m.x + rand(-m.r, m.r) * 0.5, m.y + rand(-m.r, m.r) * 0.5,
+                1, "#ff7a3c", 60, 2.2, 0.35);
+            }
+          }
+          h.life = Math.max(h.life, 0.1);
+          if (h.burnLeft <= 0) {
+            hazards.splice(i, 1);
+            continue;
+          }
+        } else {
+          h.life -= dt;
+          if (h.life <= 0) hazards.splice(i, 1);
+        }
       }
     }
   }

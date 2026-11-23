@@ -1030,15 +1030,34 @@
             ctx.stroke();
           } else {
             const f = Math.max(0, h.life / 0.5);
-            ctx.fillStyle = `rgba(255, 150, 60, ${0.42 * f})`;
-            ctx.beginPath();
-            ctx.arc(0, 0, m.r * (1.15 - f * 0.15), 0, TAU);
-            ctx.fill();
-            ctx.strokeStyle = `rgba(255, 220, 160, ${0.8 * f})`;
-            ctx.lineWidth = 4;
-            ctx.beginPath();
-            ctx.arc(0, 0, m.r * (1.05 + (1 - f) * 0.5), 0, TAU);
-            ctx.stroke();
+            if (f > 0) {
+              ctx.fillStyle = `rgba(255, 150, 60, ${0.42 * f})`;
+              ctx.beginPath();
+              ctx.arc(0, 0, m.r * (1.15 - f * 0.15), 0, TAU);
+              ctx.fill();
+              ctx.strokeStyle = `rgba(255, 220, 160, ${0.8 * f})`;
+              ctx.lineWidth = 4;
+              ctx.beginPath();
+              ctx.arc(0, 0, m.r * (1.05 + (1 - f) * 0.5), 0, TAU);
+              ctx.stroke();
+            }
+            // 灼烧地面：持续封锁落点
+            if (h.burnLeft > 0) {
+              const bf = Math.max(0, h.burnLeft / (h.burn || 1));
+              ctx.fillStyle = `rgba(255, 80, 30, ${0.07 + 0.09 * bf})`;
+              ctx.beginPath();
+              ctx.arc(0, 0, m.r * 1.02, 0, TAU);
+              ctx.fill();
+              ctx.strokeStyle = `rgba(255, 130, 60, ${0.2 + 0.35 * bf})`;
+              ctx.lineWidth = 2;
+              ctx.setLineDash([6, 9]);
+              ctx.lineDashOffset = -(t * 26) % 15;
+              ctx.beginPath();
+              ctx.arc(0, 0, m.r * (0.72 + 0.28 * (1 - bf)), 0, TAU);
+              ctx.stroke();
+              ctx.setLineDash([]);
+              ctx.lineDashOffset = 0;
+            }
           }
           ctx.restore();
         }
