@@ -178,6 +178,10 @@
     <h2>等级提升</h2>
     <p class="sub">选择一项强化 · 当前 <span id="ui-up-level">LV 2</span><span class="kb-hint"> · 按 1 / 2 / 3 快速选择</span></p>
     <div class="cards" id="cards"></div>
+    <div class="up-extra">
+      <button class="up-reroll" id="up-reroll">刷新卡牌 · 1 核心</button>
+      <span class="up-left" id="up-left"></span>
+    </div>
   </div>
 </div>
 
@@ -225,10 +229,26 @@
   </div>
 </div>
 
+<!-- 首次作战提示：首次进入自动显示，可手动关闭或 9 秒后自动收起 -->
+<div class="tutor hidden" id="tutor">
+  <div class="tutor-head">作战指令<span>首次进入自动显示</span></div>
+  <div class="tutor-grid">
+    <div><b>WASD</b><span>移动</span></div>
+    <div><b>空格</b><span>冲刺</span></div>
+    <div><b>E</b><span>超载</span></div>
+    <div><b>B</b><span>建造</span></div>
+    <div><b>F</b><span>升级 / 修复防线</span></div>
+    <div><b>ESC</b><span>暂停</span></div>
+  </div>
+  <p class="tutor-touch">手机：左侧摇杆移动 · 右侧按钮冲刺 / 超载</p>
+  <button class="tutor-close" data-act="tutor-close">知道了</button>
+</div>
+
 <div class="lowhp" id="lowhp"></div>
 <button class="mute fx-btn" id="fx-btn" aria-label="特效模式">特效</button>
 <button class="mute" id="mute" aria-label="静音切换">🔊</button>
 <button class="build-btn hidden" id="build-btn">建造 <b id="ui-core-btn">0</b></button>
+<button class="build-btn def-btn hidden" id="def-btn">防线 <b>F</b></button>
 
 <!-- 移动端虚拟摇杆与按钮 -->
 <div id="touch">

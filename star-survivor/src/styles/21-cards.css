@@ -39,6 +39,32 @@
     box-shadow: 0 0 12px var(--glow);
     pointer-events: none;
   }
+  .up-extra {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 16px;
+  }
+  .up-reroll {
+    padding: 9px 18px;
+    border-radius: 9px;
+    border: 1px solid rgba(255, 214, 102, 0.45);
+    background: rgba(30, 24, 8, 0.8);
+    color: #ffd666;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .up-reroll:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .up-left {
+    font-size: 12px;
+    color: var(--cyan-soft);
+    letter-spacing: 1px;
+  }
   @media (hover: none) { .card-key, .kb-hint { display: none; } }
   .card:active { transform: scale(0.98); }
   .card.rarity-common { border-color: rgba(159, 179, 200, 0.7); }

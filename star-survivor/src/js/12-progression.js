@@ -357,11 +357,63 @@
     return cards;
   }
 
+  let upgradeRerollUsed = false;
+
+  function rerollUsedNow() {
+    if (roomCode) {
+      if (coopNet.host) return !!(coopHostOfferP && coopHostOfferP.upOffer && coopHostOfferP.upOffer.rerolled);
+      return !!(coopGuestOffer && coopGuestOffer.rerolled);
+    }
+    return upgradeRerollUsed;
+  }
+
+  function upgradeRemaining() {
+    if (roomCode) {
+      if (coopNet.host) return coopHostOfferP ? coopHostOfferP.pendingLevels : 0;
+      return coopGuestOffer ? (coopGuestOffer.left || 0) : 0;
+    }
+    return pendingLevels;
+  }
+
+  function updateUpgradeMeta() {
+    const btn = document.getElementById("up-reroll");
+    const left = document.getElementById("up-left");
+    if (!btn) return;
+    const cost = CFG.RUN.UPGRADE_REROLL_COST;
+    const used = rerollUsedNow();
+    const poor = cores < cost;
+    btn.disabled = used || poor;
+    btn.textContent = used ? "本回合已刷新"
+      : `刷新卡牌 · ${cost} 核心` + (poor ? "（核心不足）" : "");
+    if (left) {
+      const n = upgradeRemaining();
+      left.textContent = n > 0 ? `剩余选卡 ${n} 次` : "";
+    }
+  }
+
+  function rerollUpgrade() {
+    if (roomCode) { coopRerollUpgrade(); return; }
+    if (state !== "upgrade" || upgradeRerollUsed) return;
+    const cost = CFG.RUN.UPGRADE_REROLL_COST;
+    const lp = getLocalPlayer() || player;
+    if (cores < cost) {
+      addText(lp.x, lp.y - 46, "核心不足", "#ff9f9f", 12);
+      return;
+    }
+    cores -= cost;
+    upgradeRerollUsed = true;
+    upgradeCards = buildCards();
+    renderCards();
+    refreshHud(true);
+    sfxLevelUp();
+  }
+
   function openUpgrade() {
     if (roomCode) { coopOfferUpgrade(getLocalPlayer() || player); return; }
     state = "upgrade";
     clearKeys();
     shake = 0;
+    upgradeRerollUsed = false;
     document.getElementById("ui-up-level").textContent = "LV " + level;
     upgradeCards = buildCards();
     renderCards();
@@ -386,6 +438,7 @@
       </button>`;
     }
     wrap.innerHTML = html;
+    updateUpgradeMeta();
   }
 
   function chooseUpgrade(idx) {
@@ -406,6 +459,7 @@
     refreshHud(true);
 
     if (pendingLevels > 0) {
+      upgradeRerollUsed = false;
       upgradeCards = buildCards();
       document.getElementById("ui-up-level").textContent = "LV " + level;
       renderCards();

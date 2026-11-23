@@ -53,10 +53,15 @@
     if (state === "upgrade" || coopUpgradeOpen()) {
       const pick = /^(?:Digit|Numpad)([1-3])$/.exec(code);
       if (pick) { chooseUpgrade(Number(pick[1]) - 1); return; }
+      if (code === "KeyR") { rerollUpgrade(); return; }
     }
     if (code === "KeyT") { cycleTheme(); return; }
     if (code === "KeyB") {
       if (state === "playing") openBuildMenu();
+      return;
+    }
+    if (code === "KeyF") {
+      if (state === "playing") interactDefense();
       return;
     }
     if (code === "KeyE") {

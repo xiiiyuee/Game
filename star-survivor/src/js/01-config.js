@@ -43,6 +43,12 @@
       DEF_AGGRO: 300,             // 敌人转火防线的距离
       DEF_ATTACK_CD: 0.8,         // 敌人拆塔间隔
       DEF_BUILD_RANGE: 520,       // 部署距离上限
+      DEF_MAX_LEVEL: 3,           // 防线最高等级
+      DEF_UPGRADE_COST: 2,        // 炮塔升级消耗
+      DEF_UPGRADE_COST_SMALL: 1,  // 城墙 / 缓速场升级消耗
+      DEF_REPAIR_COST: 1,         // 手动修复消耗
+      DEF_REPAIR_PCT: 0.35,       // 手动修复恢复的最大耐久比例
+      UPGRADE_REROLL_COST: 1,     // 刷新升级卡消耗核心
       CORE_MAGNET: 170,
       CORE_PICKUP: 30,
     },

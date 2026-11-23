@@ -33,4 +33,14 @@
     bottom: max(28px, calc(env(safe-area-inset-bottom) + 22px));
     height: 46px;
   }
+  .def-btn {
+    right: auto;
+    left: max(12px, env(safe-area-inset-left));
+    border-color: rgba(140, 220, 255, 0.45);
+    background: rgba(8, 24, 32, 0.78);
+    color: #9fe6ff;
+  }
+  body.touch .def-btn {
+    left: max(238px, calc(env(safe-area-inset-left) + 228px));
+  }
 

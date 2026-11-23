@@ -82,6 +82,12 @@
       (turrets.length < CFG.RUN.MAX_TURRETS || fields.length < CFG.RUN.MAX_FIELDS || walls.length < CFG.RUN.MAX_WALLS);
     buildBtn.classList.toggle("hidden", !canBuild);
     buildBtn.classList.toggle("ready", cores >= CFG.RUN.WALL_COST);
+    const defBtn = document.getElementById("def-btn");
+    if (defBtn) {
+      const canInteract = state === "playing" &&
+        (turrets.length + fields.length + walls.length) > 0;
+      defBtn.classList.toggle("hidden", !canInteract);
+    }
 
     // 连杀
     const comboEl = document.getElementById("ui-combo");

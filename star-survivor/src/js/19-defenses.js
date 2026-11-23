@@ -765,6 +765,124 @@
     return Math.round(base * (1 + (chapter - 1) * CFG.RUN.DEF_HP_GROWTH));
   }
 
+  // ===== 防线升级 / 手动修复（F 或右下角按钮）=====
+  function defenseLevel(d) { return Math.max(1, (d && d.level) || 1); }
+
+  function defenseOfId(id) {
+    for (let i = 0; i < turrets.length; i++) if (turrets[i].id === id) return turrets[i];
+    for (let i = 0; i < fields.length; i++) if (fields[i].id === id) return fields[i];
+    for (let i = 0; i < walls.length; i++) if (walls[i].id === id) return walls[i];
+    return null;
+  }
+
+  function nearestAnyDefense(x, y, maxDist) {
+    let best = null;
+    let bestD = maxDist * maxDist;
+    const groups = [turrets, fields, walls];
+    for (let g = 0; g < groups.length; g++) {
+      const arr = groups[g];
+      for (let i = 0; i < arr.length; i++) {
+        const d = arr[i];
+        if (d.dead) continue;
+        const dd = dist2(x, y, d.x, d.y);
+        if (dd < bestD) { bestD = dd; best = d; }
+      }
+    }
+    return best ? { d: best, x: best.x, y: best.y, hitR: best.hitR || 18, dist2: bestD } : null;
+  }
+
+  function defenseUpgradeCost(d) {
+    return d && d.kind === "turret" ? CFG.RUN.DEF_UPGRADE_COST : CFG.RUN.DEF_UPGRADE_COST_SMALL;
+  }
+
+  // 等级带来的几何变化（客户端也按等级还原，保持渲染一致）
+  function applyDefenseLevel(d) {
+    if (!d) return;
+    const lv = defenseLevel(d);
+    if (d.kind === "field") {
+      d.r = CFG.RUN.FIELD_RADIUS * view.scale * Math.pow(1.12, lv - 1);
+    } else if (d.kind === "wall") {
+      d.len = CFG.RUN.WALL_LEN * view.scale * Math.pow(1.06, lv - 1);
+      d.thick = CFG.RUN.WALL_THICK * view.scale * Math.pow(1.1, lv - 1);
+      d.hitR = d.thick * 0.5 + 6;
+    }
+  }
+
+  function repairDefense(d) {
+    if (!d || d.dead) return false;
+    if (d.hp >= d.maxHp - 0.5) {
+      addText(d.x, d.y - 34, "耐久已满", "#9ad8ff", 12);
+      return false;
+    }
+    if (cores < CFG.RUN.DEF_REPAIR_COST) {
+      addText(d.x, d.y - 34, "核心不足（需 " + CFG.RUN.DEF_REPAIR_COST + "）", "#ff9f9f", 12);
+      return false;
+    }
+    cores -= CFG.RUN.DEF_REPAIR_COST;
+    const heal = Math.round(d.maxHp * CFG.RUN.DEF_REPAIR_PCT);
+    d.hp = Math.min(d.maxHp, d.hp + heal);
+    d.repairT = CFG.RUN.DEF_REPAIR_DELAY;
+    d.flash = 0.6;
+    emit(d.x, d.y, 10, "#8bffdc", 170, 2.6, 0.45);
+    addText(d.x, d.y - 34, "防线修复 +" + heal, "#8bffdc", 13);
+    sfxLevelUp();
+    refreshHud(true);
+    return true;
+  }
+
+  function upgradeDefense(d) {
+    if (!d || d.dead) return false;
+    const lv = defenseLevel(d);
+    if (lv >= CFG.RUN.DEF_MAX_LEVEL) {
+      addText(d.x, d.y - 34, "防线已满级", "#9ad8ff", 12);
+      return false;
+    }
+    const cost = defenseUpgradeCost(d);
+    if (cores < cost) {
+      addText(d.x, d.y - 34, "核心不足（需 " + cost + "）", "#ff9f9f", 12);
+      return false;
+    }
+    cores -= cost;
+    d.level = lv + 1;
+    d.maxHp = Math.round(d.maxHp * 1.35);
+    d.hp = d.maxHp;
+    d.repairT = 0;
+    d.flash = 0.8;
+    if (d.kind === "turret") {
+      d.dmg *= 1.3;
+      d.range = (d.range || CFG.RUN.TURRET_RANGE) * 1.08;
+      d.cdBase = Math.max(0.38, (d.cdBase || CFG.RUN.TURRET_CD) * 0.95);
+    }
+    applyDefenseLevel(d);
+    emit(d.x, d.y, 18, "#ffd666", 220, 3, 0.6);
+    addText(d.x, d.y - 34, "防线升级 Lv" + d.level, "#ffd666", 14);
+    shake = Math.max(shake, 2.5 * CFG.FX.SHAKE);
+    sfxLevelUp();
+    refreshHud(true);
+    return true;
+  }
+
+  function interactDefense() {
+    if (state !== "playing") return;
+    const who = getLocalPlayer() || player;
+    if (!who || who.down || who.eliminated) return;
+    const nd = nearestAnyDefense(who.x, who.y, 92 * view.scale);
+    if (!nd) {
+      addText(who.x, who.y - 46, "靠近防线后可升级 / 修复", "#9ad8ff", 12);
+      return;
+    }
+    const d = nd.d;
+    const act = d.hp < d.maxHp - 0.5 ? "repair" : "upgrade";
+    if (roomCode && coopIsGuest()) {
+      coopEventSeq += 1;
+      coopSendCtrl({ t: "ev", id: coopEventSeq, k: "def-act", d: { id: d.id, act } });
+      addText(d.x, d.y - 34, act === "repair" ? "修复请求已发送" : "升级请求已发送", "#9ad8ff", 12);
+      return;
+    }
+    if (act === "repair") repairDefense(d);
+    else upgradeDefense(d);
+  }
+
   // 圆与城墙（有向矩形）的碰撞：返回推出法线与深度
   function wallHit(w, x, y, r) {
     const ca = Math.cos(w.ang), sa = Math.sin(w.ang);
@@ -923,6 +1041,7 @@
       turrets.push({
         id: nextPropId++, kind: "turret", x, y, cd: 0, ang: -Math.PI / 2,
         seed: Math.random() * TAU, hp, maxHp: hp, hitR: 18, flash: 0,
+        level: 1, cdBase: CFG.RUN.TURRET_CD,
         dmg: Math.max(CFG.RUN.TURRET_DMG, who.stats.damage * 0.5),
         speed: who.stats.bulletSpeed,
         range: CFG.RUN.TURRET_RANGE,
@@ -933,7 +1052,7 @@
       fields.push({
         id: nextPropId++, kind: "field", x, y,
         r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU,
-        hp, maxHp: hp, hitR: 20, flash: 0,
+        hp, maxHp: hp, hitR: 20, flash: 0, level: 1,
       });
       addText(x, y - 26, "缓速场已展开", "#8ff6ff", 14);
     } else {
@@ -944,7 +1063,7 @@
         len: CFG.RUN.WALL_LEN * view.scale,
         thick: CFG.RUN.WALL_THICK * view.scale,
         seed: Math.random() * TAU, hp, maxHp: hp, flash: 0,
-        hitR: CFG.RUN.WALL_THICK * view.scale * 0.5 + 6,
+        hitR: CFG.RUN.WALL_THICK * view.scale * 0.5 + 6, level: 1,
       });
       addText(x, y - 26, "城墙已架设", "#d8e6ff", 14);
     }
@@ -987,10 +1106,10 @@
     for (let i = 0; i < fields.length; i++) tickDefRepair(fields[i], dt);
     for (let i = 0; i < walls.length; i++) tickDefRepair(walls[i], dt);
 
-    const range = CFG.RUN.TURRET_RANGE * view.scale;
     for (let i = 0; i < turrets.length; i++) {
       const t = turrets[i];
       if (t.dead) continue;
+      const range = (t.range || CFG.RUN.TURRET_RANGE) * view.scale;
       let best = null;
       let bestD = range * range;
       for (let k = 0; k < enemies.length; k++) {
@@ -1003,7 +1122,7 @@
         t.ang = Math.atan2(best.y - t.y, best.x - t.x);
         t.cd -= dt;
         if (t.cd <= 0) {
-          t.cd = CFG.RUN.TURRET_CD;
+          t.cd = t.cdBase || CFG.RUN.TURRET_CD;
           if (bullets.length < CFG.LIMITS.BULLETS) {
             const sp = (t.speed || stats.bulletSpeed) * view.scale * 0.9;
             bullets.push({

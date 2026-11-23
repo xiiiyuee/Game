@@ -109,6 +109,7 @@
     else if (act === "lobby-ready") coopToggleReady();
     else if (act === "lobby-copy") copyRoom();
     else if (act === "lobby-leave") coopLeaveLobby();
+    else if (act === "tutor-close") closeTutorial();
   });
 
   // 成长档案购买
@@ -137,6 +138,14 @@
   document.getElementById("build-btn").addEventListener("click", (e) => {
     e.preventDefault();
     if (state === "playing") openBuildMenu();
+  });
+  document.getElementById("def-btn").addEventListener("click", (e) => {
+    e.preventDefault();
+    if (state === "playing") interactDefense();
+  });
+  document.getElementById("up-reroll").addEventListener("click", (e) => {
+    e.preventDefault();
+    rerollUpgrade();
   });
 
   // 建造模式：点击战场放置

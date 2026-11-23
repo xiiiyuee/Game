@@ -1,6 +1,29 @@
   /* =====================================================================
    * 14. 游戏流程（开始 / 暂停 / 结束 / 重开）
    * ===================================================================*/
+  let tutorHideTimer = 0;
+
+  // 首次进入自动展示操作提示，手动关闭或 9 秒后自动收起
+  function maybeShowTutorial() {
+    const el = document.getElementById("tutor");
+    if (!el) return;
+    let seen = false;
+    try { seen = localStorage.getItem("sf_tutor_seen") === "1"; } catch (err) {}
+    if (seen) { el.classList.add("hidden"); return; }
+    el.classList.remove("hidden");
+    clearTimeout(tutorHideTimer);
+    tutorHideTimer = setTimeout(closeTutorial, 9000);
+  }
+
+  function closeTutorial() {
+    const el = document.getElementById("tutor");
+    if (!el || el.classList.contains("hidden")) return;
+    el.classList.add("hidden");
+    clearTimeout(tutorHideTimer);
+    tutorHideTimer = 0;
+    try { localStorage.setItem("sf_tutor_seen", "1"); } catch (err) {}
+  }
+
   function startGame(weaponKey) {
     if (weaponKey && CFG.WEAPONS[weaponKey]) chosenWeapon = weaponKey;
     resetGame();
@@ -18,6 +41,7 @@
     if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
     updateBuffPanel();
     refreshHud(true);
+    maybeShowTutorial();
     coopOnGameStarted();
   }
 
@@ -53,6 +77,7 @@
     coopStopPosLoop();
     state = "over";
     clearKeys();
+    closeTutorial();
     shake = 0;
     hurtFlash = 0;
     hideBossBar();
@@ -911,20 +936,20 @@
     return arr;
   }
 
-  // 防线快照：id, kind(0炮塔/1缓速场/2城墙), x, y, hp, maxHp, 角度
+  // 防线快照：id, kind(0炮塔/1缓速场/2城墙), x, y, hp, maxHp, 角度, 等级
   function coopDefenseList() {
     const arr = [];
     for (let i = 0; i < turrets.length; i++) {
       const d = turrets[i];
-      arr.push([d.id, 0, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100)]);
+      arr.push([d.id, 0, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100), defenseLevel(d)]);
     }
     for (let i = 0; i < fields.length; i++) {
       const d = fields[i];
-      arr.push([d.id, 1, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), 0]);
+      arr.push([d.id, 1, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), 0, defenseLevel(d)]);
     }
     for (let i = 0; i < walls.length; i++) {
       const d = walls[i];
-      arr.push([d.id, 2, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100)]);
+      arr.push([d.id, 2, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100), defenseLevel(d)]);
     }
     return arr;
   }
@@ -962,7 +987,9 @@
       d.y = row[3];
       d.hp = hp;
       d.maxHp = maxHp;
+      d.level = row[7] || 1;
       if (kind === 0 || kind === 2) d.ang = (row[6] || 0) / 100;
+      applyDefenseLevel(d);
       seen[id] = 1;
     }
     // 房主已摧毁的防线，在客户端移除并播放摧毁反馈
@@ -1993,15 +2020,19 @@
     coopSendTo(pid, { t: "ev", id: coopEventSeq, k: kind, d: data || null });
   }
 
-  function coopOfferUpgrade(p) {
-    if (!p || p.pendingLevels <= 0 || p.upOffer) return;
-    const cards = buildCards(p).map((c) => ({
+  function coopOfferCards(p) {
+    return buildCards(p).map((c) => ({
       defId: c.def.id, mult: c.mult,
       rarityKey: c.rarity.key, rarityName: c.rarity.name,
       name: c.def.name, icon: c.def.icon, text: c.text,
       curse: !!c.def.curse, evo: !!c.def.evolution,
     }));
-    p.upOffer = { oid: ++coopOfferSeq, cards };
+  }
+
+  function coopOfferUpgrade(p) {
+    if (!p || p.pendingLevels <= 0 || p.upOffer) return;
+    const cards = coopOfferCards(p);
+    p.upOffer = { oid: ++coopOfferSeq, cards, rerolled: false };
     p.upgradeTimer = COOP_UPGRADE_TIME;
     p.invuln = Math.max(p.invuln, 3);      // 选卡期间 3 秒无敌
 
@@ -2015,10 +2046,53 @@
     if (pid) {
       coopSendEventTo(pid, "up-offer", {
         oid: p.upOffer.oid, lv: p.level, t: COOP_UPGRADE_TIME, cards,
+        rerolled: false, left: p.pendingLevels,
       });
     } else {
       coopApplyPick(p, 0);                 // 队友已断开：自动选，避免卡住
     }
+  }
+
+  // 刷新升级卡：房主扣核心、重新生成同一玩家的三选一
+  function coopRerollOffer(p) {
+    if (!p || !p.upOffer || p.upOffer.rerolled) return;
+    const cost = CFG.RUN.UPGRADE_REROLL_COST;
+    if (cores < cost) {
+      if (p.local) addText(p.x, p.y - 46, "核心不足", "#ff9f9f", 12);
+      return;
+    }
+    cores -= cost;
+    p.upOffer = { oid: ++coopOfferSeq, cards: coopOfferCards(p), rerolled: true };
+    p.upgradeTimer = Math.max(p.upgradeTimer, 6);
+    if (p.local) {
+      coopHostOfferP = p;
+      coopShowUpgradeOffer(p, p.upOffer);
+      updateUpgradeMeta();
+      refreshHud(true);
+      return;
+    }
+    if (!coopNet.host) return;
+    const pid = coopFindPeerOf(p.id);
+    if (pid) {
+      coopSendEventTo(pid, "up-offer", {
+        oid: p.upOffer.oid, lv: p.level, t: p.upgradeTimer, cards: p.upOffer.cards,
+        rerolled: true, left: p.pendingLevels,
+      });
+    }
+  }
+
+  function coopRerollUpgrade() {
+    if (coopNet.host) {
+      const lp = getLocalPlayer() || player;
+      if (lp) coopRerollOffer(lp);
+      return;
+    }
+    const offer = coopGuestOffer;
+    if (!offer || offer.rerolled) return;
+    offer.rerolled = true;                 // 防连点，等新报价
+    coopEventSeq += 1;
+    coopSendCtrl({ t: "ev", id: coopEventSeq, k: "up-reroll", d: { oid: offer.oid } });
+    updateUpgradeMeta();
   }
 
   function coopShowUpgradeOffer(p, offer) {
@@ -2409,6 +2483,9 @@
       const idx = Math.round(q.i);
       if (!(idx >= 0 && idx < 3)) { coopInReject(); return; }
       coopApplyPick(p, idx);
+    } else if (d.k === "up-reroll") {
+      if (!p.upOffer || q.oid !== p.upOffer.oid) { coopInReject(); return; }
+      coopRerollOffer(p);
     } else if (d.k === "shop-buy") {
       if (!p.shopOpen || q.sid !== p.shopSid) { coopInReject(); return; }
       if (typeof q.item !== "string" || q.item.length > 24) { coopInReject(); return; }
@@ -2438,6 +2515,15 @@
         return;
       }
       if (pid) coopSendEventTo(pid, "build-ok", { type: q.type, x: bx, y: by });
+    } else if (d.k === "def-act") {
+      // 队友升级/修复请求：房主校验距离与核心后执行，结果随防线快照同步
+      if (p.down || p.eliminated) { coopInReject(); return; }
+      const dd = defenseOfId(q.id);
+      if (!dd) { coopInReject(); return; }
+      const maxD = 100 * view.scale;
+      if (dist2(dd.x, dd.y, p.x, p.y) > maxD * maxD) { coopInReject(); return; }
+      if (q.act === "repair") repairDefense(dd);
+      else upgradeDefense(dd);
     }
   }
 
@@ -2450,7 +2536,10 @@
         rarity: { key: c.rarityKey, name: c.rarityName },
         text: c.text,
       }));
-      coopGuestOffer = { oid: p.oid, lv: p.lv || 1, timer: p.t || COOP_UPGRADE_TIME, cards, locked: false };
+      coopGuestOffer = {
+        oid: p.oid, lv: p.lv || 1, timer: p.t || COOP_UPGRADE_TIME, cards, locked: false,
+        rerolled: !!p.rerolled, left: p.left || 0,
+      };
       upgradeCards = cards;
       renderCards(cards);
       document.getElementById("ui-up-level").textContent =

@@ -484,6 +484,78 @@
   }
   .coop-debug .over { color: #ff6b8b; text-shadow: 0 0 8px rgba(255, 107, 139, 0.45); }
 
+  /* ========== 首次作战提示 ========== */
+  .tutor {
+    position: fixed;
+    left: 50%;
+    bottom: max(96px, calc(env(safe-area-inset-bottom) + 84px));
+    transform: translateX(-50%);
+    z-index: 18;
+    width: min(440px, calc(100vw - 32px));
+    padding: 12px 14px 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(63, 229, 255, 0.28);
+    background: rgba(6, 14, 26, 0.88);
+    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.55), 0 0 24px rgba(63, 229, 255, 0.08);
+    backdrop-filter: blur(6px);
+    animation: tutorIn 0.28s ease both;
+  }
+  .tutor.hidden { display: none; }
+  @keyframes tutorIn {
+    from { opacity: 0; transform: translate(-50%, 10px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+  .tutor-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    margin-bottom: 8px;
+  }
+  .tutor-head span { font-size: 10px; letter-spacing: 1px; color: var(--muted); }
+  .tutor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .tutor-grid div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 5px 4px;
+    border-radius: 8px;
+    background: rgba(63, 229, 255, 0.05);
+    border: 1px solid rgba(63, 229, 255, 0.1);
+  }
+  .tutor-grid b { font-size: 12px; color: var(--cyan); letter-spacing: 1px; }
+  .tutor-grid span { font-size: 10.5px; color: var(--muted); }
+  .tutor-touch {
+    display: none;
+    margin: 7px 0 0;
+    font-size: 10.5px;
+    letter-spacing: 1px;
+    color: var(--muted);
+    text-align: center;
+  }
+  body.touch .tutor-touch { display: block; }
+  .tutor-close {
+    display: block;
+    margin: 9px auto 0;
+    padding: 5px 18px;
+    border-radius: 8px;
+    border: 1px solid rgba(63, 229, 255, 0.32);
+    background: rgba(63, 229, 255, 0.08);
+    color: var(--cyan);
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 2px;
+    cursor: pointer;
+  }
+  .tutor-close:hover { background: rgba(63, 229, 255, 0.16); }
+
 
   /* ========== 升级卡片 ========== */
   .cards {
@@ -525,6 +597,32 @@
     background: linear-gradient(135deg, var(--cyan-soft), var(--cyan));
     box-shadow: 0 0 12px var(--glow);
     pointer-events: none;
+  }
+  .up-extra {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 16px;
+  }
+  .up-reroll {
+    padding: 9px 18px;
+    border-radius: 9px;
+    border: 1px solid rgba(255, 214, 102, 0.45);
+    background: rgba(30, 24, 8, 0.8);
+    color: #ffd666;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .up-reroll:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .up-left {
+    font-size: 12px;
+    color: var(--cyan-soft);
+    letter-spacing: 1px;
   }
   @media (hover: none) { .card-key, .kb-hint { display: none; } }
   .card:active { transform: scale(0.98); }
@@ -648,6 +746,16 @@
     right: auto;
     bottom: max(28px, calc(env(safe-area-inset-bottom) + 22px));
     height: 46px;
+  }
+  .def-btn {
+    right: auto;
+    left: max(12px, env(safe-area-inset-left));
+    border-color: rgba(140, 220, 255, 0.45);
+    background: rgba(8, 24, 32, 0.78);
+    color: #9fe6ff;
+  }
+  body.touch .def-btn {
+    left: max(238px, calc(env(safe-area-inset-left) + 228px));
   }
 
   /* ========== 星港商店 / 建造选择 ========== */
@@ -1101,6 +1209,10 @@
     <h2>等级提升</h2>
     <p class="sub">选择一项强化 · 当前 <span id="ui-up-level">LV 2</span><span class="kb-hint"> · 按 1 / 2 / 3 快速选择</span></p>
     <div class="cards" id="cards"></div>
+    <div class="up-extra">
+      <button class="up-reroll" id="up-reroll">刷新卡牌 · 1 核心</button>
+      <span class="up-left" id="up-left"></span>
+    </div>
   </div>
 </div>
 
@@ -1148,10 +1260,26 @@
   </div>
 </div>
 
+<!-- 首次作战提示：首次进入自动显示，可手动关闭或 9 秒后自动收起 -->
+<div class="tutor hidden" id="tutor">
+  <div class="tutor-head">作战指令<span>首次进入自动显示</span></div>
+  <div class="tutor-grid">
+    <div><b>WASD</b><span>移动</span></div>
+    <div><b>空格</b><span>冲刺</span></div>
+    <div><b>E</b><span>超载</span></div>
+    <div><b>B</b><span>建造</span></div>
+    <div><b>F</b><span>升级 / 修复防线</span></div>
+    <div><b>ESC</b><span>暂停</span></div>
+  </div>
+  <p class="tutor-touch">手机：左侧摇杆移动 · 右侧按钮冲刺 / 超载</p>
+  <button class="tutor-close" data-act="tutor-close">知道了</button>
+</div>
+
 <div class="lowhp" id="lowhp"></div>
 <button class="mute fx-btn" id="fx-btn" aria-label="特效模式">特效</button>
 <button class="mute" id="mute" aria-label="静音切换">🔊</button>
 <button class="build-btn hidden" id="build-btn">建造 <b id="ui-core-btn">0</b></button>
+<button class="build-btn def-btn hidden" id="def-btn">防线 <b>F</b></button>
 
 <!-- 移动端虚拟摇杆与按钮 -->
 <div id="touch">
@@ -1222,6 +1350,12 @@
       DEF_AGGRO: 300,             // 敌人转火防线的距离
       DEF_ATTACK_CD: 0.8,         // 敌人拆塔间隔
       DEF_BUILD_RANGE: 520,       // 部署距离上限
+      DEF_MAX_LEVEL: 3,           // 防线最高等级
+      DEF_UPGRADE_COST: 2,        // 炮塔升级消耗
+      DEF_UPGRADE_COST_SMALL: 1,  // 城墙 / 缓速场升级消耗
+      DEF_REPAIR_COST: 1,         // 手动修复消耗
+      DEF_REPAIR_PCT: 0.35,       // 手动修复恢复的最大耐久比例
+      UPGRADE_REROLL_COST: 1,     // 刷新升级卡消耗核心
       CORE_MAGNET: 170,
       CORE_PICKUP: 30,
     },
@@ -2362,10 +2496,15 @@
     if (state === "upgrade" || coopUpgradeOpen()) {
       const pick = /^(?:Digit|Numpad)([1-3])$/.exec(code);
       if (pick) { chooseUpgrade(Number(pick[1]) - 1); return; }
+      if (code === "KeyR") { rerollUpgrade(); return; }
     }
     if (code === "KeyT") { cycleTheme(); return; }
     if (code === "KeyB") {
       if (state === "playing") openBuildMenu();
+      return;
+    }
+    if (code === "KeyF") {
+      if (state === "playing") interactDefense();
       return;
     }
     if (code === "KeyE") {
@@ -2506,6 +2645,7 @@
     else if (act === "lobby-ready") coopToggleReady();
     else if (act === "lobby-copy") copyRoom();
     else if (act === "lobby-leave") coopLeaveLobby();
+    else if (act === "tutor-close") closeTutorial();
   });
 
   // 成长档案购买
@@ -2534,6 +2674,14 @@
   document.getElementById("build-btn").addEventListener("click", (e) => {
     e.preventDefault();
     if (state === "playing") openBuildMenu();
+  });
+  document.getElementById("def-btn").addEventListener("click", (e) => {
+    e.preventDefault();
+    if (state === "playing") interactDefense();
+  });
+  document.getElementById("up-reroll").addEventListener("click", (e) => {
+    e.preventDefault();
+    rerollUpgrade();
   });
 
   // 建造模式：点击战场放置
@@ -3107,11 +3255,63 @@
     return cards;
   }
 
+  let upgradeRerollUsed = false;
+
+  function rerollUsedNow() {
+    if (roomCode) {
+      if (coopNet.host) return !!(coopHostOfferP && coopHostOfferP.upOffer && coopHostOfferP.upOffer.rerolled);
+      return !!(coopGuestOffer && coopGuestOffer.rerolled);
+    }
+    return upgradeRerollUsed;
+  }
+
+  function upgradeRemaining() {
+    if (roomCode) {
+      if (coopNet.host) return coopHostOfferP ? coopHostOfferP.pendingLevels : 0;
+      return coopGuestOffer ? (coopGuestOffer.left || 0) : 0;
+    }
+    return pendingLevels;
+  }
+
+  function updateUpgradeMeta() {
+    const btn = document.getElementById("up-reroll");
+    const left = document.getElementById("up-left");
+    if (!btn) return;
+    const cost = CFG.RUN.UPGRADE_REROLL_COST;
+    const used = rerollUsedNow();
+    const poor = cores < cost;
+    btn.disabled = used || poor;
+    btn.textContent = used ? "本回合已刷新"
+      : `刷新卡牌 · ${cost} 核心` + (poor ? "（核心不足）" : "");
+    if (left) {
+      const n = upgradeRemaining();
+      left.textContent = n > 0 ? `剩余选卡 ${n} 次` : "";
+    }
+  }
+
+  function rerollUpgrade() {
+    if (roomCode) { coopRerollUpgrade(); return; }
+    if (state !== "upgrade" || upgradeRerollUsed) return;
+    const cost = CFG.RUN.UPGRADE_REROLL_COST;
+    const lp = getLocalPlayer() || player;
+    if (cores < cost) {
+      addText(lp.x, lp.y - 46, "核心不足", "#ff9f9f", 12);
+      return;
+    }
+    cores -= cost;
+    upgradeRerollUsed = true;
+    upgradeCards = buildCards();
+    renderCards();
+    refreshHud(true);
+    sfxLevelUp();
+  }
+
   function openUpgrade() {
     if (roomCode) { coopOfferUpgrade(getLocalPlayer() || player); return; }
     state = "upgrade";
     clearKeys();
     shake = 0;
+    upgradeRerollUsed = false;
     document.getElementById("ui-up-level").textContent = "LV " + level;
     upgradeCards = buildCards();
     renderCards();
@@ -3136,6 +3336,7 @@
       </button>`;
     }
     wrap.innerHTML = html;
+    updateUpgradeMeta();
   }
 
   function chooseUpgrade(idx) {
@@ -3156,6 +3357,7 @@
     refreshHud(true);
 
     if (pendingLevels > 0) {
+      upgradeRerollUsed = false;
       upgradeCards = buildCards();
       document.getElementById("ui-up-level").textContent = "LV " + level;
       renderCards();
@@ -4488,6 +4690,29 @@
   /* =====================================================================
    * 14. 游戏流程（开始 / 暂停 / 结束 / 重开）
    * ===================================================================*/
+  let tutorHideTimer = 0;
+
+  // 首次进入自动展示操作提示，手动关闭或 9 秒后自动收起
+  function maybeShowTutorial() {
+    const el = document.getElementById("tutor");
+    if (!el) return;
+    let seen = false;
+    try { seen = localStorage.getItem("sf_tutor_seen") === "1"; } catch (err) {}
+    if (seen) { el.classList.add("hidden"); return; }
+    el.classList.remove("hidden");
+    clearTimeout(tutorHideTimer);
+    tutorHideTimer = setTimeout(closeTutorial, 9000);
+  }
+
+  function closeTutorial() {
+    const el = document.getElementById("tutor");
+    if (!el || el.classList.contains("hidden")) return;
+    el.classList.add("hidden");
+    clearTimeout(tutorHideTimer);
+    tutorHideTimer = 0;
+    try { localStorage.setItem("sf_tutor_seen", "1"); } catch (err) {}
+  }
+
   function startGame(weaponKey) {
     if (weaponKey && CFG.WEAPONS[weaponKey]) chosenWeapon = weaponKey;
     resetGame();
@@ -4505,6 +4730,7 @@
     if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
     updateBuffPanel();
     refreshHud(true);
+    maybeShowTutorial();
     coopOnGameStarted();
   }
 
@@ -4540,6 +4766,7 @@
     coopStopPosLoop();
     state = "over";
     clearKeys();
+    closeTutorial();
     shake = 0;
     hurtFlash = 0;
     hideBossBar();
@@ -5398,20 +5625,20 @@
     return arr;
   }
 
-  // 防线快照：id, kind(0炮塔/1缓速场/2城墙), x, y, hp, maxHp, 角度
+  // 防线快照：id, kind(0炮塔/1缓速场/2城墙), x, y, hp, maxHp, 角度, 等级
   function coopDefenseList() {
     const arr = [];
     for (let i = 0; i < turrets.length; i++) {
       const d = turrets[i];
-      arr.push([d.id, 0, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100)]);
+      arr.push([d.id, 0, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100), defenseLevel(d)]);
     }
     for (let i = 0; i < fields.length; i++) {
       const d = fields[i];
-      arr.push([d.id, 1, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), 0]);
+      arr.push([d.id, 1, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), 0, defenseLevel(d)]);
     }
     for (let i = 0; i < walls.length; i++) {
       const d = walls[i];
-      arr.push([d.id, 2, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100)]);
+      arr.push([d.id, 2, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100), defenseLevel(d)]);
     }
     return arr;
   }
@@ -5449,7 +5676,9 @@
       d.y = row[3];
       d.hp = hp;
       d.maxHp = maxHp;
+      d.level = row[7] || 1;
       if (kind === 0 || kind === 2) d.ang = (row[6] || 0) / 100;
+      applyDefenseLevel(d);
       seen[id] = 1;
     }
     // 房主已摧毁的防线，在客户端移除并播放摧毁反馈
@@ -6480,15 +6709,19 @@
     coopSendTo(pid, { t: "ev", id: coopEventSeq, k: kind, d: data || null });
   }
 
-  function coopOfferUpgrade(p) {
-    if (!p || p.pendingLevels <= 0 || p.upOffer) return;
-    const cards = buildCards(p).map((c) => ({
+  function coopOfferCards(p) {
+    return buildCards(p).map((c) => ({
       defId: c.def.id, mult: c.mult,
       rarityKey: c.rarity.key, rarityName: c.rarity.name,
       name: c.def.name, icon: c.def.icon, text: c.text,
       curse: !!c.def.curse, evo: !!c.def.evolution,
     }));
-    p.upOffer = { oid: ++coopOfferSeq, cards };
+  }
+
+  function coopOfferUpgrade(p) {
+    if (!p || p.pendingLevels <= 0 || p.upOffer) return;
+    const cards = coopOfferCards(p);
+    p.upOffer = { oid: ++coopOfferSeq, cards, rerolled: false };
     p.upgradeTimer = COOP_UPGRADE_TIME;
     p.invuln = Math.max(p.invuln, 3);      // 选卡期间 3 秒无敌
 
@@ -6502,10 +6735,53 @@
     if (pid) {
       coopSendEventTo(pid, "up-offer", {
         oid: p.upOffer.oid, lv: p.level, t: COOP_UPGRADE_TIME, cards,
+        rerolled: false, left: p.pendingLevels,
       });
     } else {
       coopApplyPick(p, 0);                 // 队友已断开：自动选，避免卡住
     }
+  }
+
+  // 刷新升级卡：房主扣核心、重新生成同一玩家的三选一
+  function coopRerollOffer(p) {
+    if (!p || !p.upOffer || p.upOffer.rerolled) return;
+    const cost = CFG.RUN.UPGRADE_REROLL_COST;
+    if (cores < cost) {
+      if (p.local) addText(p.x, p.y - 46, "核心不足", "#ff9f9f", 12);
+      return;
+    }
+    cores -= cost;
+    p.upOffer = { oid: ++coopOfferSeq, cards: coopOfferCards(p), rerolled: true };
+    p.upgradeTimer = Math.max(p.upgradeTimer, 6);
+    if (p.local) {
+      coopHostOfferP = p;
+      coopShowUpgradeOffer(p, p.upOffer);
+      updateUpgradeMeta();
+      refreshHud(true);
+      return;
+    }
+    if (!coopNet.host) return;
+    const pid = coopFindPeerOf(p.id);
+    if (pid) {
+      coopSendEventTo(pid, "up-offer", {
+        oid: p.upOffer.oid, lv: p.level, t: p.upgradeTimer, cards: p.upOffer.cards,
+        rerolled: true, left: p.pendingLevels,
+      });
+    }
+  }
+
+  function coopRerollUpgrade() {
+    if (coopNet.host) {
+      const lp = getLocalPlayer() || player;
+      if (lp) coopRerollOffer(lp);
+      return;
+    }
+    const offer = coopGuestOffer;
+    if (!offer || offer.rerolled) return;
+    offer.rerolled = true;                 // 防连点，等新报价
+    coopEventSeq += 1;
+    coopSendCtrl({ t: "ev", id: coopEventSeq, k: "up-reroll", d: { oid: offer.oid } });
+    updateUpgradeMeta();
   }
 
   function coopShowUpgradeOffer(p, offer) {
@@ -6896,6 +7172,9 @@
       const idx = Math.round(q.i);
       if (!(idx >= 0 && idx < 3)) { coopInReject(); return; }
       coopApplyPick(p, idx);
+    } else if (d.k === "up-reroll") {
+      if (!p.upOffer || q.oid !== p.upOffer.oid) { coopInReject(); return; }
+      coopRerollOffer(p);
     } else if (d.k === "shop-buy") {
       if (!p.shopOpen || q.sid !== p.shopSid) { coopInReject(); return; }
       if (typeof q.item !== "string" || q.item.length > 24) { coopInReject(); return; }
@@ -6925,6 +7204,15 @@
         return;
       }
       if (pid) coopSendEventTo(pid, "build-ok", { type: q.type, x: bx, y: by });
+    } else if (d.k === "def-act") {
+      // 队友升级/修复请求：房主校验距离与核心后执行，结果随防线快照同步
+      if (p.down || p.eliminated) { coopInReject(); return; }
+      const dd = defenseOfId(q.id);
+      if (!dd) { coopInReject(); return; }
+      const maxD = 100 * view.scale;
+      if (dist2(dd.x, dd.y, p.x, p.y) > maxD * maxD) { coopInReject(); return; }
+      if (q.act === "repair") repairDefense(dd);
+      else upgradeDefense(dd);
     }
   }
 
@@ -6937,7 +7225,10 @@
         rarity: { key: c.rarityKey, name: c.rarityName },
         text: c.text,
       }));
-      coopGuestOffer = { oid: p.oid, lv: p.lv || 1, timer: p.t || COOP_UPGRADE_TIME, cards, locked: false };
+      coopGuestOffer = {
+        oid: p.oid, lv: p.lv || 1, timer: p.t || COOP_UPGRADE_TIME, cards, locked: false,
+        rerolled: !!p.rerolled, left: p.left || 0,
+      };
       upgradeCards = cards;
       renderCards(cards);
       document.getElementById("ui-up-level").textContent =
@@ -7088,6 +7379,12 @@
       (turrets.length < CFG.RUN.MAX_TURRETS || fields.length < CFG.RUN.MAX_FIELDS || walls.length < CFG.RUN.MAX_WALLS);
     buildBtn.classList.toggle("hidden", !canBuild);
     buildBtn.classList.toggle("ready", cores >= CFG.RUN.WALL_COST);
+    const defBtn = document.getElementById("def-btn");
+    if (defBtn) {
+      const canInteract = state === "playing" &&
+        (turrets.length + fields.length + walls.length) > 0;
+      defBtn.classList.toggle("hidden", !canInteract);
+    }
 
     // 连杀
     const comboEl = document.getElementById("ui-combo");
@@ -8107,6 +8404,124 @@
     return Math.round(base * (1 + (chapter - 1) * CFG.RUN.DEF_HP_GROWTH));
   }
 
+  // ===== 防线升级 / 手动修复（F 或右下角按钮）=====
+  function defenseLevel(d) { return Math.max(1, (d && d.level) || 1); }
+
+  function defenseOfId(id) {
+    for (let i = 0; i < turrets.length; i++) if (turrets[i].id === id) return turrets[i];
+    for (let i = 0; i < fields.length; i++) if (fields[i].id === id) return fields[i];
+    for (let i = 0; i < walls.length; i++) if (walls[i].id === id) return walls[i];
+    return null;
+  }
+
+  function nearestAnyDefense(x, y, maxDist) {
+    let best = null;
+    let bestD = maxDist * maxDist;
+    const groups = [turrets, fields, walls];
+    for (let g = 0; g < groups.length; g++) {
+      const arr = groups[g];
+      for (let i = 0; i < arr.length; i++) {
+        const d = arr[i];
+        if (d.dead) continue;
+        const dd = dist2(x, y, d.x, d.y);
+        if (dd < bestD) { bestD = dd; best = d; }
+      }
+    }
+    return best ? { d: best, x: best.x, y: best.y, hitR: best.hitR || 18, dist2: bestD } : null;
+  }
+
+  function defenseUpgradeCost(d) {
+    return d && d.kind === "turret" ? CFG.RUN.DEF_UPGRADE_COST : CFG.RUN.DEF_UPGRADE_COST_SMALL;
+  }
+
+  // 等级带来的几何变化（客户端也按等级还原，保持渲染一致）
+  function applyDefenseLevel(d) {
+    if (!d) return;
+    const lv = defenseLevel(d);
+    if (d.kind === "field") {
+      d.r = CFG.RUN.FIELD_RADIUS * view.scale * Math.pow(1.12, lv - 1);
+    } else if (d.kind === "wall") {
+      d.len = CFG.RUN.WALL_LEN * view.scale * Math.pow(1.06, lv - 1);
+      d.thick = CFG.RUN.WALL_THICK * view.scale * Math.pow(1.1, lv - 1);
+      d.hitR = d.thick * 0.5 + 6;
+    }
+  }
+
+  function repairDefense(d) {
+    if (!d || d.dead) return false;
+    if (d.hp >= d.maxHp - 0.5) {
+      addText(d.x, d.y - 34, "耐久已满", "#9ad8ff", 12);
+      return false;
+    }
+    if (cores < CFG.RUN.DEF_REPAIR_COST) {
+      addText(d.x, d.y - 34, "核心不足（需 " + CFG.RUN.DEF_REPAIR_COST + "）", "#ff9f9f", 12);
+      return false;
+    }
+    cores -= CFG.RUN.DEF_REPAIR_COST;
+    const heal = Math.round(d.maxHp * CFG.RUN.DEF_REPAIR_PCT);
+    d.hp = Math.min(d.maxHp, d.hp + heal);
+    d.repairT = CFG.RUN.DEF_REPAIR_DELAY;
+    d.flash = 0.6;
+    emit(d.x, d.y, 10, "#8bffdc", 170, 2.6, 0.45);
+    addText(d.x, d.y - 34, "防线修复 +" + heal, "#8bffdc", 13);
+    sfxLevelUp();
+    refreshHud(true);
+    return true;
+  }
+
+  function upgradeDefense(d) {
+    if (!d || d.dead) return false;
+    const lv = defenseLevel(d);
+    if (lv >= CFG.RUN.DEF_MAX_LEVEL) {
+      addText(d.x, d.y - 34, "防线已满级", "#9ad8ff", 12);
+      return false;
+    }
+    const cost = defenseUpgradeCost(d);
+    if (cores < cost) {
+      addText(d.x, d.y - 34, "核心不足（需 " + cost + "）", "#ff9f9f", 12);
+      return false;
+    }
+    cores -= cost;
+    d.level = lv + 1;
+    d.maxHp = Math.round(d.maxHp * 1.35);
+    d.hp = d.maxHp;
+    d.repairT = 0;
+    d.flash = 0.8;
+    if (d.kind === "turret") {
+      d.dmg *= 1.3;
+      d.range = (d.range || CFG.RUN.TURRET_RANGE) * 1.08;
+      d.cdBase = Math.max(0.38, (d.cdBase || CFG.RUN.TURRET_CD) * 0.95);
+    }
+    applyDefenseLevel(d);
+    emit(d.x, d.y, 18, "#ffd666", 220, 3, 0.6);
+    addText(d.x, d.y - 34, "防线升级 Lv" + d.level, "#ffd666", 14);
+    shake = Math.max(shake, 2.5 * CFG.FX.SHAKE);
+    sfxLevelUp();
+    refreshHud(true);
+    return true;
+  }
+
+  function interactDefense() {
+    if (state !== "playing") return;
+    const who = getLocalPlayer() || player;
+    if (!who || who.down || who.eliminated) return;
+    const nd = nearestAnyDefense(who.x, who.y, 92 * view.scale);
+    if (!nd) {
+      addText(who.x, who.y - 46, "靠近防线后可升级 / 修复", "#9ad8ff", 12);
+      return;
+    }
+    const d = nd.d;
+    const act = d.hp < d.maxHp - 0.5 ? "repair" : "upgrade";
+    if (roomCode && coopIsGuest()) {
+      coopEventSeq += 1;
+      coopSendCtrl({ t: "ev", id: coopEventSeq, k: "def-act", d: { id: d.id, act } });
+      addText(d.x, d.y - 34, act === "repair" ? "修复请求已发送" : "升级请求已发送", "#9ad8ff", 12);
+      return;
+    }
+    if (act === "repair") repairDefense(d);
+    else upgradeDefense(d);
+  }
+
   // 圆与城墙（有向矩形）的碰撞：返回推出法线与深度
   function wallHit(w, x, y, r) {
     const ca = Math.cos(w.ang), sa = Math.sin(w.ang);
@@ -8265,6 +8680,7 @@
       turrets.push({
         id: nextPropId++, kind: "turret", x, y, cd: 0, ang: -Math.PI / 2,
         seed: Math.random() * TAU, hp, maxHp: hp, hitR: 18, flash: 0,
+        level: 1, cdBase: CFG.RUN.TURRET_CD,
         dmg: Math.max(CFG.RUN.TURRET_DMG, who.stats.damage * 0.5),
         speed: who.stats.bulletSpeed,
         range: CFG.RUN.TURRET_RANGE,
@@ -8275,7 +8691,7 @@
       fields.push({
         id: nextPropId++, kind: "field", x, y,
         r: CFG.RUN.FIELD_RADIUS * view.scale, seed: Math.random() * TAU,
-        hp, maxHp: hp, hitR: 20, flash: 0,
+        hp, maxHp: hp, hitR: 20, flash: 0, level: 1,
       });
       addText(x, y - 26, "缓速场已展开", "#8ff6ff", 14);
     } else {
@@ -8286,7 +8702,7 @@
         len: CFG.RUN.WALL_LEN * view.scale,
         thick: CFG.RUN.WALL_THICK * view.scale,
         seed: Math.random() * TAU, hp, maxHp: hp, flash: 0,
-        hitR: CFG.RUN.WALL_THICK * view.scale * 0.5 + 6,
+        hitR: CFG.RUN.WALL_THICK * view.scale * 0.5 + 6, level: 1,
       });
       addText(x, y - 26, "城墙已架设", "#d8e6ff", 14);
     }
@@ -8329,10 +8745,10 @@
     for (let i = 0; i < fields.length; i++) tickDefRepair(fields[i], dt);
     for (let i = 0; i < walls.length; i++) tickDefRepair(walls[i], dt);
 
-    const range = CFG.RUN.TURRET_RANGE * view.scale;
     for (let i = 0; i < turrets.length; i++) {
       const t = turrets[i];
       if (t.dead) continue;
+      const range = (t.range || CFG.RUN.TURRET_RANGE) * view.scale;
       let best = null;
       let bestD = range * range;
       for (let k = 0; k < enemies.length; k++) {
@@ -8345,7 +8761,7 @@
         t.ang = Math.atan2(best.y - t.y, best.x - t.x);
         t.cd -= dt;
         if (t.cd <= 0) {
-          t.cd = CFG.RUN.TURRET_CD;
+          t.cd = t.cdBase || CFG.RUN.TURRET_CD;
           if (bullets.length < CFG.LIMITS.BULLETS) {
             const sp = (t.speed || stats.bulletSpeed) * view.scale * 0.9;
             bullets.push({
@@ -9105,6 +9521,20 @@
     }
   }
 
+  // 防线等级点：Lv2 起显示在血条下方
+  function drawDefLevel(d, x, y, color) {
+    const lv = defenseLevel(d);
+    if (lv <= 1) return;
+    ctx.save();
+    ctx.fillStyle = color;
+    for (let i = 0; i < lv; i++) {
+      ctx.beginPath();
+      ctx.arc(x + (i - (lv - 1) / 2) * 7, y, 2.2, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // 缓速场
   function drawFields(t) {
     for (let i = 0; i < fields.length; i++) {
@@ -9170,6 +9600,7 @@
         ctx.fillStyle = fhp > 0.5 ? "#8bffdc" : fhp > 0.25 ? "#ffd666" : "#ff6b6b";
         ctx.fillRect(f.x - 17, f.y + 18, 34 * fhp, 4);
       }
+      drawDefLevel(f, f.x, f.y + (fhp < 0.999 ? 27 : 22), "#8ff6ff");
     }
   }
 
@@ -9239,6 +9670,7 @@
         ctx.fillStyle = whp > 0.5 ? "#8bffdc" : whp > 0.25 ? "#ffd666" : "#ff6b6b";
         ctx.fillRect(w.x - bw / 2, w.y - hy - 14, bw * whp, 4);
       }
+      drawDefLevel(w, w.x, w.y + hy + 12, "#bcd8ff");
     }
   }
 
@@ -9333,6 +9765,7 @@
         ctx.fillStyle = thp > 0.5 ? "#8bffdc" : thp > 0.25 ? "#ffd666" : "#ff6b6b";
         ctx.fillRect(tu.x - 17, tu.y + 20, 34 * thp, 4);
       }
+      drawDefLevel(tu, tu.x, tu.y + (thp < 0.999 ? 29 : 24), "#ffd666");
 
       // 待机指示
       ctx.globalAlpha = 0.35;
@@ -9343,6 +9776,34 @@
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
+  }
+
+  // 靠近防线时的操作提示
+  function drawDefensePrompt(me) {
+    if (!me || state !== "playing") return;
+    const nd = nearestAnyDefense(me.x, me.y, 92 * view.scale);
+    if (!nd) return;
+    const d = nd.d;
+    const lv = defenseLevel(d);
+    const damaged = d.hp < d.maxHp - 0.5;
+    if (!damaged && lv >= CFG.RUN.DEF_MAX_LEVEL) return;
+    const cost = damaged ? CFG.RUN.DEF_REPAIR_COST : defenseUpgradeCost(d);
+    const text = damaged ? `F 修复 · ${cost} 核心` : `F 升级 Lv${lv + 1} · ${cost} 核心`;
+    const can = cores >= cost;
+    const y = d.kind === "wall" ? d.y - Math.max(18, d.thick * 0.5 + 14) : d.y - 38;
+    ctx.save();
+    ctx.font = "600 13px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const w = ctx.measureText(text).width + 20;
+    ctx.fillStyle = "rgba(4, 12, 20, 0.82)";
+    ctx.fillRect(d.x - w / 2, y - 12, w, 24);
+    ctx.strokeStyle = can ? "rgba(255, 214, 102, 0.6)" : "rgba(255, 120, 120, 0.55)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(d.x - w / 2, y - 12, w, 24);
+    ctx.fillStyle = can ? "#ffe6a0" : "#ff9f9f";
+    ctx.fillText(text, d.x, y + 1);
+    ctx.restore();
   }
 
   // 风险星域：红色虚线警示圈
@@ -9580,6 +10041,7 @@
         if (players[i] !== me) drawDownState(players[i]);
       }
       drawTurrets(t);
+      drawDefensePrompt(me);
       drawPulses();
       drawEnemyBullets();
       drawParticles();

@@ -28,6 +28,15 @@ const hook = `
     get pendingLevels() { return pendingLevels; },
     chooseUpgrade,
     startGame,
+    get cores() { return cores; }, set cores(v) { cores = v; },
+    get turrets() { return turrets; },
+    get fields() { return fields; },
+    get walls() { return walls; },
+    placeDefense, defenseOfId, defenseLevel, nearestAnyDefense,
+    defenseMaxHp, upgradeDefense, repairDefense, interactDefense, applyDefenseLevel,
+    get upgradeRerollUsed() { return upgradeRerollUsed; },
+    rerollUpgrade, updateUpgradeMeta, openUpgrade, syncProgressGlobals,
+    maybeShowTutorial, closeTutorial,
   };
 `;
 html = html.slice(0, idx) + hook + html.slice(idx);

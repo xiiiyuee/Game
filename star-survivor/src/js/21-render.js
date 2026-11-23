@@ -558,6 +558,20 @@
     }
   }
 
+  // 防线等级点：Lv2 起显示在血条下方
+  function drawDefLevel(d, x, y, color) {
+    const lv = defenseLevel(d);
+    if (lv <= 1) return;
+    ctx.save();
+    ctx.fillStyle = color;
+    for (let i = 0; i < lv; i++) {
+      ctx.beginPath();
+      ctx.arc(x + (i - (lv - 1) / 2) * 7, y, 2.2, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // 缓速场
   function drawFields(t) {
     for (let i = 0; i < fields.length; i++) {
@@ -623,6 +637,7 @@
         ctx.fillStyle = fhp > 0.5 ? "#8bffdc" : fhp > 0.25 ? "#ffd666" : "#ff6b6b";
         ctx.fillRect(f.x - 17, f.y + 18, 34 * fhp, 4);
       }
+      drawDefLevel(f, f.x, f.y + (fhp < 0.999 ? 27 : 22), "#8ff6ff");
     }
   }
 
@@ -692,6 +707,7 @@
         ctx.fillStyle = whp > 0.5 ? "#8bffdc" : whp > 0.25 ? "#ffd666" : "#ff6b6b";
         ctx.fillRect(w.x - bw / 2, w.y - hy - 14, bw * whp, 4);
       }
+      drawDefLevel(w, w.x, w.y + hy + 12, "#bcd8ff");
     }
   }
 
@@ -786,6 +802,7 @@
         ctx.fillStyle = thp > 0.5 ? "#8bffdc" : thp > 0.25 ? "#ffd666" : "#ff6b6b";
         ctx.fillRect(tu.x - 17, tu.y + 20, 34 * thp, 4);
       }
+      drawDefLevel(tu, tu.x, tu.y + (thp < 0.999 ? 29 : 24), "#ffd666");
 
       // 待机指示
       ctx.globalAlpha = 0.35;
@@ -796,6 +813,34 @@
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
+  }
+
+  // 靠近防线时的操作提示
+  function drawDefensePrompt(me) {
+    if (!me || state !== "playing") return;
+    const nd = nearestAnyDefense(me.x, me.y, 92 * view.scale);
+    if (!nd) return;
+    const d = nd.d;
+    const lv = defenseLevel(d);
+    const damaged = d.hp < d.maxHp - 0.5;
+    if (!damaged && lv >= CFG.RUN.DEF_MAX_LEVEL) return;
+    const cost = damaged ? CFG.RUN.DEF_REPAIR_COST : defenseUpgradeCost(d);
+    const text = damaged ? `F 修复 · ${cost} 核心` : `F 升级 Lv${lv + 1} · ${cost} 核心`;
+    const can = cores >= cost;
+    const y = d.kind === "wall" ? d.y - Math.max(18, d.thick * 0.5 + 14) : d.y - 38;
+    ctx.save();
+    ctx.font = "600 13px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const w = ctx.measureText(text).width + 20;
+    ctx.fillStyle = "rgba(4, 12, 20, 0.82)";
+    ctx.fillRect(d.x - w / 2, y - 12, w, 24);
+    ctx.strokeStyle = can ? "rgba(255, 214, 102, 0.6)" : "rgba(255, 120, 120, 0.55)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(d.x - w / 2, y - 12, w, 24);
+    ctx.fillStyle = can ? "#ffe6a0" : "#ff9f9f";
+    ctx.fillText(text, d.x, y + 1);
+    ctx.restore();
   }
 
   // 风险星域：红色虚线警示圈
@@ -1033,6 +1078,7 @@
         if (players[i] !== me) drawDownState(players[i]);
       }
       drawTurrets(t);
+      drawDefensePrompt(me);
       drawPulses();
       drawEnemyBullets();
       drawParticles();
