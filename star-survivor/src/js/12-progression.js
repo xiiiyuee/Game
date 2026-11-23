@@ -171,6 +171,57 @@
     },
   ];
 
+  // 技能改装：每个主动技能两个互斥分支，已改装后不再出现
+  const SKILL_MODS = [
+    {
+      id: "mod_phase_ice", name: "冰痕", icon: "❄", max: 1, mod: true, modSkill: "phase", base: 0,
+      apply(s, m, p) { if (p) p.skillMod = "phase_ice"; },
+      desc() {
+        return "残影不再射击，沿冲刺路径留下 <b>2 秒</b>冰区<br>区域内敌人移速 <b>-45%</b>";
+      },
+    },
+    {
+      id: "mod_phase_blast", name: "爆痕", icon: "✸", max: 1, mod: true, modSkill: "phase", base: 0,
+      apply(s, m, p) { if (p) p.skillMod = "phase_blast"; },
+      desc() {
+        return "残影延迟 <b>0.5 秒</b>后原地爆炸<br>范围伤害高于原残影补射";
+      },
+    },
+    {
+      id: "mod_well_singularity", name: "奇点", icon: "◍", max: 1, mod: true, modSkill: "well", base: 0,
+      apply(s, m, p) { if (p) p.skillMod = "well_singularity"; },
+      desc() {
+        return "引力场半径 <b>-20%</b>，吸附更强<br>结束内爆伤害 <b>+100%</b>";
+      },
+    },
+    {
+      id: "mod_well_pulse", name: "脉冲井", icon: "◉", max: 1, mod: true, modSkill: "well", base: 0,
+      apply(s, m, p) { if (p) p.skillMod = "well_pulse"; },
+      desc() {
+        return "取消结束内爆，改为每 <b>0.6 秒</b>脉冲伤害<br>引力场持续 <b>+40%</b>";
+      },
+    },
+    {
+      id: "mod_graze_reflect", name: "反射装甲", icon: "↺", max: 1, mod: true, modSkill: "graze", base: 0,
+      apply(s, m, p) { if (p) p.skillMod = "graze_reflect"; },
+      desc() {
+        return "每吸收 <b>3</b> 发敌弹，向最近敌人返还一发强化弹<br>继承当前武器弹道";
+      },
+    },
+    {
+      id: "mod_graze_overcharge", name: "护盾过载", icon: "⬢", max: 1, mod: true, modSkill: "graze", base: 0,
+      apply(s, m, p) {
+        if (!p) return;
+        p.skillMod = "graze_overcharge";
+        s.shieldMax += CFG.SKILL.GRAZE.OVER_SHIELD_MAX;
+        p.shield = Math.min(s.shieldMax, p.shield + CFG.SKILL.GRAZE.OVER_SHIELD_MAX);
+      },
+      desc() {
+        return "护盾上限 <b>+25</b>，每次擦弹 <b>+2</b> 护盾<br>但强化射击层数增伤 <b>减半</b>";
+      },
+    },
+  ];
+
   // 进化强化：满足组合条件后才会出现在升级选项中（一次性）
   const EVOLUTIONS = [
     {
@@ -251,7 +302,7 @@
     },
   ];
 
-  const ALL_DEFS = UPGRADES.concat(EVOLUTIONS);
+  const ALL_DEFS = UPGRADES.concat(SKILL_MODS, EVOLUTIONS);
 
   function gainXp(v) {
     gainXpFor(getLocalPlayer() || player, v);
@@ -309,8 +360,8 @@
   }
 
   function makeCard(def, rarity, lp) {
-    // 进化与诅咒不随稀有度放大，数值固定
-    const mult = def.curse || def.evolution ? def.base : def.base * rarity.mult;
+    // 进化 / 诅咒 / 改装不随稀有度放大，数值固定
+    const mult = def.curse || def.evolution || def.mod ? def.base : def.base * rarity.mult;
     const owner = lp || getLocalPlayer() || player;
     return {
       def,
@@ -335,6 +386,17 @@
       const def = pick(evoPool);
       chosen.add(def.id);
       cards.push(makeCard(def, RARITIES[3], lp));
+    }
+
+    // 1.5) 技能改装：已选技能尚未改装时，从该技能的互斥分支中出 1 张
+    if (cards.length < 3 && lp.skill && !lp.skillMod && Math.random() < 0.6) {
+      const pool = SKILL_MODS.filter((d) =>
+        d.modSkill === lp.skill && !chosen.has(d.id) && (stacks[d.id] || 0) < d.max);
+      if (pool.length) {
+        const def = pick(pool);
+        chosen.add(def.id);
+        cards.push(makeCard(def, RARITIES[2], lp));
+      }
     }
 
     // 2) 诅咒：约 20% 概率占一个位置（每轮最多一张）
@@ -458,8 +520,8 @@
     let html = "";
     for (let i = 0; i < list.length; i++) {
       const c = list[i];
-      const special = c.def.curse ? " curse" : c.def.evolution ? " evo" : "";
-      const label = c.def.curse ? "诅咒" : c.def.evolution ? "进化" : c.rarity.name;
+      const special = c.def.curse ? " curse" : (c.def.evolution || c.def.mod) ? " evo" : "";
+      const label = c.def.curse ? "诅咒" : c.def.evolution ? "进化" : c.def.mod ? "改装" : c.rarity.name;
       html += `<button class="card rarity-${c.rarity.key}${special}" data-i="${i}">
         <span class="card-key">${i + 1}</span>
         <div class="card-top"><span class="card-ic">${c.def.icon}</span><span class="card-rt">${label}</span></div>

@@ -933,6 +933,7 @@
         p.down ? 1 : 0, Math.round(p.downTimer || 0), p.eliminated ? 1 : 0,
         p.level || 1, p.kills || 0,
         p.skill || "", Math.round(p.skillEnergy || 0),
+        p.skillMod || "",
       ]);
     }
     return arr;
@@ -1037,6 +1038,7 @@
       cr: Math.round(credits), co: cores, rv: revives,
       df: coopDefenseList(),
       sg: coopWellList(),
+      sf: coopFrostList(),
       dd: Math.round(defDamageTaken),
       dl: defLost,
     });
@@ -1077,6 +1079,7 @@
         if (e[13]) p.skill = e[13];
         p.skillEnergy = e[14] || 0;
       }
+      if (e.length >= 16) p.skillMod = e[15] || "";
       coopInterpPush(id, p.x, p.y, p.facing);
     }
     // 团队共享资源（D-03）：星币 / 核心 / 保险由房主同步
@@ -1085,6 +1088,7 @@
     if (typeof d.rv === "number" && d.rv !== revives) revives = d.rv;
     if (d.df) coopApplyDefenses(d.df);       // 炮塔/缓速场及耐久由房主同步
     if (d.sg) coopApplyWells(d.sg);          // 重力井表现由房主同步
+    if (d.sf) coopApplyFrost(d.sf);          // 冰痕减速区表现由房主同步
     if (typeof d.dd === "number") defDamageTaken = d.dd;
     if (typeof d.dl === "number") defLost = d.dl;
     refreshHud();
@@ -1120,6 +1124,7 @@
       if (e[13]) player.skill = e[13];
       player.skillEnergy = e[14] || 0;
     }
+    if (e.length >= 16) player.skillMod = e[15] || "";
     if (player.hp < hpBefore - 0.5) {
       if (coopGuestShop) coopCloseShopUI();     // 受击关闭个人商店
       if (coopGuestTrade) coopCloseTradeUI();
@@ -2037,7 +2042,7 @@
       defId: c.def.id, mult: c.mult,
       rarityKey: c.rarity.key, rarityName: c.rarity.name,
       name: c.def.name, icon: c.def.icon, text: c.text,
-      curse: !!c.def.curse, evo: !!c.def.evolution,
+      curse: !!c.def.curse, evo: !!c.def.evolution, mod: !!c.def.mod,
     }));
   }
 
@@ -2109,7 +2114,7 @@
 
   function coopShowUpgradeOffer(p, offer) {
     const cards = offer.cards.map((c) => ({
-      def: { id: c.defId, name: c.name, icon: c.icon, curse: c.curse, evolution: c.evo },
+      def: { id: c.defId, name: c.name, icon: c.icon, curse: c.curse, evolution: c.evo, mod: c.mod },
       rarity: { key: c.rarityKey, name: c.rarityName },
       text: c.text,
     }));
@@ -2242,6 +2247,7 @@
     const s = p.stats;
     return {
       id: p.id, lv: p.level, xp: Math.round(p.xp), xpn: p.xpNeed, pl: p.pendingLevels,
+      mod: p.skillMod || "",
       st: {
         damage: s.damage, fireInterval: s.fireInterval, crit: s.crit, pierce: s.pierce,
         moveSpeed: s.moveSpeed, shieldMax: s.shieldMax, shieldRegen: s.shieldRegen,
@@ -2270,6 +2276,7 @@
     if (typeof d.xp === "number") p.xp = d.xp;
     if (typeof d.xpn === "number") p.xpNeed = d.xpn;
     if (typeof d.pl === "number") p.pendingLevels = d.pl;
+    if (typeof d.mod === "string") p.skillMod = d.mod;
     if (d.st) Object.assign(p.stats, d.st);
     if (Array.isArray(d.chips)) p.chips = d.chips;
     if (d.stacks) p.stacks = d.stacks;
@@ -2550,7 +2557,7 @@
     const p = d.d || {};
     if (d.k === "up-offer") {
       const cards = (p.cards || []).map((c) => ({
-        def: { id: c.defId, name: c.name, icon: c.icon, curse: c.curse, evolution: c.evo },
+        def: { id: c.defId, name: c.name, icon: c.icon, curse: c.curse, evolution: c.evo, mod: c.mod },
         rarity: { key: c.rarityKey, name: c.rarityName },
         text: c.text,
       }));

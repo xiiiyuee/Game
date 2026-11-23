@@ -167,22 +167,36 @@
     return best;
   }
 
+  // 多弹道继承折扣：残影 / 反射弹继承散射等多弹武器时压低单发，避免总伤害失控
+  function bulletInheritScale(n) {
+    return n > 1 ? 1 / Math.sqrt(n) : 1;
+  }
+
+  // 通用武器弹道：普通射击 / 相位残影 / 擦弹反射共用，继承当前武器弹道
+  function fireWeaponPattern(p, baseAng, damageMul, opts) {
+    p = p || player;
+    const s = p.stats;
+    const o = opts || {};
+    const n = s.bulletCount;
+    const spread = Math.min(1.0, 0.11 * (n - 1) + (s.spread || 0));
+    const dmg = s.damage * (damageMul === undefined ? 1 : damageMul);
+    for (let i = 0; i < n; i++) {
+      if (bullets.length >= CFG.LIMITS.BULLETS) break;
+      const t = n === 1 ? 0.5 : i / (n - 1);
+      const ang = baseAng + (t - 0.5) * spread;
+      spawnPlayerBullet(ang, dmg, o.speedMul, p, o);
+    }
+  }
+
   function fireAt(target, p) {
     p = p || player;
     const s = p.stats;
     const baseAng = Math.atan2(target.y - p.y, target.x - p.x);
     p.facing = baseAng;
-    const n = s.bulletCount;
-    const spread = Math.min(1.0, 0.11 * (n - 1) + (s.spread || 0));
-    // 擦弹回流：层数转化为强化射击
-    const grazeMul = 1 + (p.grazeStacks || 0) * CFG.SKILL.GRAZE.DMG_PER;
-
-    for (let i = 0; i < n; i++) {
-      if (bullets.length >= CFG.LIMITS.BULLETS) break;
-      const t = n === 1 ? 0.5 : i / (n - 1);
-      const ang = baseAng + (t - 0.5) * spread;
-      spawnPlayerBullet(ang, s.damage * grazeMul, undefined, p);
-    }
+    // 擦弹回流：层数转化为强化射击（护盾过载改装使层数增伤减半）
+    const stackMul = p.skillMod === "graze_overcharge" ? CFG.SKILL.GRAZE.OVER_STACK_MUL : 1;
+    const grazeMul = 1 + (p.grazeStacks || 0) * CFG.SKILL.GRAZE.DMG_PER * stackMul;
+    fireWeaponPattern(p, baseAng, grazeMul);
 
     // 进化「双子脉冲」：每次射击追加两道侧向脉冲
     if (s.twinPulse) {
@@ -195,27 +209,32 @@
     sfxShoot();
   }
 
-  // 玩家子弹工厂（供普通射击 / 回响 / 终极使用）
-  function spawnPlayerBullet(ang, dmgOverride, speedMul, p) {
+  // 玩家子弹工厂（供普通射击 / 回响 / 残影 / 反射 / 终极使用）
+  function spawnPlayerBullet(ang, dmgOverride, speedMul, p, opts) {
     p = p || player;
     const s = p.stats;
+    const o = opts || {};
     if (bullets.length >= CFG.LIMITS.BULLETS) return;
     const sp = s.bulletSpeed * view.scale * (speedMul || 1);
+    const ox = o.origin ? o.origin.x : p.x;
+    const oy = o.origin ? o.origin.y : p.y;
     bullets.push({
       bid: nextBulletId++,
       owner: p.id,
-      x: p.x + Math.cos(ang) * (p.r + 4),
-      y: p.y + Math.sin(ang) * (p.r + 4),
+      x: ox + Math.cos(ang) * (p.r + 4),
+      y: oy + Math.sin(ang) * (p.r + 4),
       vx: Math.cos(ang) * sp,
       vy: Math.sin(ang) * sp,
-      r: s.bulletR || 4,
+      r: o.r || s.bulletR || 4,
       dmg: dmgOverride === undefined ? s.damage : dmgOverride,
-      pierce: s.pierce,
-      life: 1.5,
+      pierce: o.pierce !== undefined ? o.pierce : s.pierce,
+      life: o.life || 1.5,
       dead: false,
       hit: new Set(),
       ang,
-      color: s.bulletColor || THEME.cyan,
+      color: o.color || s.bulletColor || THEME.cyan,
+      shadow: !!o.shadow,
+      reflect: !!o.reflect,
     });
   }
 

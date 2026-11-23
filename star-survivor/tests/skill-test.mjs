@@ -84,7 +84,7 @@ const well = await page.evaluate(() => {
     list, after: S.gravityWells.length,
   };
 });
-ok("重力井可施放并记录快照", well.castOk && well.list.length === 1 && well.list[0].length === 4, well.list);
+ok("重力井可施放并记录快照", well.castOk && well.list.length === 1 && well.list[0].length >= 4, well.list);
 ok("重力井到期后移除", well.after === 0, well.after);
 
 // 5) 擦弹回流：吸收子弹 -> 护盾 + 层数 + 能量

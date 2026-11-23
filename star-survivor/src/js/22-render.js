@@ -1066,6 +1066,7 @@
       drawChipDrops(t);
       drawCores(t);
       drawTrader(t);
+      drawFrostZones(t);
       drawGravityWells(t);
       drawBullets();
       drawEnemies(t);

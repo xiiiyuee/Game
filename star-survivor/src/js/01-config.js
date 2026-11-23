@@ -185,11 +185,29 @@
       HIT_GAIN: 2,           // 命中敌人返能量
       CAST_LOCK: 0.4,        // 施放后的短锁，避免连按
       // 相位冲刺：穿越弹幕与敌人，沿路留下残影补射
-      PHASE: { TIME: 0.32, SPEED: 1080, SHADOWS: 3, SHADOW_DELAY: 0.16, SHADOW_DMG: 0.45, SHADOW_LIFE: 0.7 },
+      PHASE: {
+        TIME: 0.32, SPEED: 1080, SHADOWS: 3, SHADOW_DELAY: 0.16, SHADOW_DMG: 0.45, SHADOW_LIFE: 0.7,
+        // 改装「冰痕」：残影不射击，沿路径留下冰区
+        ICE_RADIUS: 62, ICE_TIME: 2.0, ICE_SLOW: 0.55,
+        // 改装「爆痕」：残影延迟爆炸
+        BLAST_DELAY: 0.5, BLAST_DMG: 1.1, BLAST_RADIUS: 70,
+      },
       // 重力井：吸附敌人与弹幕，结束时内爆
-      WELL: { DIST: 190, RADIUS: 120, TIME: 2.4, PULL_ENEMY: 90, PULL_BULLET: 140, DMG: 26 },
+      WELL: {
+        DIST: 190, RADIUS: 120, TIME: 2.4, PULL_ENEMY: 90, PULL_BULLET: 140, DMG: 26,
+        // 改装「奇点」：半径缩小、吸附更强、内爆翻倍
+        SINGULARITY_R: 0.8, SINGULARITY_PULL: 1.6, SINGULARITY_DMG: 2,
+        // 改装「脉冲井」：取消内爆，周期性脉冲伤害
+        PULSE_TIME: 1.4, PULSE_CD: 0.6, PULSE_DMG: 11,
+      },
       // 擦弹回流：近距离掠过敌弹时吸收，转为护盾与强化射击
-      GRAZE: { TIME: 4.5, RADIUS: 38, MAX_STACKS: 10, DMG_PER: 0.06, SHIELD: 1, ENERGY: 1.5 },
+      GRAZE: {
+        TIME: 4.5, RADIUS: 38, MAX_STACKS: 10, DMG_PER: 0.06, SHIELD: 1, ENERGY: 1.5,
+        // 改装「反射装甲」：每吸收 N 发返还一发强化弹
+        REFLECT_EVERY: 3, REFLECT_DMG: 0.6,
+        // 改装「护盾过载」：护盾上限与单发护盾提升，但增伤层数减半
+        OVER_SHIELD_MAX: 25, OVER_SHIELD: 2, OVER_STACK_MUL: 0.5,
+      },
     },
     ULT: {
       MAX: 100,              // 能量上限

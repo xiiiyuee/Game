@@ -499,8 +499,10 @@
       }
 
       const sp = e.speed * view.scale * stats.enemySpeedMul * (e.dashTime > 0 ? 3.1 : 1) *
-        (e.slowT > 0 ? CFG.RUN.FIELD_SLOW : 1);
+        (e.slowT > 0 ? CFG.RUN.FIELD_SLOW : 1) *
+        (e.frostT > 0 ? CFG.SKILL.PHASE.ICE_SLOW : 1);
       e.slowT = Math.max(0, (e.slowT || 0) - sdt);
+      e.frostT = Math.max(0, (e.frostT || 0) - sdt);
       e.x += Math.cos(ang) * sp * sdt;
       e.y += Math.sin(ang) * sp * sdt;
       e.angle = ang;

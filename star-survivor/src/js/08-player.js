@@ -66,6 +66,7 @@
       hitFlash: 0,
       energy: 0,                 // 超载能量
       skill: chosenSkill || "phase", // 本局主动技能
+      skillMod: "",              // 技能改装（互斥，见 SKILL_MODS）
       skillEnergy: 0,            // 技能能量 0..MAX
       skillLock: 0,              // 施放后短锁
       grazeActive: 0,            // 擦弹回流剩余时间
@@ -185,6 +186,7 @@
     buildGhosts = [];
     gravityWells = [];
     skillShadows = [];
+    frostZones = [];
     defDamageTaken = 0;
     defLost = 0;
     coreDrops = [];

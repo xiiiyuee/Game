@@ -42,15 +42,17 @@ const hook = `
     get chosenSkill() { return chosenSkill; }, set chosenSkill(v) { chosenSkill = v; },
     get gravityWells() { return gravityWells; },
     get skillShadows() { return skillShadows; },
+    get frostZones() { return frostZones; },
     get bullets() { return bullets; },
     get ebullets() { return ebullets; },
     get intent() { return intent; },
-    SKILL_DEFS, UPGRADES, skillDef, castSkill, tryCastSkill, gainSkillEnergy, updateSkillEffects,
-    updateBullets, getLocalPlayer,
+    SKILL_DEFS, UPGRADES, SKILL_MODS, ALL_DEFS, skillDef, skillModDef, skillDisplayName,
+    castSkill, tryCastSkill, gainSkillEnergy, updateSkillEffects, spawnSkillShadow,
+    updateBullets, getLocalPlayer, buildCards,
     get chosenWeapon() { return chosenWeapon; },
-    coopWellList, coopApplyWells, coopIsGuest,
+    coopWellList, coopApplyWells, coopFrostList, coopApplyFrost, coopIsGuest,
     get roomCode() { return roomCode; },
-    spawnPlayerBullet,
+    spawnPlayerBullet, fireWeaponPattern, makeStats,
   };
 `;
 html = html.slice(0, idx) + hook + html.slice(idx);
