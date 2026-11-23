@@ -114,6 +114,46 @@
     emit(b.x, b.y, 4, THEME.violet, 140, 2, 0.25);
   }
 
+  // 觉醒「裂变反射」：反射弹命中后分裂为两枚
+  function spawnSplitBullets(b, hitE) {
+    const count = CFG.SKILL.AWAKEN.SPLIT_COUNT;
+    b.split = 0;
+    const targets = [];
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (e.dead || e === hitE) continue;
+      const d = dist2(b.x, b.y, e.x, e.y);
+      if (d <= 300 * 300) targets.push({ e, d });
+    }
+    targets.sort((a, z) => a.d - z.d);
+    const base = Math.atan2(hitE.y - b.y, hitE.x - b.x);
+    for (let k = 0; k < count; k++) {
+      if (bullets.length >= CFG.LIMITS.BULLETS) break;
+      const tgt = targets[k] && targets[k].e;
+      const ang = tgt ? Math.atan2(tgt.y - b.y, tgt.x - b.x)
+        : base + (k % 2 === 0 ? 0.42 : -0.42);
+      const sp = Math.hypot(b.vx, b.vy) * 0.9;
+      bullets.push({
+        bid: nextBulletId++,
+        owner: b.owner,
+        x: b.x, y: b.y,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp,
+        r: Math.max(2.2, b.r * 0.75),
+        dmg: b.dmg * CFG.SKILL.AWAKEN.SPLIT_DMG,
+        pierce: 0,
+        life: 0.9,
+        dead: false,
+        hit: new Set(),
+        ang,
+        color: THEME.mint,
+        reflect: false,
+        split: 0,
+      });
+    }
+    emit(b.x, b.y, 9, THEME.mint, 220, 2.8, 0.45);
+  }
+
   function updateBullets(dt) {
     const slow = ultTimer > 0 ? CFG.ULT.SLOW : 1;
     for (let i = bullets.length - 1; i >= 0; i--) {
@@ -151,6 +191,7 @@
               if (stats.pulseBlast) explodeAt(b.x, b.y, b.dmg * 0.45, e, 56, THEME.cyanSoft, b.owner);
               if (stats.scatterBlast) explodeAt(b.x, b.y, b.dmg * 0.35, e, 38, THEME.gold, b.owner);
               if (stats.railShard && !b.shard) spawnRailShard(b, e);
+              if (b.split > 0) spawnSplitBullets(b, e);
             }
 
             if (b.pierce > 0) {

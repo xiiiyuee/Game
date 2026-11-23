@@ -49,6 +49,7 @@
 
     if (p.phaseTime > 0) {
       // 相位冲刺：高速位移、沿途留影，冲刺帧内几乎无敌
+      const phaseBefore = p.phaseTime;
       p.phaseTime = Math.max(0, p.phaseTime - dt);
       const sp = CFG.SKILL.PHASE.SPEED * view.scale;
       p.x += p.phaseDir.x * sp * dt;
@@ -59,6 +60,11 @@
         p.phaseSpawn = CFG.SKILL.PHASE.TIME / CFG.SKILL.PHASE.SHADOWS;
         p.phaseLeft -= 1;
         spawnSkillShadow(p);
+      }
+      // 觉醒「残像终焉」：冲刺终点爆发
+      if (phaseBefore > 0 && p.phaseTime === 0 &&
+        p.skillAwaken === "awaken_phase" && !coopIsGuest()) {
+        phaseAwakenBurst(p);
       }
     } else if (p.dashTime > 0) {
       p.dashTime -= dt;
@@ -93,7 +99,8 @@
     p.fireCd -= dt;
     if (p.fireCd <= 0 && target) {
       fireAt(target, p);
-      p.fireCd = s.fireInterval;
+      // 防线联动：炮塔光环内射击间隔缩短
+      p.fireCd = s.fireInterval * defenseFireMul(p);
     }
   }
 
@@ -226,7 +233,8 @@
       vx: Math.cos(ang) * sp,
       vy: Math.sin(ang) * sp,
       r: o.r || s.bulletR || 4,
-      dmg: dmgOverride === undefined ? s.damage : dmgOverride,
+      dmg: (dmgOverride === undefined ? s.damage : dmgOverride) *
+        (chapterMod && chapterMod.playerDmgMul ? chapterMod.playerDmgMul : 1),
       pierce: o.pierce !== undefined ? o.pierce : s.pierce,
       life: o.life || 1.5,
       dead: false,
@@ -235,6 +243,7 @@
       color: o.color || s.bulletColor || THEME.cyan,
       shadow: !!o.shadow,
       reflect: !!o.reflect,
+      split: o.split || 0,
     });
   }
 
@@ -245,7 +254,8 @@
     if (p.down || p.eliminated) return;
     if (p.invuln > 0) return;
 
-    const dmg = baseDmg * (1 - s.armor) * s.takenMul;
+    const dmg = baseDmg * (1 - s.armor) * s.takenMul *
+      (chapterMod && chapterMod.dmgTakenMul ? chapterMod.dmgTakenMul : 1);
     let remain = dmg;
     if (p.shield > 0) {
       const absorbed = Math.min(p.shield, remain);

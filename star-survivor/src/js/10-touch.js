@@ -90,6 +90,12 @@
     chooseUpgrade(idx);
   });
 
+  // 星域事件抉择
+  document.getElementById("event-items").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-event]");
+    if (btn && !btn.disabled) chooseSectorEvent(btn.dataset.event);
+  });
+
   // 菜单 / 暂停 / 结算 / 商店 / 建造按钮
   document.addEventListener("click", (e) => {
     const kick = e.target.closest("[data-kick]");

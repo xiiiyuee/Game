@@ -4,6 +4,7 @@
   // 只推进世界状态，不直接刷新 HUD / 播放音乐；返回本帧有效 dt，提前中止返回 false
   function simulate(dt) {
     const rawDt = dt;
+    updateSectorTimer(rawDt);
 
     // 统一输入意图：每帧汇总移动 / 开火，并消费一次性动作（冲刺 / 超载）
     pollInputIntent();

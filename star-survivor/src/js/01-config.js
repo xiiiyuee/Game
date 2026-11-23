@@ -48,6 +48,17 @@
       DEF_UPGRADE_COST_SMALL: 1,  // 城墙 / 缓速场升级消耗
       DEF_REPAIR_COST: 1,         // 手动修复消耗
       DEF_REPAIR_PCT: 0.35,       // 手动修复恢复的最大耐久比例
+      // 防线联动：站位 / 擦弹 / 技能施放与炮塔、城墙形成配合
+      TURRET_AURA: 150,           // 炮塔增益光环半径
+      TURRET_AURA_FIRE: 0.88,     // 光环内玩家射击间隔倍率
+      TURRET_OC_RADIUS: 230,      // 技能施放可为炮塔叠加过载的距离
+      TURRET_OC_MAX: 3,           // 过载层数上限
+      TURRET_OC_TIME: 6,          // 单层过载持续
+      TURRET_OC_DMG: 0.12,        // 每层过载炮塔伤害加成
+      WALL_CHARGE_RADIUS: 200,    // 擦弹为城墙充能的距离
+      WALL_CHARGE_MAX: 8,         // 充满所需次数
+      WALL_CHARGE_DMG: 1.6,       // 冲击波伤害（玩家伤害倍率）
+      WALL_CHARGE_R: 115,         // 冲击波半径
       UPGRADE_REROLL_COST: 1,     // 刷新升级卡消耗核心
       CORE_MAGNET: 170,
       CORE_PICKUP: 30,
@@ -233,6 +244,18 @@
         REFLECT_EVERY: 3, REFLECT_DMG: 0.6,
         // 改装「护盾过载」：护盾上限与单发护盾提升，但增伤层数减半
         OVER_SHIELD_MAX: 25, OVER_SHIELD: 2, OVER_STACK_MUL: 0.5,
+      },
+      // 技能终极觉醒：改装后解锁，每技能唯一
+      AWAKEN: {
+        // 相位：冲刺终点爆发，冰痕同步留下冰区
+        PHASE_DMG: 2.2, PHASE_RADIUS: 86, PHASE_FROST: true,
+        // 重力井：结束后留下 2 秒事件视界，持续吸附与脉冲
+        HOLE_TIME: 2.0, HOLE_R: 0.85, HOLE_PULL: 1.5,
+        HOLE_CD: 0.45, HOLE_DMG: 8,
+        // 擦弹：每吸收 2 发额外返还一枚可分裂反射弹
+        GRAZE_EVERY: 2, SPLIT_COUNT: 2, SPLIT_DMG: 0.5,
+        // 冰区觉醒：每秒冻结区域内敌人
+        FREEZE_TIME: 0.45, FREEZE_CD: 0.9, FREEZE_BOSS: 0.2,
       },
     },
     ULT: {

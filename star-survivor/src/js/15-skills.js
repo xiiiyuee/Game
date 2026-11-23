@@ -38,13 +38,16 @@
   function skillDisplayName(p) {
     const sd = skillDef(p);
     const md = skillModDef(p);
-    return md ? sd.name + "·" + md.name : sd.name;
+    let name = md ? sd.name + "·" + md.name : sd.name;
+    if (p && p.skillAwaken) name += "·觉醒";
+    return name;
   }
 
-  // 命中敌人返能量（受能量获取倍率影响）
+  // 命中敌人返能量（受能量获取倍率与星域事件影响）
   function gainSkillEnergy(p, v) {
     if (!p || !p.skill || !(v > 0)) return;
-    const mul = (p.stats && p.stats.skillGainMul) || 1;
+    const mul = ((p.stats && p.stats.skillGainMul) || 1) *
+      (chapterMod && chapterMod.energyMul ? chapterMod.energyMul : 1);
     p.skillEnergy = Math.min(CFG.SKILL.MAX, (p.skillEnergy || 0) + v * mul);
   }
 
@@ -141,10 +144,13 @@
       p.grazeActive = CFG.SKILL.GRAZE.TIME * (p.stats.skillDurationMul || 1);
       p.grazeStacks = 0;
       p.grazeReflect = 0;
+      p.grazeAwakenCount = 0;
       emit(p.x, p.y, 20, THEME.mint, 220, 3, 0.65);
       addText(p.x, p.y - 40, "擦弹回流", THEME.mint, 15);
       sfxLevelUp();
     }
+    // 防线联动：技能施放为附近炮塔叠加过载
+    if (!coopIsGuest()) overclockNearbyTurrets(p);
     refreshHud(true);
     return true;
   }
@@ -162,6 +168,7 @@
       r: radius * view.scale,
       t: dur, maxT: dur,
       mod,
+      awaken: p.skillAwaken || "",
       pulseCd: CFG.SKILL.WELL.PULSE_CD,
       seed: Math.random() * TAU,
       synced: false,
@@ -187,7 +194,7 @@
       fired: false,
     });
     // 冰痕：残影不射击，落点生成减速区（房主权威，客机走快照）
-    if (mod === "phase_ice" && !coopIsGuest()) pushFrostZone(p.x, p.y);
+    if (mod === "phase_ice" && !coopIsGuest()) pushFrostZone(p, p.x, p.y);
   }
 
   function fireShadowBullet(s) {
@@ -234,13 +241,23 @@
       p.grazeReflect = (p.grazeReflect || 0) + 1;
       if (p.grazeReflect >= CFG.SKILL.GRAZE.REFLECT_EVERY) {
         p.grazeReflect = 0;
-        fireReflectBullet(p);
+        fireReflectBullet(p, 0);
       }
     }
+    // 觉醒「裂变反射」：每 2 发额外返还一枚可分裂反射弹
+    if (p.skillAwaken === "awaken_graze") {
+      p.grazeAwakenCount = (p.grazeAwakenCount || 0) + 1;
+      if (p.grazeAwakenCount >= CFG.SKILL.AWAKEN.GRAZE_EVERY) {
+        p.grazeAwakenCount = 0;
+        fireReflectBullet(p, CFG.SKILL.AWAKEN.SPLIT_COUNT);
+      }
+    }
+    // 防线联动：擦弹同时为附近城墙充能
+    if (!coopIsGuest()) chargeNearbyWalls(p);
     emit(b.x, b.y, 4, THEME.mint, 150, 2, 0.3);
   }
 
-  function fireReflectBullet(p) {
+  function fireReflectBullet(p, splitCount) {
     const tgt = nearestEnemy(p);
     const ang = tgt ? Math.atan2(tgt.y - p.y, tgt.x - p.x) : p.facing;
     const mul = CFG.SKILL.GRAZE.REFLECT_DMG * (p.stats.skillPowerMul || 1) *
@@ -248,11 +265,22 @@
     fireWeaponPattern(p, ang, mul, {
       pierce: (p.stats.pierce || 0) + 1,
       reflect: true,
+      split: splitCount || 0,
       color: THEME.mint,
       life: 1.2,
       speedMul: 1.05,
     });
     emit(p.x, p.y, 8, THEME.mint, 190, 2.6, 0.4);
+  }
+
+  // 觉醒「残像终焉」：冲刺终点爆炸，冰痕顺势留下冰区
+  function phaseAwakenBurst(p) {
+    const dmg = p.stats.damage * CFG.SKILL.AWAKEN.PHASE_DMG *
+      (p.stats.skillPowerMul || 1);
+    explodeAt(p.x, p.y, dmg, null, CFG.SKILL.AWAKEN.PHASE_RADIUS, THEME.cyan, p.id);
+    emit(p.x, p.y, 22, THEME.cyan, 260, 3.4, 0.7);
+    shake = Math.max(shake, 2.4 * CFG.FX.SHAKE);
+    if (p.skillMod === "phase_ice") pushFrostZone(p, p.x, p.y);
   }
 
   function updateSkillEffects(dt) {
@@ -275,12 +303,15 @@
   }
 
   /* ===== 冰痕减速区 ===== */
-  function pushFrostZone(x, y) {
+  function pushFrostZone(p, x, y) {
     if (frostZones.length > 30) frostZones.shift();
     frostZones.push({
+      owner: p ? p.id : "",
+      awaken: p && p.skillAwaken === "awaken_phase" ? 1 : 0,
       x, y,
       r: CFG.SKILL.PHASE.ICE_RADIUS * view.scale,
       t: CFG.SKILL.PHASE.ICE_TIME, maxT: CFG.SKILL.PHASE.ICE_TIME,
+      freezeCd: 0,
       seed: Math.random() * TAU,
       synced: false,
     });
@@ -291,11 +322,21 @@
       const z = frostZones[i];
       z.t -= dt;
       if (!coopIsGuest()) {
+        z.freezeCd = Math.max(0, (z.freezeCd || 0) - dt);
+        const frozen = z.awaken && z.freezeCd <= 0;
+        if (frozen) z.freezeCd = CFG.SKILL.AWAKEN.FREEZE_CD;
         for (let k = 0; k < enemies.length; k++) {
           const e = enemies[k];
           if (e.dead) continue;
-          if (dist2(z.x, z.y, e.x, e.y) <= z.r * z.r) e.frostT = 0.25;
+          if (dist2(z.x, z.y, e.x, e.y) <= z.r * z.r) {
+            e.frostT = 0.25;
+            if (frozen) {
+              e.freezeT = Math.max(e.freezeT || 0,
+                e.isBoss ? CFG.SKILL.AWAKEN.FREEZE_BOSS : CFG.SKILL.AWAKEN.FREEZE_TIME);
+            }
+          }
         }
+        if (frozen) emit(z.x, z.y, 10, "#c8f4ff", 170, 2.8, 0.45);
       }
       if (z.t <= 0) frostZones.splice(i, 1);
     }
@@ -313,8 +354,10 @@
         continue;
       }
 
-      // 奇点改装：吸附更强
-      const pullMul = w.mod === "well_singularity" ? CFG.SKILL.WELL.SINGULARITY_PULL : 1;
+      // 奇点改装 / 觉醒事件视界：吸附更强
+      const isBlack = w.mod === "well_black";
+      const pullMul = isBlack ? CFG.SKILL.AWAKEN.HOLE_PULL
+        : w.mod === "well_singularity" ? CFG.SKILL.WELL.SINGULARITY_PULL : 1;
       const pe = pullE * pullMul;
       const pb = pullB * pullMul;
 
@@ -341,29 +384,51 @@
       const ownerP = coopPlayerById(w.owner) || player;
       const power = (ownerP && ownerP.stats.skillPowerMul) || 1;
 
-      // 脉冲井：周期性范围伤害，取消结束内爆
-      if (w.mod === "well_pulse") {
+      // 脉冲井 / 事件视界：周期性范围伤害
+      if (w.mod === "well_pulse" || isBlack) {
         w.pulseCd -= dt;
         if (w.pulseCd <= 0) {
-          w.pulseCd += CFG.SKILL.WELL.PULSE_CD;
-          explodeAt(w.x, w.y, CFG.SKILL.WELL.PULSE_DMG * power, null,
+          w.pulseCd += isBlack ? CFG.SKILL.AWAKEN.HOLE_CD : CFG.SKILL.WELL.PULSE_CD;
+          const tick = isBlack ? CFG.SKILL.AWAKEN.HOLE_DMG : CFG.SKILL.WELL.PULSE_DMG;
+          explodeAt(w.x, w.y, tick * power, null,
             w.r / view.scale, THEME.violet, w.owner);
-          emit(w.x, w.y, 10, THEME.violet, 210, 2.8, 0.45);
+          emit(w.x, w.y, isBlack ? 8 : 10, THEME.violet, 210, 2.8, 0.45);
           if (state !== "playing") return;
         }
       }
 
       if (w.t <= 0) {
-        if (w.mod !== "well_pulse") {
+        if (w.mod !== "well_pulse" && !isBlack) {
           const dmgMul = w.mod === "well_singularity" ? CFG.SKILL.WELL.SINGULARITY_DMG : 1;
           explodeAt(w.x, w.y, CFG.SKILL.WELL.DMG * power * dmgMul, null,
             w.r / view.scale, THEME.violet, w.owner);
           emit(w.x, w.y, 26, THEME.violet, 280, 3.6, 0.75);
         }
+        // 觉醒「事件视界」：结束后留下持续吸附与脉冲的黑洞
+        if (!isBlack && ownerP && ownerP.skillAwaken === "awaken_well") {
+          pushBlackHole(w, ownerP);
+        }
         gravityWells.splice(i, 1);
         if (state !== "playing") return;
       }
     }
+  }
+
+  function pushBlackHole(w, ownerP) {
+    const dur = CFG.SKILL.AWAKEN.HOLE_TIME;
+    gravityWells.push({
+      owner: w.owner,
+      x: w.x, y: w.y,
+      r: w.r * CFG.SKILL.AWAKEN.HOLE_R,
+      t: dur, maxT: dur,
+      mod: "well_black",
+      awaken: ownerP.skillAwaken,
+      pulseCd: 0.2,
+      seed: Math.random() * TAU,
+      synced: false,
+    });
+    emit(w.x, w.y, 20, "#7c5cff", 260, 3.2, 0.65);
+    addText(w.x, w.y - 34, "事件视界", "#b9a6ff", 15);
   }
 
   /* ===== 联机快照：重力井 / 冰区 ===== */
@@ -374,7 +439,8 @@
       arr.push([
         Math.round(w.x), Math.round(w.y), Math.round(w.r),
         Math.max(0, Math.round(w.t * 100) / 100),
-        w.mod === "well_pulse" ? 1 : 0,
+        w.mod === "well_pulse" ? 1 : w.mod === "well_black" ? 2
+          : w.mod === "well_singularity" ? 3 : 0,
       ]);
     }
     return arr;
@@ -387,11 +453,13 @@
     for (let i = 0; i < list.length; i++) {
       const row = list[i];
       if (!row || row.length < 4) continue;
+      const code = row[4] || 0;
       gravityWells.push({
         x: row[0], y: row[1], r: row[2],
         t: row[3], maxT: row[3] || 1,
-        mod: row[4] ? "well_pulse" : "",
-        pulseCd: CFG.SKILL.WELL.PULSE_CD,
+        mod: code === 1 ? "well_pulse" : code === 2 ? "well_black"
+          : code === 3 ? "well_singularity" : "",
+        pulseCd: code === 2 ? CFG.SKILL.AWAKEN.HOLE_CD : CFG.SKILL.WELL.PULSE_CD,
         seed: Math.random() * TAU, synced: true,
       });
     }
@@ -401,7 +469,8 @@
     const arr = [];
     for (let i = 0; i < frostZones.length; i++) {
       const z = frostZones[i];
-      arr.push([Math.round(z.x), Math.round(z.y), Math.round(z.r), Math.max(0, Math.round(z.t * 100) / 100)]);
+      arr.push([Math.round(z.x), Math.round(z.y), Math.round(z.r),
+        Math.max(0, Math.round(z.t * 100) / 100), z.awaken ? 1 : 0]);
     }
     return arr;
   }
@@ -416,6 +485,7 @@
       frostZones.push({
         x: row[0], y: row[1], r: row[2],
         t: row[3], maxT: row[3] || 1,
+        awaken: row[4] ? 1 : 0,
         seed: Math.random() * TAU, synced: true,
       });
     }
@@ -427,32 +497,52 @@
       const w = gravityWells[i];
       if (w.x < cull.x0 || w.x > cull.x1 || w.y < cull.y0 || w.y > cull.y1) continue;
       ctx.save();
+      const black = w.mod === "well_black";
+      const col = black ? "#8f7bff" : THEME.violet;
       const a = 0.35 + 0.2 * Math.sin(t * 6 + w.seed);
-      drawGlow(THEME.violet, w.x, w.y, w.r * 0.95, 0.22);
+      drawGlow(col, w.x, w.y, w.r * 0.95, black ? 0.3 : 0.22);
       for (let k = 0; k < 3; k++) {
         const p = (t * 0.55 + k / 3 + w.seed * 0.12) % 1;
         const rr = w.r * (0.25 + 0.75 * p);
         ctx.globalAlpha = a * (1 - p);
-        ctx.strokeStyle = THEME.violet;
+        ctx.strokeStyle = col;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(w.x, w.y, rr, 0, TAU);
         ctx.stroke();
       }
-      ctx.globalAlpha = a;
-      ctx.fillStyle = rgbaOf(THEME.violet, 0.1);
+      ctx.globalAlpha = black ? 0.55 : a;
+      ctx.fillStyle = black ? "rgba(6,2,18,0.72)" : rgbaOf(THEME.violet, 0.1);
       ctx.beginPath();
-      ctx.arc(w.x, w.y, w.r * 0.22, 0, TAU);
+      ctx.arc(w.x, w.y, w.r * (black ? 0.3 : 0.22), 0, TAU);
       ctx.fill();
-      // 脉冲井：按脉冲节奏叠加内圈
-      if (w.mod === "well_pulse") {
-        const ph = 1 - clamp((w.pulseCd || 0) / CFG.SKILL.WELL.PULSE_CD, 0, 1);
+      if (black) {
+        ctx.globalAlpha = 0.65;
+        ctx.strokeStyle = "#d9ccff";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, w.r * 0.32, 0, TAU);
+        ctx.stroke();
+      }
+      // 脉冲井 / 事件视界：按脉冲节奏叠加内圈
+      if (w.mod === "well_pulse" || black) {
+        const cdMax = black ? CFG.SKILL.AWAKEN.HOLE_CD : CFG.SKILL.WELL.PULSE_CD;
+        const ph = 1 - clamp((w.pulseCd || 0) / cdMax, 0, 1);
+        if (black) {
+          ctx.globalAlpha = 0.5 * (1 - ph) + 0.12;
+          ctx.strokeStyle = "#c8b8ff";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(w.x, w.y, w.r * (0.36 + 0.5 * ph), 0, TAU);
+          ctx.stroke();
+        } else {
         ctx.globalAlpha = 0.28 * (1 - ph);
         ctx.strokeStyle = THEME.violet;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.arc(w.x, w.y, w.r * (0.35 + 0.55 * ph), 0, TAU);
         ctx.stroke();
+        }
       }
       ctx.restore();
     }
@@ -464,11 +554,19 @@
       if (z.x < cull.x0 || z.x > cull.x1 || z.y < cull.y0 || z.y > cull.y1) continue;
       const lifePct = clamp(z.t / (z.maxT || CFG.SKILL.PHASE.ICE_TIME), 0, 1);
       ctx.save();
-      ctx.globalAlpha = 0.12 + 0.10 * lifePct;
-      ctx.fillStyle = "#9fe8ff";
+      ctx.globalAlpha = (z.awaken ? 0.18 : 0.12) + 0.10 * lifePct;
+      ctx.fillStyle = z.awaken ? "#c8f4ff" : "#9fe8ff";
       ctx.beginPath();
       ctx.arc(z.x, z.y, z.r, 0, TAU);
       ctx.fill();
+      if (z.awaken) {
+        ctx.globalAlpha = 0.28 + 0.16 * Math.sin(t * 7 + z.seed);
+        ctx.strokeStyle = "#e8fbff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(z.x, z.y, z.r * (0.55 + 0.12 * Math.sin(t * 4 + z.seed)), 0, TAU);
+        ctx.stroke();
+      }
       ctx.globalAlpha = 0.35 + 0.15 * Math.sin(t * 5 + z.seed);
       ctx.strokeStyle = "#bff2ff";
       ctx.lineWidth = 1.5;

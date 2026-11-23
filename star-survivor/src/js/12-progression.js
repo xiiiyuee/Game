@@ -222,6 +222,31 @@
     },
   ];
 
+  // 技能终极觉醒：对应技能已改装后才会出现，每个技能只能觉醒一次
+  const SKILL_AWAKENINGS = [
+    {
+      id: "awaken_phase", name: "残像终焉", icon: "✴", max: 1, awaken: true, awakenSkill: "phase", base: 0,
+      apply(s, m, p) { if (p) p.skillAwaken = "awaken_phase"; },
+      desc() {
+        return "冲刺结束时在终点爆发，造成 <b>220%</b> 范围伤害<br>冰痕额外留下冰区，爆痕则叠加一次爆炸";
+      },
+    },
+    {
+      id: "awaken_well", name: "事件视界", icon: "◍", max: 1, awaken: true, awakenSkill: "well", base: 0,
+      apply(s, m, p) { if (p) p.skillAwaken = "awaken_well"; },
+      desc() {
+        return "引力场结束后留下 <b>2 秒</b>事件视界<br>持续吸附敌人并每 <b>0.45 秒</b>造成伤害";
+      },
+    },
+    {
+      id: "awaken_graze", name: "裂变反射", icon: "↯", max: 1, awaken: true, awakenSkill: "graze", base: 0,
+      apply(s, m, p) { if (p) p.skillAwaken = "awaken_graze"; },
+      desc() {
+        return "每吸收 <b>2</b> 发敌弹额外返还一枚反射弹<br>反射弹命中后分裂为 <b>2</b> 枚";
+      },
+    },
+  ];
+
   // 进化强化：满足组合条件后才会出现在升级选项中（一次性）
   const EVOLUTIONS = [
     {
@@ -302,7 +327,7 @@
     },
   ];
 
-  const ALL_DEFS = UPGRADES.concat(SKILL_MODS, EVOLUTIONS);
+  const ALL_DEFS = UPGRADES.concat(SKILL_MODS, SKILL_AWAKENINGS, EVOLUTIONS);
 
   function gainXp(v) {
     gainXpFor(getLocalPlayer() || player, v);
@@ -311,7 +336,7 @@
   // 个人经验结算（P4-01）：联机时每名玩家独立成长
   function gainXpFor(p, v) {
     if (!p || coopIsGuest()) return;      // 客户端经验由房主裁决
-    p.xp += v;
+    p.xp += v * (chapterMod && chapterMod.xpMul ? chapterMod.xpMul : 1);
     while (p.xp >= p.xpNeed) {
       p.xp -= p.xpNeed;
       p.level += 1;
@@ -360,8 +385,8 @@
   }
 
   function makeCard(def, rarity, lp) {
-    // 进化 / 诅咒 / 改装不随稀有度放大，数值固定
-    const mult = def.curse || def.evolution || def.mod ? def.base : def.base * rarity.mult;
+    // 进化 / 诅咒 / 改装 / 觉醒不随稀有度放大，数值固定
+    const mult = def.curse || def.evolution || def.mod || def.awaken ? def.base : def.base * rarity.mult;
     const owner = lp || getLocalPlayer() || player;
     return {
       def,
@@ -396,6 +421,17 @@
         const def = pick(pool);
         chosen.add(def.id);
         cards.push(makeCard(def, RARITIES[2], lp));
+      }
+    }
+
+    // 1.6) 技能觉醒：已改装且尚未觉醒时，高概率出现专属觉醒卡
+    if (cards.length < 3 && lp.skillMod && !lp.skillAwaken && Math.random() < 0.7) {
+      const pool = SKILL_AWAKENINGS.filter((d) =>
+        d.awakenSkill === lp.skill && (stacks[d.id] || 0) < d.max);
+      if (pool.length) {
+        const def = pool[0];
+        chosen.add(def.id);
+        cards.push(makeCard(def, RARITIES[3], lp));
       }
     }
 
@@ -520,8 +556,9 @@
     let html = "";
     for (let i = 0; i < list.length; i++) {
       const c = list[i];
-      const special = c.def.curse ? " curse" : (c.def.evolution || c.def.mod) ? " evo" : "";
-      const label = c.def.curse ? "诅咒" : c.def.evolution ? "进化" : c.def.mod ? "改装" : c.rarity.name;
+      const special = c.def.curse ? " curse" : (c.def.evolution || c.def.mod || c.def.awaken) ? " evo" : "";
+      const label = c.def.curse ? "诅咒" : c.def.evolution ? "进化"
+        : c.def.mod ? "改装" : c.def.awaken ? "觉醒" : c.rarity.name;
       html += `<button class="card rarity-${c.rarity.key}${special}" data-i="${i}">
         <span class="card-key">${i + 1}</span>
         <div class="card-top"><span class="card-ic">${c.def.icon}</span><span class="card-rt">${label}</span></div>

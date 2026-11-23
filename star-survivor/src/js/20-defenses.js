@@ -72,12 +72,93 @@
     },
   ];
 
-  // 星域环境词条：每章随机，改变对局节奏
-  const CHAPTER_MODS = [
-    { id: "rich", name: "富矿", desc: "击杀星币 +40% · 敌人生命 +8%", creditMul: 1.4, hpMul: 1.08 },
-    { id: "storm", name: "离子风暴", desc: "敌弹速度 +18% · 敌人移速 +5%", ebMul: 1.18, speedMul: 1.05 },
-    { id: "fracture", name: "裂解空间", desc: "敌人生命 -10% · 刷怪间隔 -15%", hpMul: 0.9, spawnMul: 0.85 },
+  // 星域事件：章节切换时二选一，收益与风险并存
+  const SECTOR_EVENTS = [
+    {
+      id: "rich", name: "富矿带", icon: "◈",
+      desc: "击杀星币 +40% · 敌人生命 +8%",
+      creditMul: 1.4, hpMul: 1.08,
+    },
+    {
+      id: "storm", name: "离子风暴", icon: "⚡",
+      desc: "敌弹速度 +18% · 敌人移速 +5% · 技能充能 +30%",
+      ebMul: 1.18, speedMul: 1.05, energyMul: 1.3,
+    },
+    {
+      id: "fracture", name: "裂解空间", icon: "✧",
+      desc: "敌人生命 -10% · 刷怪 -15% · 经验 -15%",
+      hpMul: 0.9, spawnMul: 0.85, xpMul: 0.85,
+    },
+    {
+      id: "armory", name: "废弃兵工厂", icon: "⚔",
+      desc: "玩家伤害 +12% · 敌人生命 +10%",
+      playerDmgMul: 1.12, hpMul: 1.1,
+    },
+    {
+      id: "medical", name: "医疗星港", icon: "✚",
+      desc: "立即回复 45% 生命 · 受到伤害 +10%",
+      dmgTakenMul: 1.1,
+      onPick(p) { if (p) p.hp = Math.min(p.hpMax, p.hp + p.hpMax * 0.45); },
+    },
   ];
+  const CHAPTER_MODS = SECTOR_EVENTS;
+  let sectorChoices = [];
+  let sectorTimer = 0;
+
+  function renderSectorChoices() {
+    const wrap = document.getElementById("event-items");
+    if (!wrap) return;
+    wrap.innerHTML = sectorChoices.map((m) => `<button class="shop-item" data-event="${m.id}">
+      <h3>${m.icon} ${m.name}</h3>
+      <p>${m.desc}</p>
+      <span class="cost">选择</span>
+    </button>`).join("");
+    const sub = document.getElementById("event-sub");
+    if (sub) {
+      sub.textContent = roomCode && !coopIsGuest()
+        ? "选择下一星域的环境 · 9 秒后自动选择"
+        : "选择下一星域的环境 · 收益与风险并存";
+    }
+    document.getElementById("ov-event").classList.remove("hidden");
+  }
+
+  // 章节切换：单机暂停抉择；联机由房主抉择并倒计时自动选择
+  function prepareSectorChoice() {
+    const pool = SECTOR_EVENTS.filter((m) => !chapterMod || m.id !== chapterMod.id);
+    sectorChoices = pool.slice().sort(() => Math.random() - 0.5).slice(0, 2);
+    if (!sectorChoices.length) sectorChoices = SECTOR_EVENTS.slice(0, 2);
+    renderSectorChoices();
+    if (roomCode) {
+      sectorTimer = 9;
+      spawnTimer = Math.max(spawnTimer || 0, 10);   // 抉择期间不刷怪
+    } else { state = "event"; sectorTimer = 0; }
+  }
+
+  function chooseSectorEvent(id) {
+    const ev = SECTOR_EVENTS.find((m) => m.id === id) || sectorChoices[0];
+    if (!ev) return;
+    chapterMod = ev;
+    sectorChoices = [];
+    sectorTimer = 0;
+    document.getElementById("ov-event").classList.add("hidden");
+    if (state === "event") state = "playing";
+    spawnTimer = Math.min(spawnTimer || 2.5, 2.5);
+    if (ev.onPick) players.forEach((p) => ev.onPick(p));
+    coopSendEvent("chapter", { c: chapter, mod: ev.id });
+    const cx = camera.x + view.w / 2;
+    const cy = camera.y + view.h * 0.26;
+    addText(cx, cy + 74, `星域事件：${ev.name} · ${ev.desc}`, "#7ef0ff", 13);
+    openShop("第 " + chapter + " 星域 · 星港补给");
+    refreshHud(true);
+  }
+
+  function updateSectorTimer(dt) {
+    if (sectorTimer <= 0) return;
+    sectorTimer -= dt;
+    if (sectorTimer <= 0 && sectorChoices.length) {
+      chooseSectorEvent(sectorChoices[0].id);
+    }
+  }
 
   function shopCost(def) {
     return Math.round(def.base * (1 + (chapter - 1) * 0.18) * (1 + (shopCounts[def.id] || 0) * 0.45));
@@ -1048,6 +1129,7 @@
         dmg: Math.max(CFG.RUN.TURRET_DMG, who.stats.damage * 0.5),
         speed: who.stats.bulletSpeed,
         range: CFG.RUN.TURRET_RANGE,
+        oc: 0, ocT: 0,
         owner: who.id,
       });
       addText(x, y - 26, "炮塔已部署", "#ffd666", 14);
@@ -1067,6 +1149,7 @@
         thick: CFG.RUN.WALL_THICK * view.scale,
         seed: Math.random() * TAU, hp, maxHp: hp, flash: 0,
         hitR: CFG.RUN.WALL_THICK * view.scale * 0.5 + 6, level: 1,
+        charge: 0,
       });
       addText(x, y - 26, "城墙已架设", "#d8e6ff", 14);
     }
@@ -1112,6 +1195,11 @@
     for (let i = 0; i < turrets.length; i++) {
       const t = turrets[i];
       if (t.dead) continue;
+      // 过载层数到期清空
+      if (t.ocT > 0) {
+        t.ocT -= dt;
+        if (t.ocT <= 0) { t.ocT = 0; t.oc = 0; }
+      }
       const range = (t.range || CFG.RUN.TURRET_RANGE) * view.scale;
       let best = null;
       let bestD = range * range;
@@ -1135,7 +1223,8 @@
               vx: Math.cos(t.ang) * sp,
               vy: Math.sin(t.ang) * sp,
               r: 3.4,
-              dmg: t.dmg || Math.max(6, stats.damage * 0.5),
+              dmg: (t.dmg || Math.max(6, stats.damage * 0.5)) *
+                (1 + (t.oc || 0) * CFG.RUN.TURRET_OC_DMG),
               pierce: 0,
               life: 1.2,
               dead: false,
@@ -1159,13 +1248,60 @@
     }
   }
 
+  // 防线联动：靠近炮塔时缩短射击间隔
+  function defenseFireMul(p) {
+    if (!p) return 1;
+    const r2 = (CFG.RUN.TURRET_AURA * view.scale) ** 2;
+    for (let i = 0; i < turrets.length; i++) {
+      const t = turrets[i];
+      if (t.dead) continue;
+      if (dist2(p.x, p.y, t.x, t.y) <= r2) return CFG.RUN.TURRET_AURA_FIRE;
+    }
+    return 1;
+  }
+
+  // 防线联动：施放技能为附近炮塔叠加过载
+  function overclockNearbyTurrets(p) {
+    if (!p) return;
+    const r2 = (CFG.RUN.TURRET_OC_RADIUS * view.scale) ** 2;
+    let hit = false;
+    for (let i = 0; i < turrets.length; i++) {
+      const t = turrets[i];
+      if (t.dead) continue;
+      if (dist2(p.x, p.y, t.x, t.y) > r2) continue;
+      t.oc = Math.min(CFG.RUN.TURRET_OC_MAX, (t.oc || 0) + 1);
+      t.ocT = CFG.RUN.TURRET_OC_TIME;
+      hit = true;
+    }
+    if (hit) addText(p.x, p.y - 34, "炮塔过载 +1", "#ffd666", 12);
+  }
+
+  // 防线联动：擦弹为附近城墙充能，充满释放冲击波
+  function chargeNearbyWalls(p) {
+    if (!p) return;
+    const r2 = (CFG.RUN.WALL_CHARGE_RADIUS * view.scale) ** 2;
+    for (let i = 0; i < walls.length; i++) {
+      const w = walls[i];
+      if (w.dead) continue;
+      if (dist2(p.x, p.y, w.x, w.y) > r2) continue;
+      w.charge = (w.charge || 0) + 1;
+      emit(w.x, w.y, 4, "#8ff6ff", 120, 1.8, 0.3);
+      if (w.charge >= CFG.RUN.WALL_CHARGE_MAX) {
+        w.charge = 0;
+        explodeAt(w.x, w.y, p.stats.damage * CFG.RUN.WALL_CHARGE_DMG,
+          null, CFG.RUN.WALL_CHARGE_R * view.scale, "#8ff6ff", p.id);
+        emit(w.x, w.y, 18, "#8ff6ff", 260, 3, 0.6);
+        addText(w.x, w.y - 30, "城墙脉冲", "#8ff6ff", 13);
+      }
+    }
+  }
+
   // ===== 章节切换（无尽远航）=====
   function chapterClear() {
+    if (coopIsGuest()) return;
     victoryFlash = 0;
     slowmo = 0;
     chapter += 1;
-    chapterMod = pick(CHAPTER_MODS.filter((m) => !chapterMod || m.id !== chapterMod.id));
-    coopSendEvent("chapter", { c: chapter, mod: chapterMod ? chapterMod.id : "" });
     chapterStartElapsed = elapsed;
     waveNum = 1;
     bossSpawned = false;
@@ -1190,10 +1326,9 @@
       (chapter - 1) * CFG.RUN.CHAPTER_WAVES) - 1) * 100);
     const armorPct = Math.round(waveScaleArmor() * 100);
     addText(cx, cy + 54, `深渊压制：敌人生命 +${hpPct}% · 护甲 ${armorPct}%`, "#ff9f2e", 14);
-    if (chapterMod) addText(cx, cy + 74, `星域环境：${chapterMod.name} · ${chapterMod.desc}`, "#7ef0ff", 13);
     emit(player.x, player.y, 34, "#8bffdc", 280, 3.6, 0.9);
     sfxWin();
-    openShop("第 " + chapter + " 星域 · 星港补给");
     refreshHud(true);
+    prepareSectorChoice();
   }
 

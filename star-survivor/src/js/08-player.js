@@ -67,10 +67,12 @@
       energy: 0,                 // 超载能量
       skill: chosenSkill || "phase", // 本局主动技能
       skillMod: "",              // 技能改装（互斥，见 SKILL_MODS）
+      skillAwaken: "",           // 技能终极觉醒（改装后解锁）
       skillEnergy: 0,            // 技能能量 0..MAX
       skillLock: 0,              // 施放后短锁
       grazeActive: 0,            // 擦弹回流剩余时间
       grazeStacks: 0,            // 擦弹层数（强化射击）
+      grazeAwakenCount: 0,       // 觉醒：擦弹返还计数
       phaseTime: 0,              // 相位冲刺剩余时间
       phaseLeft: 0,              // 待生成残影数
       phaseSpawn: 0,             // 残影生成计时
@@ -218,7 +220,7 @@
     nextBulletId = 1;
     nextPropId = 1;
     upgradeCards = [];
-    chapterMod = pick(CHAPTER_MODS);
+    chapterMod = null;          // 首章无星域事件，章节切换时由玩家抉择
     hitStop = 0;
     musicTimer = 0;
     ultTimer = 0;

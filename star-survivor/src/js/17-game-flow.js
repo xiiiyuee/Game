@@ -933,7 +933,7 @@
         p.down ? 1 : 0, Math.round(p.downTimer || 0), p.eliminated ? 1 : 0,
         p.level || 1, p.kills || 0,
         p.skill || "", Math.round(p.skillEnergy || 0),
-        p.skillMod || "",
+        p.skillMod || "", p.skillAwaken || "",
       ]);
     }
     return arr;
@@ -944,7 +944,7 @@
     const arr = [];
     for (let i = 0; i < turrets.length; i++) {
       const d = turrets[i];
-      arr.push([d.id, 0, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100), defenseLevel(d)]);
+      arr.push([d.id, 0, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100), defenseLevel(d), d.oc || 0]);
     }
     for (let i = 0; i < fields.length; i++) {
       const d = fields[i];
@@ -952,7 +952,7 @@
     }
     for (let i = 0; i < walls.length; i++) {
       const d = walls[i];
-      arr.push([d.id, 2, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100), defenseLevel(d)]);
+      arr.push([d.id, 2, Math.round(d.x), Math.round(d.y), Math.round(d.hp), Math.round(d.maxHp), Math.round((d.ang || 0) * 100), defenseLevel(d), 0, d.charge || 0]);
     }
     return arr;
   }
@@ -991,6 +991,8 @@
       d.hp = hp;
       d.maxHp = maxHp;
       d.level = row[7] || 1;
+      if (kind === 0) d.oc = row[8] || 0;
+      if (kind === 2) d.charge = row[9] || 0;
       if (kind === 0 || kind === 2) d.ang = (row[6] || 0) / 100;
       applyDefenseLevel(d);
       seen[id] = 1;
@@ -1080,6 +1082,7 @@
         p.skillEnergy = e[14] || 0;
       }
       if (e.length >= 16) p.skillMod = e[15] || "";
+      if (e.length >= 17) p.skillAwaken = e[16] || "";
       coopInterpPush(id, p.x, p.y, p.facing);
     }
     // 团队共享资源（D-03）：星币 / 核心 / 保险由房主同步
@@ -1125,6 +1128,7 @@
       player.skillEnergy = e[14] || 0;
     }
     if (e.length >= 16) player.skillMod = e[15] || "";
+    if (e.length >= 17) player.skillAwaken = e[16] || "";
     if (player.hp < hpBefore - 0.5) {
       if (coopGuestShop) coopCloseShopUI();     // 受击关闭个人商店
       if (coopGuestTrade) coopCloseTradeUI();
@@ -2251,6 +2255,7 @@
     return {
       id: p.id, lv: p.level, xp: Math.round(p.xp), xpn: p.xpNeed, pl: p.pendingLevels,
       mod: p.skillMod || "",
+      aw: p.skillAwaken || "",
       st: {
         damage: s.damage, fireInterval: s.fireInterval, crit: s.crit, pierce: s.pierce,
         moveSpeed: s.moveSpeed, shieldMax: s.shieldMax, shieldRegen: s.shieldRegen,
@@ -2280,6 +2285,7 @@
     if (typeof d.xpn === "number") p.xpNeed = d.xpn;
     if (typeof d.pl === "number") p.pendingLevels = d.pl;
     if (typeof d.mod === "string") p.skillMod = d.mod;
+    if (typeof d.aw === "string") p.skillAwaken = d.aw;
     if (d.st) Object.assign(p.stats, d.st);
     if (Array.isArray(d.chips)) p.chips = d.chips;
     if (d.stacks) p.stacks = d.stacks;

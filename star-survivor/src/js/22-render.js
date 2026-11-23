@@ -423,6 +423,13 @@
       }
       ctx.shadowBlur = 0;
 
+      // 觉醒冰区冻结：冰晶轮廓提示
+      if (e.freezeT > 0) {
+        ctx.globalAlpha = 0.75;
+        drawShape(0, 0, e.r + 2.5, 6, t * 0.6, "rgba(200,244,255,0.28)", "#dffaff", 2);
+        ctx.globalAlpha = 1;
+      }
+
       // 精英血条
       if (detail && e.type === "diamond") {
         const w = e.r * 2.1;
@@ -758,6 +765,17 @@
         ctx.fillStyle = whp > 0.5 ? "#8bffdc" : whp > 0.25 ? "#ffd666" : "#ff6b6b";
         ctx.fillRect(w.x - bw / 2, w.y - hy - 14, bw * whp, 4);
       }
+      // 擦弹充能：城墙顶部显示青色充能格
+      const charge = w.charge || 0;
+      if (charge > 0) {
+        const n = CFG.RUN.WALL_CHARGE_MAX;
+        const cw = 5, gap = 2;
+        const total = n * cw + (n - 1) * gap;
+        for (let k = 0; k < n; k++) {
+          ctx.fillStyle = k < charge ? "#8ff6ff" : "rgba(120, 200, 255, 0.18)";
+          ctx.fillRect(w.x - total / 2 + k * (cw + gap), w.y - hy - 8, cw, 3);
+        }
+      }
       drawDefLevel(w, w.x, w.y + hy + 12, "#bcd8ff");
     }
   }
@@ -863,6 +881,27 @@
       ctx.arc(tu.x, tu.y, 19 + Math.sin(t * 3 + tu.seed) * 1.5, 0, TAU);
       ctx.stroke();
       ctx.globalAlpha = 1;
+
+      // 防线联动：玩家在光环内时显示增益范围，并显示过载层数
+      const lp = getLocalPlayer() || player;
+      if (state === "playing" && lp && !lp.down &&
+        dist2(lp.x, lp.y, tu.x, tu.y) <= (CFG.RUN.TURRET_AURA * view.scale) ** 2) {
+        ctx.globalAlpha = 0.28 + 0.1 * Math.sin(t * 5 + tu.seed);
+        ctx.strokeStyle = "#ffe6a0";
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([5, 6]);
+        ctx.beginPath();
+        ctx.arc(tu.x, tu.y, CFG.RUN.TURRET_AURA * view.scale, 0, TAU);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+      if (tu.oc > 0) {
+        for (let k = 0; k < CFG.RUN.TURRET_OC_MAX; k++) {
+          ctx.fillStyle = k < tu.oc ? "#ffd666" : "rgba(255, 214, 102, 0.18)";
+          ctx.fillRect(tu.x - 8 + k * 6, tu.y - 30, 4, 4);
+        }
+      }
     }
   }
 
