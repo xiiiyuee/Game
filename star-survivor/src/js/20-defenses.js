@@ -151,11 +151,12 @@
     if (state !== "shop") return;
     const def = SHOP_ITEMS.find((d) => d.id === id);
     if (!def) return;
+    const p = getLocalPlayer() || player;
     const cost = shopCost(def);
-    if (credits < cost || !def.can()) return;
+    if (credits < cost || !def.can(p)) return;
     credits -= cost;
     shopCounts[id] = (shopCounts[id] || 0) + 1;
-    def.apply();
+    def.apply(p);
     sfxLevelUp();
     renderShop();
     updateBuffPanel();

@@ -56,6 +56,9 @@ const hook = `
     coopWellList, coopApplyWells, coopFrostList, coopApplyFrost, coopIsGuest,
     get roomCode() { return roomCode; },
     spawnPlayerBullet, fireWeaponPattern, makeStats,
+    buyShopItem, openShop, closeShop, shopOfferFor,
+    get credits() { return credits; }, set credits(v) { credits = v; },
+    get revives() { return revives; }, set revives(v) { revives = v; },
   };
 `;
 html = html.slice(0, idx) + hook + html.slice(idx);
