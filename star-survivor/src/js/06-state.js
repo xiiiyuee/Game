@@ -51,6 +51,7 @@
   let spawnTimer = 1.2;
   let threat = 0;                  // 威胁等级（0~MAX，驱动刷怪/弹速/精英率）
   let salvoTimer = 4;              // 远程敌机交叉齐射计时
+  let squadTimer = 24;             // 敌方编队投放计时
   let hunterTimer = 14;            // 追猎者出现计时
   let hunterSpawned = false;       // 本章追猎者是否已出现
   let hazards = [];                // 场地灾害（陨石雨 / 激光）

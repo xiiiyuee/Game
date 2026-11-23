@@ -32,6 +32,22 @@
     p.hitDirT = Math.max(0, (p.hitDirT || 0) - dt * 1.4);
     p.shieldBreak = Math.max(0, (p.shieldBreak || 0) - dt * 2.2);
 
+    // 低血量心跳：生命越低越急促，与屏幕边缘脉冲同步
+    if (p === player && state === "playing") {
+      const hpPct = p.hpMax > 0 ? p.hp / p.hpMax : 1;
+      if (hpPct < 0.35) {
+        p.heartT = (p.heartT || 0) - dt;
+        if (p.heartT <= 0) {
+          p.heartT = 0.55 + hpPct * 1.3;
+          const intense = hpPct < 0.18;
+          sfxHeartbeat(intense);
+          if (intense) haptic(16);
+        }
+      } else {
+        p.heartT = 0;
+      }
+    }
+
     // 主动技能：被动蓄能（冷却/施放锁期间照常积累）
     p.skillLock = Math.max(0, (p.skillLock || 0) - dt);
     if (p.skill && (p.skillEnergy || 0) < CFG.SKILL.MAX) {
@@ -279,7 +295,11 @@
     if (shieldBefore > 0 && p.shield <= 0) {
       p.shieldBreak = 1;
       emit(p.x, p.y, 16, THEME.cyan, 200, 3, 0.5);
-      if (p === player) addText(p.x, p.y - 30, "护盾破碎", "#8ff6ff", 12);
+      if (p === player) {
+        addText(p.x, p.y - 30, "护盾破碎", "#8ff6ff", 12);
+        sfxShieldBreak();
+        haptic(45);
+      }
     }
     // 记录受击来向（来自激光/炮弹/接触），用于屏幕上的方向指示
     if (opts && opts.src) {
@@ -297,7 +317,8 @@
       shake = Math.max(shake, 12 * CFG.FX.SHAKE);
       sfxHurt();
       hitStop = Math.max(hitStop, 0.025);
-      if (document.body.classList.contains("touch") && navigator.vibrate) navigator.vibrate(28);
+      // 激光穿透用更长震动，普通受击保持短促
+      haptic(opts && opts.pierceArmor ? [0, 42, 28, 70] : 28);
       combo = 0;
       comboTimer = 0;
       // 受击会打断压迫节奏：威胁等级回落

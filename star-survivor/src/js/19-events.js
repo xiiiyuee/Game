@@ -149,7 +149,9 @@
   /* ===================== 场地灾害 ===================== */
   function hazardInterval() {
     const H = CFG.EVENTS.HAZARD;
-    return H.INTERVAL * (1 - Math.min(0.42, (chapter - 1) * 0.05)) / (1 + threat * 0.03);
+    const cf = climaxFactor();
+    return H.INTERVAL * (1 - Math.min(0.42, (chapter - 1) * 0.05)) /
+      (1 + threat * 0.03) * (1 - (1 - CFG.RUN.CLIMAX_HAZARD) * cf);
   }
 
   function spawnMeteorHazard() {
@@ -199,6 +201,9 @@
     };
     hazards.push(h);
     emit(e.x, e.y, 12, "#ff8a3c", 180, 2.6, 0.5);
+    // 蓄力音只在本机附近播放，远处激光不干扰听感
+    const lp = getLocalPlayer();
+    if (!lp || dist2(lp.x, lp.y, e.x, e.y) < 780 * 780) sfxLaserCharge(L.WARN);
     if (roomCode) coopSendEvent("hazard", h);   // 客机同步预警与光束表现
     return h;
   }
@@ -264,6 +269,7 @@
       const len = h.len || CFG.ENEMY_LASER.LEN;
       emit(h.x, h.y, 16, "#ff8a3c", 220, 3.2, 0.5);
       shake = Math.max(shake, 7 * CFG.FX.SHAKE);
+      sfxLaserFire();
       if (!solid) return;
       // 穿透：一次判定线路上所有玩家，且不受护甲减伤；单次伤害设上限，避免后期直接秒杀
       const L = CFG.ENEMY_LASER;
@@ -357,6 +363,7 @@
         if (!owner || owner.dead) {
           emit(h.x, h.y, 10, "#ffb37a", 150, 2.4, 0.4);
           hazards.splice(i, 1);
+          sfxLaserBreak();
           if (roomCode) coopSendEvent("hazard-cancel", { ownerId: h.ownerId });
           continue;
         }

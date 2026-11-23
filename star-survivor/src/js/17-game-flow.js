@@ -2621,11 +2621,13 @@
       p.warn = p.maxWarn;
       p.life = 0;
       hazards.push(p);
+      if (p.type === "laser") sfxLaserCharge(p.maxWarn || CFG.ENEMY_LASER.WARN);
     } else if (d.k === "hazard-cancel" && p && p.ownerId !== undefined) {
       // 房主侧蓄力被打断：客机同步移除对应的激光预警
       for (let i = hazards.length - 1; i >= 0; i--) {
         if (hazards[i].type === "laser" && hazards[i].ownerId === p.ownerId) hazards.splice(i, 1);
       }
+      sfxLaserBreak();
     } else if (d.k === "chapter") {
       chapter = p.c || chapter + 1;
       chapterMod = CHAPTER_MODS.find((m) => m.id === p.mod) || null;

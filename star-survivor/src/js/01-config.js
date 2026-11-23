@@ -5,6 +5,9 @@
     // 无尽远航：每章 10 波，Boss 后进入下一星域，难度持续攀升
     RUN: {
       CHAPTER_WAVES: 10,          // 每章波数（第 10 波 Boss）
+      CLIMAX_WAVES: 3,            // 每章最后 3 波进入高潮节奏
+      CLIMAX_SPAWN: 0.8,          // 高潮期刷怪间隔倍率（越低越密）
+      CLIMAX_HAZARD: 0.75,        // 高潮期灾害间隔倍率
       BOSS_HP_GROWTH: 1.8,        // 章节 Boss 生命成长
       BOSS_DMG_GROWTH: 1.18,      // 章节 Boss 伤害成长
       ENEMY_HP_GROWTH: 1.065,     // 每个等效波次生命成长（跨章节连续，不回落）
@@ -125,6 +128,13 @@
       ELITE_WAVE: 5,              // 第 5 波后开始出现精英
       SPAWN_BASE: 1.05,           // 初始刷怪间隔
       SPAWN_MIN: 0.34,           // 最短刷怪间隔（后期压力）
+    },
+    // 敌方编队：成组投放远程小队，同边入场并同步开火
+    SQUAD: {
+      FIRST_WAVE: 4,              // 从第 4 波开始出现
+      INTERVAL: 26,               // 基础投放间隔（秒）
+      SIZE: 3,                    // 每队数量
+      GAP: 52,                    // 队形间距
     },
     ENEMIES: {
       tri:     { name: "疾行者", hp: 16, speed: 96,  dmg: 8,  xp: 3,  score: 10, r: 12,   color: "#ff5252", weight: 42 },

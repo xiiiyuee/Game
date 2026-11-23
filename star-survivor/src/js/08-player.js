@@ -217,6 +217,7 @@
     spawnTimer = 0.7;
     threat = 0;
     salvoTimer = 4;
+    squadTimer = 24;
     hunterTimer = 14;
     hunterSpawned = false;
     hazards = [];

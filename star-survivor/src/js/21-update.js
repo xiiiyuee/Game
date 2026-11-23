@@ -59,8 +59,13 @@
       waveNum = newWave;
       const cx = camera.x + view.w / 2;
       const cy = camera.y + view.h * 0.28;
+      const climaxStart = CFG.RUN.CHAPTER_WAVES - CFG.RUN.CLIMAX_WAVES + 1;
       if (waveNum >= CFG.RUN.CHAPTER_WAVES) {
         addText(cx, cy, "虚空之眼逼近", "#ff4d6d", 24);
+      } else if (waveNum >= climaxStart) {
+        addText(cx, cy, "第 " + waveNum + " 波 · 星域震荡", "#ffb347", 24);
+        sfxClimax();
+        if (!coopIsGuest()) threat = Math.min(threatMax(), threat + 0.6);
       } else {
         addText(cx, cy, "第 " + waveNum + " 波", "#7ef0ff", 22);
       }

@@ -27,6 +27,13 @@
     return Math.min(CFG.RUN.BOSS_POWER_CAP,
       Math.pow(playerDpsRatio(), CFG.RUN.BOSS_POWER_ADAPT));
   }
+  // 章节高潮：每章最后几波逐步收紧刷怪与灾害节奏
+  function climaxFactor() {
+    const total = CFG.RUN.CHAPTER_WAVES;
+    const start = total - CFG.RUN.CLIMAX_WAVES + 1;
+    if (waveNum < start) return 0;
+    return clamp((waveNum - start + 1) / CFG.RUN.CLIMAX_WAVES, 0, 1);
+  }
   function waveScaleSpeed() {
     return Math.min(CFG.RUN.ENEMY_SPEED_CAP, 1 + (waveNum - 1) * 0.028 + (chapter - 1) * 0.06);
   }
@@ -234,6 +241,39 @@
       (names.length ? " · " + names.join(" / ") : "");
   }
 
+  // 敌方编队：同一侧边缘成组入场，共享开火节奏形成同步齐射
+  function spawnSquad() {
+    const S = CFG.SQUAD;
+    const totalWave = (chapter - 1) * CFG.RUN.CHAPTER_WAVES + waveNum;
+    const pool = ["hex", "penta"].filter((k) => !CFG.ENEMIES[k].minWave || totalWave >= CFG.ENEMIES[k].minWave);
+    const type = pool.length ? pool[randInt(pool.length)] : "penta";
+    if (enemies.length + S.SIZE > CFG.LIMITS.ENEMIES) return;
+
+    const side = randInt(4);
+    const gap = S.GAP;
+    const start = (S.SIZE - 1) * gap * 0.5;
+    const midX = camera.x + rand(120, Math.max(140, view.w - 120));
+    const midY = camera.y + rand(120, Math.max(140, view.h - 120));
+    const cdBase = rand(1.4, 1.9);
+    for (let i = 0; i < S.SIZE; i++) {
+      const off = i * gap - start;
+      let x, y;
+      if (side === 0) { x = midX + off; y = camera.y - 64; }
+      else if (side === 1) { x = camera.x + view.w + 64; y = midY + off; }
+      else if (side === 2) { x = midX + off; y = camera.y + view.h + 64; }
+      else { x = camera.x - 64; y = midY + off; }
+      const e = spawnEnemy(type, clamp(x, 30, world.w - 30), clamp(y, 30, world.h - 30), true);
+      if (!e) continue;
+      e.squad = true;
+      e.shotCd = cdBase + i * 0.03;   // 同时开火，弹幕成扇面
+      e.salvo = 1.2;                  // 首轮使用加宽散布
+    }
+    const cx = camera.x + view.w / 2;
+    const cy = camera.y + view.h * 0.2;
+    addText(cx, cy, "敌方编队来袭", "#8ea6ff", 18);
+    sfxSquad();
+  }
+
   function updateSpawner(dt) {
     if (coopIsGuest()) return;                          // 联机客户端的敌人由房主生成
     if (enemies.length >= CFG.LIMITS.ENEMIES) return;   // 达到上限则暂停生成
@@ -254,13 +294,26 @@
       }
     }
 
+    // 编队协同：定期成组投放远程小队，形成同步齐射
+    if (waveNum >= CFG.SQUAD.FIRST_WAVE) {
+      squadTimer -= dt;
+      if (squadTimer <= 0) {
+        squadTimer = Math.max(14, CFG.SQUAD.INTERVAL) /
+          (1 + threat * 0.02) / (1 + (chapter - 1) * 0.06);
+        spawnSquad();
+      }
+    }
+
     spawnTimer -= dt;
     if (spawnTimer > 0) return;
 
+    const cf = climaxFactor();
     spawnTimer = Math.max(CFG.WAVE.SPAWN_MIN,
       CFG.WAVE.SPAWN_BASE - (waveNum - 1) * 0.065 - (chapter - 1) * 0.06) *
+      (1 - (1 - CFG.RUN.CLIMAX_SPAWN) * cf) *
       (chapterMod ? chapterMod.spawnMul || 1 : 1) / threatSpawnMul();
     const count = 1 + Math.floor(waveNum / 6) + Math.floor((chapter - 1) * 0.8) +
+      Math.floor(cf * 2) +
       (partyCount() - 1) * CFG.COOP.ENEMY_EXTRA_PER_EXTRA;
     for (let i = 0; i < count; i++) {
       spawnEnemy(weightedEnemyType());

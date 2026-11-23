@@ -71,6 +71,7 @@ const hook = `
     threatSpawnMul, threatBulletMul, threatSpeedMul, threatEliteChance, updateThreat,
     threatMax, threatFloor, playerPowerMul,
     spawnHazard, updateHazards, hazardHit, startEnemyLaser,
+    climaxFactor, hazardInterval, spawnSquad,
     get hazards() { return hazards; }, set hazards(v) { hazards = v; },
     killEnemy,
   };

@@ -1312,6 +1312,7 @@
     hazardTimer = CFG.EVENTS.HAZARD.INTERVAL;
     hunterTimer = 14;
     hunterSpawned = false;
+    squadTimer = 18;
     buildMode = null;
     spawnTimer = 2.5;
 

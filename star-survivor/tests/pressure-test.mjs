@@ -398,6 +398,41 @@ const bossMeteor3 = await page.evaluate(() => {
 });
 ok("三阶段陨星数量加倍", bossMeteor3.rocks >= 2, bossMeteor3);
 
+/* ===== 章节高潮与敌方编队 ===== */
+const climax = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  S.threat = 0;
+  S.waveNum = 1;
+  const early = { f: S.climaxFactor(), hz: S.hazardInterval() };
+  S.waveNum = 10;
+  const late = { f: S.climaxFactor(), hz: S.hazardInterval() };
+  return { early, late, start: S.CFG.RUN.CHAPTER_WAVES - S.CFG.RUN.CLIMAX_WAVES + 1 };
+});
+ok("章节最后阶段进入高潮并收紧刷怪与灾害", climax.early.f === 0 && climax.late.f === 1 &&
+  climax.late.hz < climax.early.hz * 0.85, climax);
+
+const squad = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  S.chapter = 1;
+  S.waveNum = 6;
+  S.enemies.length = 0;
+  S.spawnSquad();
+  const list = S.enemies.filter((e) => e.squad);
+  const cds = list.map((e) => e.shotCd);
+  return {
+    count: list.length,
+    spread: cds.length ? Math.max(...cds) - Math.min(...cds) : 99,
+    types: Array.from(new Set(list.map((e) => e.type))),
+    salvo: list.every((e) => e.salvo > 0),
+  };
+});
+ok("敌方编队成组入场并同步开火", squad.count === 3 && squad.types.length === 1 &&
+  squad.spread < 0.15 && squad.salvo, squad);
+
 /* ===== 输出 ===== */
 let pass = 0;
 for (const c of checks) {

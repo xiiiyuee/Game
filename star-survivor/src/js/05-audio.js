@@ -125,6 +125,60 @@
     if (!audio.ctx || audio.muted) return;
     tone(160, 70, 0.22, "sawtooth", 0.18, 700);
   }
+
+  // ===== 激光与濒危反馈 =====
+  let lastLaserChargeSfx = 0;
+  function sfxLaserCharge(dur) {
+    if (!audio.ctx || audio.muted) return;
+    const now = performance.now();
+    if (now - lastLaserChargeSfx < 260) return;   // 多道激光同时蓄力时不叠爆音
+    lastLaserChargeSfx = now;
+    const d = Math.min(Math.max(dur || 1.1, 0.45), 1.2);
+    tone(150, 920, d, "sawtooth", 0.06, 2600);
+    tone(240, 1240, d, "square", 0.026, 3200);
+  }
+  function sfxLaserFire() {
+    if (!audio.ctx || audio.muted) return;
+    tone(1300, 90, 0.24, "sawtooth", 0.17, 3400);
+    noiseBurst(0.18, 0.16, 3800, 380);
+  }
+  function sfxLaserBreak() {
+    if (!audio.ctx || audio.muted) return;
+    tone(660, 170, 0.16, "triangle", 0.09, 2200);
+  }
+  function sfxShieldBreak() {
+    if (!audio.ctx || audio.muted) return;
+    tone(1040, 210, 0.2, "square", 0.09, 4400);
+    noiseBurst(0.16, 0.12, 5600, 900);
+  }
+  function sfxClimax() {
+    if (!audio.ctx || audio.muted) return;
+    tone(72, 46, 0.85, "sawtooth", 0.16, 360);
+    setTimeout(() => {
+      if (audio.ctx && !audio.muted) tone(120, 260, 0.45, "square", 0.06, 1800);
+    }, 110);
+    noiseBurst(0.6, 0.1, 900, 140);
+  }
+  function sfxSquad() {
+    if (!audio.ctx || audio.muted) return;
+    tone(300, 420, 0.12, "square", 0.06, 1800);
+    setTimeout(() => {
+      if (audio.ctx && !audio.muted) tone(420, 300, 0.14, "square", 0.05, 1600);
+    }, 90);
+  }
+  function sfxHeartbeat(intense) {
+    if (!audio.ctx || audio.muted) return;
+    tone(64, 40, 0.14, "sine", intense ? 0.17 : 0.11, 220);
+    setTimeout(() => {
+      if (audio.ctx && !audio.muted) tone(56, 35, 0.12, "sine", intense ? 0.12 : 0.08, 200);
+    }, 130);
+  }
+
+  // 移动端触觉反馈（桌面端 navigator.vibrate 不存在，自动跳过）
+  function haptic(pattern) {
+    if (!document.body.classList.contains("touch")) return;
+    if (navigator.vibrate) navigator.vibrate(pattern);
+  }
   function sfxDash() {
     if (!audio.ctx || audio.muted) return;
     tone(220, 940, 0.13, "sine", 0.1, 4000);
