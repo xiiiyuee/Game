@@ -302,7 +302,7 @@ const laserHit = await page.evaluate(() => {
     type: "laser", x: p.x - 200, y: p.y, ang: 0, len: 1000, width: 18,
     warn: 0.01, maxWarn: 0.01, active: L.ACTIVE, life: 0, dmg: 20, pierceArmor: true,
   });
-  p.hp = 200; p.hpMax = 200; p.shield = 0; p.invuln = 0; p.stats.armor = 0.5;
+  p.hp = 200; p.hpMax = 200; p.shield = 0; p.invuln = 0.5; p.stats.armor = 0.5;
   S.hazards = [mk()];
   S.updateHazards(0.02);
   const armored = p.hp;
@@ -335,17 +335,23 @@ const laserFair = await page.evaluate(() => {
   }];
   S.updateHazards(0.02);
   const first = p.hp;
-  for (let i = 0; i < 5; i++) S.updateHazards(0.1);
+  const ang0 = S.hazards[0] ? S.hazards[0].ang : 0;
+  p.y += 80;                        // 玩家偏移后，光束应缓慢转向追踪
+  S.updateHazards(0.1);
+  const ang1 = S.hazards[0] ? S.hazards[0].ang : 0;
+  for (let i = 0; i < 16; i++) S.updateHazards(0.1);
   const sustained = p.hp;
   return {
-    first, sustained, left: S.hazards.filter((h) => h.type === "laser").length,
+    first, sustained, turn: Math.abs(ang1 - ang0), active: L.ACTIVE,
+    left: S.hazards.filter((h) => h.type === "laser").length,
     dirT: p.hitDirT, warn: L.WARN, cap: L.TICK_CAP,
     tickCap: 200 * L.TICK_CAP,
   };
 });
 ok("激光持续灼烧、单跳伤害封顶且光柱结束后消失", Math.abs(laserFair.first - (200 - laserFair.tickCap)) < 0.01 &&
   laserFair.sustained < laserFair.first && laserFair.left === 0 && laserFair.dirT > 0 &&
-  laserFair.warn >= 1.05 && laserFair.cap > 0 && laserFair.cap < 1, laserFair);
+  laserFair.warn >= 1.05 && laserFair.cap > 0 && laserFair.cap < 1 &&
+  laserFair.active >= 1 && laserFair.turn > 0.01, laserFair);
 
 const laserBreak = await page.evaluate(() => {
   const S = window.__SS__;

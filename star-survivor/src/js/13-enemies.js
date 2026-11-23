@@ -720,6 +720,7 @@
       // 灼光者：远距离游走，蓄力后发射穿透激光
       if (e.type === "lancer") {
         e.laserCd -= sdt;
+        e.laserHold = Math.max(0, (e.laserHold || 0) - sdt);
         const pd = Math.hypot(playerTgt.x - e.x, playerTgt.y - e.y) || 1;
         if (e.laserWarn > 0) {
           e.laserWarn -= sdt;
@@ -800,7 +801,7 @@
       const sp = e.speed * view.scale * stats.enemySpeedMul * (e.dashTime > 0 ? 3.1 : 1) *
         (e.type === "hunter" ? Math.min(1.75, 1 + (e.huntT || 0) * 0.012) : 1) *
         (e.warn > 0 ? 0.12 : 1) *
-        (e.laserWarn > 0 ? CFG.ENEMY_LASER.STOP_MOVE : 1) *
+        (e.laserWarn > 0 || (e.laserHold || 0) > 0 ? CFG.ENEMY_LASER.STOP_MOVE : 1) *
         (e.freezeT > 0 ? 0 : 1) *
         (e.slowT > 0 ? CFG.RUN.FIELD_SLOW : 1) *
         (e.frostT > 0 ? CFG.SKILL.PHASE.ICE_SLOW : 1);

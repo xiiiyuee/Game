@@ -1156,7 +1156,9 @@
         ctx.save();
         ctx.lineCap = "round";
         if (h.warn > 0) {
-          const pulse = 0.5 + 0.5 * Math.sin(t * 18);
+          // 预警末段加速闪烁，提示“即将发射”
+          const near = h.warn < 0.3;
+          const pulse = 0.5 + 0.5 * Math.sin(t * (near ? 40 : 18));
           const ck = 1 - h.warn / Math.max(0.01, h.maxWarn);
           // 预警走廊：先铺一层半透明带宽，再叠虚线与聚焦核心
           ctx.strokeStyle = `rgba(255, 120, 40, ${0.06 + 0.05 * pulse + ck * 0.05})`;
@@ -1164,8 +1166,8 @@
           ctx.beginPath();
           ctx.moveTo(h.x, h.y); ctx.lineTo(ex, ey);
           ctx.stroke();
-          ctx.strokeStyle = `rgba(255, 170, 90, ${0.35 + 0.45 * pulse})`;
-          ctx.lineWidth = 2 + ck * 2;
+          ctx.strokeStyle = `rgba(255, 170, 90, ${0.35 + 0.45 * pulse + (near ? 0.15 : 0)})`;
+          ctx.lineWidth = 2 + ck * 2 + (near ? 1.5 : 0);
           ctx.setLineDash([16, 10]);
           ctx.beginPath();
           ctx.moveTo(h.x, h.y); ctx.lineTo(ex, ey);
@@ -1173,23 +1175,47 @@
           ctx.setLineDash([]);
           ctx.fillStyle = `rgba(255, 210, 150, ${0.5 + 0.4 * pulse})`;
           ctx.beginPath();
-          ctx.arc(h.x, h.y, 4 + ck * 5, 0, TAU);
+          ctx.arc(h.x, h.y, 4 + ck * 5 + (near ? 3 : 0), 0, TAU);
           ctx.fill();
         } else {
-          const f = Math.max(0, h.life / Math.max(0.01, h.active));
+          const EL = CFG.ENEMY_LASER;
+          const lifeLeft = Math.max(0, h.life);
+          const elapsed = Math.max(0, (h.active || EL.ACTIVE) - lifeLeft);
+          const inK = Math.min(1, elapsed / Math.max(0.01, EL.FADE_IN));
+          const outK = Math.min(1, lifeLeft / Math.max(0.01, EL.FADE_OUT));
+          const f = Math.min(inK, outK);
+          const wScale = 0.35 + 0.65 * f;
           ctx.shadowColor = "#ff7a3c";
           ctx.shadowBlur = 18;
+          // 外晕
           ctx.strokeStyle = `rgba(255, 110, 40, ${0.3 * f})`;
-          ctx.lineWidth = half * 2 + 12;
+          ctx.lineWidth = half * 2 * wScale + 12;
           ctx.beginPath();
           ctx.moveTo(h.x, h.y); ctx.lineTo(ex, ey);
           ctx.stroke();
           ctx.shadowBlur = 0;
-          ctx.strokeStyle = `rgba(255, 245, 220, ${0.85 * f})`;
-          ctx.lineWidth = half * 0.8;
+          // 内芯
+          ctx.strokeStyle = `rgba(255, 245, 220, ${0.9 * f})`;
+          ctx.lineWidth = Math.max(1.5, half * 0.8 * wScale);
           ctx.beginPath();
           ctx.moveTo(h.x, h.y); ctx.lineTo(ex, ey);
           ctx.stroke();
+          // 流动能量条纹：强化“持续灼烧”的感知
+          const step = 210;
+          const flow = (t * 640) % step;
+          ctx.strokeStyle = `rgba(255, 185, 110, ${0.45 * f})`;
+          ctx.lineWidth = Math.max(1, half * 0.3 * wScale);
+          ctx.beginPath();
+          for (let d = flow; d < len; d += step) {
+            ctx.moveTo(h.x + dx * d, h.y + dy * d);
+            ctx.lineTo(h.x + dx * Math.min(len, d + 52), h.y + dy * Math.min(len, d + 52));
+          }
+          ctx.stroke();
+          // 端点亮斑
+          ctx.fillStyle = `rgba(255, 230, 190, ${0.8 * f})`;
+          ctx.beginPath();
+          ctx.arc(ex, ey, Math.max(2, half * 0.9 * wScale), 0, TAU);
+          ctx.fill();
         }
         ctx.restore();
       } else if (h.type === "beam") {

@@ -199,6 +199,8 @@
       dmg: e.dmg * L.DMG_MUL, pierceArmor: true,
       ownerId: e.id,               // 蓄力期间击杀灼光者可打断激光
     };
+    // 蓄力与发射期间原地锁定，避免光束起点和敌人身体脱节
+    e.laserHold = L.WARN + L.ACTIVE;
     hazards.push(h);
     emit(e.x, e.y, 12, "#ff8a3c", 180, 2.6, 0.5);
     // 蓄力音只在本机附近播放，远处激光不干扰听感
@@ -291,10 +293,16 @@
       const perp = Math.abs(rx * dy - ry * dx);
       if (perp > half + q.r) continue;
       const dmg = Math.min((h.dmg || 8) * L.TICK_DMG, q.hpMax * L.TICK_CAP);
-      const fresh = q.invuln <= 0;
-      damagePlayer(dmg, q, { pierceArmor: true, laserTick: !first, src: { x: h.x, y: h.y } });
-      emit(q.x, q.y, first ? 10 : 4, "#ffb37a", first ? 210 : 150, 2.6, 0.35);
-      if (first && fresh && q === getLocalPlayer()) addText(q.x, q.y - 36, "护甲被穿透", "#ffb37a", 12);
+      // 所有跳伤统一走穿透灼烧：普通受击无敌不豁免，只能靠位移或相位/冲刺硬无敌躲开
+      damagePlayer(dmg, q, { pierceArmor: true, laserTick: true, src: { x: h.x, y: h.y } });
+      if (first) {
+        // 起束命中额外反馈：更明显的火花与震屏，但不占用受击无敌帧
+        emit(q.x, q.y, 10, "#ffb37a", 210, 2.6, 0.35);
+        shake = Math.max(shake, 5 * CFG.FX.SHAKE);
+        if (q === getLocalPlayer()) addText(q.x, q.y - 36, "护甲被穿透", "#ffb37a", 12);
+      } else {
+        emit(q.x, q.y, 4, "#ffb37a", 150, 2.4, 0.3);
+      }
     }
   }
 
@@ -389,11 +397,28 @@
         h.life = Math.max(0, h.life - dt);
         if (h.active <= 0) hazards.splice(i, 1);
       } else if (h.type === "laser") {
-        // 光束持续期间按固定间隔继续灼烧，站在光柱里会连续掉血
+        // 光束持续期间缓慢追踪最近玩家：站桩会被持续灼烧，横向走位才能甩开
+        const EL = CFG.ENEMY_LASER;
         h.life -= dt;
+        let chase = null;
+        let chaseD = Infinity;
+        for (let k = 0; k < players.length; k++) {
+          const q = players[k];
+          if (q.down || q.eliminated) continue;
+          const d = dist2(q.x, q.y, h.x, h.y);
+          if (d < chaseD) { chaseD = d; chase = q; }
+        }
+        if (chase) {
+          const want = Math.atan2(chase.y - h.y, chase.x - h.x);
+          let da = want - h.ang;
+          while (da > Math.PI) da -= TAU;
+          while (da < -Math.PI) da += TAU;
+          const rate = EL.TRACK * dt;
+          h.ang += Math.max(-rate, Math.min(rate, da));
+        }
         h.tickCd = (h.tickCd || 0) - dt;
         if (h.tickCd <= 0) {
-          h.tickCd += CFG.ENEMY_LASER.TICK;
+          h.tickCd += EL.TICK;
           laserHitPlayers(h, false);
         }
         if (h.life <= 0) hazards.splice(i, 1);
