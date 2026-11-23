@@ -788,8 +788,9 @@
       }
     }
 
-    // 风险星域内击杀 + 连杀：经验倍率
-    const xpVal = e.xp * (inZone(e.x, e.y) ? CFG.EVENTS.ZONE_XP_MUL : 1) * mul;
+    // 风险星域内击杀 + 连杀：经验倍率（连杀对经验打折，分数不吃折扣）
+    const xpCombo = 1 + (mul - 1) * (CFG.COMBO.XP_FACTOR != null ? CFG.COMBO.XP_FACTOR : 1);
+    const xpVal = e.xp * (inZone(e.x, e.y) ? CFG.EVENTS.ZONE_XP_MUL : 1) * xpCombo;
     spawnGem(e.x, e.y, xpVal);
   }
 

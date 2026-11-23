@@ -60,10 +60,10 @@ const ok = (name, cond, info) => {
   else { fail++; console.log("FAIL " + name + (info ? " :: " + JSON.stringify(info) : "")); }
 };
 
-ok("1 级需求为 16", r.base === 16, r.base);
+ok("1 级需求为 24", r.base === 24, r.base);
 ok("60 经验只到 3 级", r.after60.level === 3, r.after60);
-ok("100 经验只到 5 级", r.after100.level === 5, r.after100);
-ok("300 经验只到 8 级", r.after300.level === 8, r.after300);
+ok("100 经验只到 4 级", r.after100.level === 4, r.after100);
+ok("300 经验只到 7 级", r.after300.level === 7, r.after300);
 ok("升级需求递增", r.after100.need > r.after60.need && r.after60.need > r.base, r);
 ok("20 级需求接近原曲线（<5400）", r.level20Need < 5400, r.level20Need);
 ok("升到 2 级后进入选卡", r.levelUp.state === "upgrade" && r.levelUp.level === 2 && r.levelUp.pending === 1, r.levelUp);
