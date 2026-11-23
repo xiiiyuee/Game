@@ -1308,6 +1308,10 @@
     boss = null;
     enemies.length = 0;
     ebullets.length = 0;
+    hazards.length = 0;
+    hazardTimer = CFG.EVENTS.HAZARD.INTERVAL;
+    hunterTimer = 14;
+    hunterSpawned = false;
     buildMode = null;
     spawnTimer = 2.5;
 

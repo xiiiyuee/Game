@@ -67,6 +67,11 @@ const hook = `
     get bossSpawned() { return bossSpawned; }, set bossSpawned(v) { bossSpawned = v; },
     get roomCode() { return roomCode; }, set roomCode(v) { roomCode = v; },
     coopEnemyList, coopBulletList, coopApplyEnemies, coopApplyEnemyBullets,
+    get threat() { return threat; }, set threat(v) { threat = v; },
+    threatSpawnMul, threatBulletMul, threatSpeedMul, threatEliteChance, updateThreat,
+    spawnHazard, updateHazards, hazardHit,
+    get hazards() { return hazards; }, set hazards(v) { hazards = v; },
+    killEnemy,
   };
 `;
 html = html.slice(0, idx) + hook + html.slice(idx);

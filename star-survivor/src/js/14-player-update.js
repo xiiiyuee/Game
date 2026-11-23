@@ -25,6 +25,7 @@
     const P = CFG.PLAYER;
     const s = p.stats;
     if (p.down || p.eliminated) return;
+    const px0 = p.x, py0 = p.y;
     p.invuln = Math.max(0, p.invuln - dt);
     p.dashCd = Math.max(0, p.dashCd - dt);
     p.hitFlash = Math.max(0, p.hitFlash - dt * 2.6);
@@ -101,6 +102,12 @@
       fireAt(target, p);
       // 防线联动：炮塔光环内射击间隔缩短
       p.fireCd = s.fireInterval * defenseFireMul(p);
+    }
+
+    // 记录实际速度，供敌机预判射击
+    if (dt > 0) {
+      p.velX = (p.x - px0) / dt;
+      p.velY = (p.y - py0) / dt;
     }
   }
 
@@ -277,6 +284,8 @@
       if (document.body.classList.contains("touch") && navigator.vibrate) navigator.vibrate(28);
       combo = 0;
       comboTimer = 0;
+      // 受击会打断压迫节奏：威胁等级回落
+      if (!coopIsGuest()) threat = Math.max(0, threat - CFG.THREAT.HIT_DROP);
     }
     if (roomCode) {                        // P4-02：受击立即关闭个人商店/游商
       if (p.shopOpen) coopCloseShop(p);

@@ -1039,6 +1039,7 @@
     coopSendState({
       t: "snap", v: COOP_SNAP_VER, s: coopSnapSeq, pl: coopSnapshotList(),
       cr: Math.round(credits), co: cores, rv: revives,
+      th: Math.round(threat * 10) / 10,
       df: coopDefenseList(),
       sg: coopWellList(),
       sf: coopFrostList(),
@@ -1091,6 +1092,7 @@
     if (typeof d.cr === "number" && d.cr !== credits) credits = d.cr;
     if (typeof d.co === "number" && d.co !== cores) cores = d.co;
     if (typeof d.rv === "number" && d.rv !== revives) revives = d.rv;
+    if (typeof d.th === "number") threat = d.th;
     if (d.df) coopApplyDefenses(d.df);       // 炮塔/缓速场及耐久由房主同步
     if (d.sg) coopApplyWells(d.sg);          // 重力井表现由房主同步
     if (d.sf) coopApplyFrost(d.sf);          // 冰痕减速区表现由房主同步
@@ -2613,6 +2615,12 @@
       slowmo = Math.max(slowmo, 1.0);
       victoryFlash = 1;
       emit(player.x, player.y, 30, "#ffc857", 320, 4, 1.0);
+    } else if (d.k === "hazard" && p && p.type) {
+      // 客机复现灾害表现，伤害由房主结算
+      p.ghost = true;
+      p.warn = p.maxWarn;
+      p.life = 0;
+      hazards.push(p);
     } else if (d.k === "chapter") {
       chapter = p.c || chapter + 1;
       chapterMod = CHAPTER_MODS.find((m) => m.id === p.mod) || null;
@@ -2622,6 +2630,8 @@
       hideBossBar();
       enemies = enemies.filter((e) => !e.synced);
       ebullets = [];
+      hazards = [];
+      hazardTimer = CFG.EVENTS.HAZARD.INTERVAL;
       addText(player.x, player.y - 64, "第 " + chapter + " 星域", "#ffd666", 24);
       refreshHud(true);
     } else if (d.k === "build-ok") {

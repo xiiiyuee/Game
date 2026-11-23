@@ -212,6 +212,12 @@
     pendingLevels = 0;
     bossSpawned = false;
     spawnTimer = 0.7;
+    threat = 0;
+    salvoTimer = 4;
+    hunterTimer = 14;
+    hunterSpawned = false;
+    hazards = [];
+    hazardTimer = CFG.EVENTS.HAZARD.INTERVAL;
     shake = 0;
     shakeDirX = 0;
     shakeDirY = 0;

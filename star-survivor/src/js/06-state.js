@@ -49,6 +49,12 @@
   let pendingLevels = 0;
   let bossSpawned = false;
   let spawnTimer = 1.2;
+  let threat = 0;                  // 威胁等级（0~MAX，驱动刷怪/弹速/精英率）
+  let salvoTimer = 4;              // 远程敌机交叉齐射计时
+  let hunterTimer = 14;            // 追猎者出现计时
+  let hunterSpawned = false;       // 本章追猎者是否已出现
+  let hazards = [];                // 场地灾害（陨石雨 / 激光）
+  let hazardTimer = CFG.EVENTS.HAZARD.INTERVAL;
   let shake = 0;
   let shakeDirX = 0;               // 重击震屏方向（单位向量，P0 打击感）
   let shakeDirY = 0;

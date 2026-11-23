@@ -125,7 +125,124 @@
       }
     }
 
+    updateThreat(dt);
+    updateHazards(dt);
     updatePulses(dt);
+  }
+
+  /* ===================== 威胁等级 ===================== */
+  function threatSpawnMul() { return 1 + threat * CFG.THREAT.SPAWN; }
+  function threatBulletMul() { return 1 + threat * CFG.THREAT.BULLET; }
+  function threatSpeedMul() { return 1 + threat * CFG.THREAT.SPEED; }
+  function threatEliteChance() { return threat * CFG.THREAT.ELITE; }
+
+  function updateThreat(dt) {
+    if (coopIsGuest()) return;   // 房主权威，客机从快照读取
+    threat = Math.min(CFG.THREAT.MAX, threat + dt * CFG.THREAT.TIME_RATE);
+  }
+
+  /* ===================== 场地灾害 ===================== */
+  function hazardInterval() {
+    const H = CFG.EVENTS.HAZARD;
+    return H.INTERVAL * (1 - Math.min(0.42, (chapter - 1) * 0.05)) / (1 + threat * 0.03);
+  }
+
+  function spawnMeteorHazard() {
+    const H = CFG.EVENTS.HAZARD;
+    const n = H.METEOR_COUNT + (chapter > 2 ? 1 : 0);
+    const list = [];
+    for (let i = 0; i < n; i++) {
+      // 第一颗贴近玩家，其余散落周围，形成封路
+      const off = i === 0 ? rand(26, 92) : rand(90, 310);
+      const a = Math.random() * TAU;
+      list.push({
+        x: clamp(player.x + Math.cos(a) * off, 40, world.w - 40),
+        y: clamp(player.y + Math.sin(a) * off, 40, world.h - 40),
+        r: H.METEOR_R,
+      });
+    }
+    return { type: "meteor", list, warn: H.METEOR_WARN, maxWarn: H.METEOR_WARN, life: 0 };
+  }
+
+  function spawnBeamHazard() {
+    const H = CFG.EVENTS.HAZARD;
+    const axis = Math.random() < 0.5 ? "h" : "v";
+    const pos = axis === "h"
+      ? clamp(player.y + rand(-230, 230), camera.y + 50, camera.y + view.h - 50)
+      : clamp(player.x + rand(-230, 230), camera.x + 50, camera.x + view.w - 50);
+    return { type: "beam", axis, pos, warn: H.BEAM_WARN, maxWarn: H.BEAM_WARN, active: H.BEAM_ACTIVE, life: 0 };
+  }
+
+  function spawnHazard() {
+    if (hazards.length >= CFG.EVENTS.HAZARD.MAX_ACTIVE) return;
+    const h = Math.random() < 0.6 ? spawnMeteorHazard() : spawnBeamHazard();
+    hazards.push(h);
+    if (roomCode) coopSendEvent("hazard", h);   // 客机同步视觉，伤害仍由房主结算
+  }
+
+  function hazardHit(h) {
+    const H = CFG.EVENTS.HAZARD;
+    const solid = !coopIsGuest() && !h.ghost;
+    if (h.type === "meteor") {
+      for (let k = 0; k < h.list.length; k++) {
+        const m = h.list[k];
+        emit(m.x, m.y, 22, "#ff9f2e", 260, 3.4, 0.65);
+        emit(m.x, m.y, 10, "#ff4d6d", 180, 2.6, 0.5);
+        if (!solid) continue;
+        for (let i = 0; i < players.length; i++) {
+          const q = players[i];
+          if (q.down || q.eliminated) continue;
+          const rr = m.r + q.r;
+          if (dist2(m.x, m.y, q.x, q.y) <= rr * rr) damagePlayer(H.METEOR_DMG, q);
+        }
+      }
+      shake = Math.max(shake, 8 * CFG.FX.SHAKE);
+      sfxExplode(false);
+    } else if (h.type === "beam") {
+      const half = H.BEAM_WIDTH / 2;
+      const len = h.axis === "h" ? view.w : view.h;
+      const cx = h.axis === "h" ? camera.x + view.w / 2 : h.pos;
+      const cy = h.axis === "h" ? h.pos : camera.y + view.h / 2;
+      emit(cx, cy, Math.round(len / 26), "#ff4d6d", len * 0.6, 4, 0.5);
+      if (solid) {
+        for (let i = 0; i < players.length; i++) {
+          const q = players[i];
+          if (q.down || q.eliminated) continue;
+          const d = h.axis === "h" ? Math.abs(q.y - h.pos) : Math.abs(q.x - h.pos);
+          if (d <= half + q.r) damagePlayer(H.BEAM_DMG, q);
+        }
+      }
+      shake = Math.max(shake, 6 * CFG.FX.SHAKE);
+    }
+  }
+
+  function updateHazards(dt) {
+    const H = CFG.EVENTS.HAZARD;
+    if (state === "playing" && !coopIsGuest() && !boss && waveNum >= H.FIRST_WAVE) {
+      hazardTimer -= dt;
+      if (hazardTimer <= 0) {
+        hazardTimer = hazardInterval();
+        spawnHazard();
+      }
+    }
+    for (let i = hazards.length - 1; i >= 0; i--) {
+      const h = hazards[i];
+      if (h.warn > 0) {
+        h.warn -= dt;
+        if (h.warn <= 0) {
+          h.warn = 0;
+          h.life = h.type === "meteor" ? 0.5 : h.active;
+          hazardHit(h);
+        }
+      } else if (h.type === "beam") {
+        h.active -= dt;
+        h.life = Math.max(0, h.life - dt);
+        if (h.active <= 0) hazards.splice(i, 1);
+      } else {
+        h.life -= dt;
+        if (h.life <= 0) hazards.splice(i, 1);
+      }
+    }
   }
 
   function updatePulses(dt) {

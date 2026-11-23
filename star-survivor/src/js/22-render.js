@@ -384,8 +384,30 @@
         sides = 4; rot = e.angle; fillA = 0.28; lw = 2;
       } else if (e.type === "mender") {
         sides = 6; rot = -t * 0.8 + e.seed; fillA = 0.2; lw = 2;
+      } else if (e.type === "hunter") {
+        sides = 8; rot = e.angle; fillA = 0.3; lw = 3;
       }
       drawShape(0, 0, e.r, sides, rot, rgbaOf(e.color, fillA), e.color, lw);
+
+      // 追猎者：脉动锁环 + 速度刻线
+      if (e.type === "hunter") {
+        const hp = 0.45 + 0.3 * Math.sin(t * 9 + e.seed);
+        ctx.strokeStyle = rgbaOf("#ff2d55", hp);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, e.r + 7 + Math.sin(t * 6) * 2.5, 0, TAU);
+        ctx.stroke();
+        const spd = Math.min(1.75, 1 + (e.huntT || 0) * 0.012);
+        ctx.strokeStyle = rgbaOf("#ff8fa3", 0.35 + (spd - 1) * 0.5);
+        ctx.lineWidth = 1.5;
+        for (let k = 0; k < 4; k++) {
+          const a = -e.angle + Math.PI + (k - 1.5) * 0.34;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * (e.r + 3), Math.sin(a) * (e.r + 3));
+          ctx.lineTo(Math.cos(a) * (e.r + 10 + spd * 6), Math.sin(a) * (e.r + 10 + spd * 6));
+          ctx.stroke();
+        }
+      }
 
       // 突刺者蓄力指示线
       if (e.type === "dart" && e.warn > 0) {
@@ -976,6 +998,85 @@
     }
   }
 
+  // 场地灾害：陨石落点预警 / 扫射激光
+  function drawHazards(t) {
+    const W = CFG.EVENTS.HAZARD;
+    for (let i = 0; i < hazards.length; i++) {
+      const h = hazards[i];
+      if (h.type === "meteor") {
+        for (let k = 0; k < h.list.length; k++) {
+          const m = h.list[k];
+          ctx.save();
+          ctx.translate(m.x, m.y);
+          if (h.warn > 0) {
+            const prog = 1 - h.warn / h.maxWarn;
+            const pulse = 0.5 + 0.5 * Math.sin(t * 14);
+            ctx.fillStyle = `rgba(255, 90, 60, ${0.06 + 0.1 * prog})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, m.r, 0, TAU);
+            ctx.fill();
+            ctx.strokeStyle = `rgba(255, 120, 80, ${0.4 + 0.35 * pulse})`;
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([9, 8]);
+            ctx.beginPath();
+            ctx.arc(0, 0, m.r, 0, TAU);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // 内圈随预警收缩，提示落地时机
+            ctx.strokeStyle = `rgba(255, 200, 120, ${0.5 + 0.3 * pulse})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, m.r * (1 - prog * 0.72), 0, TAU);
+            ctx.stroke();
+          } else {
+            const f = Math.max(0, h.life / 0.5);
+            ctx.fillStyle = `rgba(255, 150, 60, ${0.42 * f})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, m.r * (1.15 - f * 0.15), 0, TAU);
+            ctx.fill();
+            ctx.strokeStyle = `rgba(255, 220, 160, ${0.8 * f})`;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(0, 0, m.r * (1.05 + (1 - f) * 0.5), 0, TAU);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      } else if (h.type === "beam") {
+        const half = W.BEAM_WIDTH / 2;
+        const x = h.axis === "h" ? camera.x : h.pos;
+        const y = h.axis === "h" ? h.pos : camera.y;
+        const w = h.axis === "h" ? view.w : half * 2;
+        const hh = h.axis === "h" ? half * 2 : view.h;
+        ctx.save();
+        if (h.warn > 0) {
+          const pulse = 0.5 + 0.5 * Math.sin(t * 16);
+          ctx.fillStyle = `rgba(255, 60, 90, ${0.05 + 0.06 * pulse})`;
+          ctx.fillRect(x, y, w, hh);
+          ctx.strokeStyle = `rgba(255, 110, 130, ${0.45 + 0.35 * pulse})`;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([12, 10]);
+          ctx.beginPath();
+          if (h.axis === "h") {
+            ctx.moveTo(x, h.pos); ctx.lineTo(x + w, h.pos);
+          } else {
+            ctx.moveTo(h.pos, y); ctx.lineTo(h.pos, y + hh);
+          }
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else {
+          const f = Math.max(0, h.life / Math.max(0.01, h.active));
+          ctx.fillStyle = `rgba(255, 70, 100, ${0.3 * f})`;
+          ctx.fillRect(x, y, w, hh);
+          ctx.fillStyle = `rgba(255, 240, 240, ${0.75 * f})`;
+          if (h.axis === "h") ctx.fillRect(x, h.pos - 3, w, 6);
+          else ctx.fillRect(h.pos - 3, y, 6, hh);
+        }
+        ctx.restore();
+      }
+    }
+  }
+
   // 能量水晶 / 补给舱
   function drawProps(t) {
     for (let i = 0; i < crystals.length; i++) {
@@ -1147,6 +1248,7 @@
       drawWalls(t);
       drawBuildGhosts(t);
       drawZones(t);
+      drawHazards(t);
       drawAsteroids(t);
       drawProps(t);
       drawGems();

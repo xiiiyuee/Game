@@ -103,6 +103,17 @@
       PICKUP: 135,                // 经验吸附范围
       COLLECT: 24,                // 实际拾取距离
     },
+    // 威胁等级：随时间与击杀上涨，受击回落；联动刷怪、弹速、精英率
+    THREAT: {
+      MAX: 10,                    // 上限（等级 = 0~10 连续值）
+      TIME_RATE: 0.05,            // 每秒自然上涨
+      KILL_RATE: 0.035,           // 每次击杀上涨
+      HIT_DROP: 1.5,              // 每次受伤回落
+      SPAWN: 0.055,               // 每级刷怪速度加成
+      BULLET: 0.035,              // 每级敌弹速度加成
+      ELITE: 0.012,               // 每级精英出现率加成
+      SPEED: 0.012,               // 每级敌机移速加成
+    },
     WAVE: {
       INTERVAL: 30,               // 每波持续时间（秒）
       ELITE_WAVE: 5,              // 第 5 波后开始出现精英
@@ -120,9 +131,12 @@
       dart:    { name: "突刺者", hp: 22, speed: 128, dmg: 11, xp: 4,  score: 15, r: 11,   color: "#ff3ea5", weight: 8,  minWave: 3 },
       // 修补者：为周围敌人持续回血，优先击杀目标
       mender:  { name: "修补者", hp: 26, speed: 74,  dmg: 6,  xp: 5,  score: 18, r: 13,   color: "#6dffc9", weight: 6,  minWave: 8 },
+      // 追猎者：每章锁定玩家持续追击，越拖越快，击杀有额外奖励
+      hunter:  { name: "追猎者", hp: 130, speed: 84, dmg: 16, xp: 26, score: 130, r: 19,  color: "#ff2d55", weight: 0,  minWave: 4 },
     },
     // 小怪远程弹幕：间隔范围（秒）、弹速、伤害倍率、每次弹数、扇形角（三角怪不射击）
     ENEMY_GUN: {
+      LEAD: 0.62,             // 预判提前量系数：按目标速度预测落点
       square:  { cd: [4.4, 5.8], speed: 165, dmgMul: 0.55, count: 1, spread: 0 },
       penta:   { cd: [3.2, 4.4], speed: 185, dmgMul: 0.5,  count: 1, spread: 0 },
       diamond: { cd: [2.9, 4.0], speed: 200, dmgMul: 0.6,  count: 3, spread: 0.4 },
@@ -292,6 +306,20 @@
       POD_HEAL: 25,          // 拾取回复生命
       POD_ENERGY: 45,        // 拾取回复超载能量
       MAX_PODS: 1,
+      // 场地灾害：陨石雨 / 扫射激光，预警后落地，逼迫走位
+      HAZARD: {
+        FIRST_WAVE: 3,         // 第 3 波开始出现
+        INTERVAL: 17,          // 基础间隔（秒）
+        METEOR_COUNT: 4,       // 每轮陨石数量
+        METEOR_R: 62,          // 爆炸半径
+        METEOR_WARN: 1.15,     // 预警时间
+        METEOR_DMG: 15,        // 单次伤害
+        BEAM_WARN: 1.1,        // 激光预警
+        BEAM_ACTIVE: 0.45,     // 激光持续
+        BEAM_WIDTH: 54,        // 激光判定宽度
+        BEAM_DMG: 18,          // 激光伤害
+        MAX_ACTIVE: 3,         // 同屏灾害上限
+      },
     },
     // 可破坏陨石：挡路但可击碎，碎裂时对周围敌人爆炸并掉落资源
     ASTEROID: {

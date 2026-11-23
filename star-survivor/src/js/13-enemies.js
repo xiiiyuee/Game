@@ -77,7 +77,7 @@
       r: def.r,
       hp,
       maxHp: hp,
-      speed: def.speed * waveScaleSpeed() * (chapterMod ? chapterMod.speedMul || 1 : 1),
+      speed: def.speed * waveScaleSpeed() * threatSpeedMul() * (chapterMod ? chapterMod.speedMul || 1 : 1),
       dmg: def.dmg * waveScaleDmg(),
       armor: waveScaleArmor(),
       xp: def.xp,
@@ -91,6 +91,8 @@
       warn: 0,                  // 突刺者蓄力预警
       healCd: rand(1.6, 3.2),   // 修补者治疗间隔
       healPulse: 0,
+      huntT: 0,                 // 追猎者追击时长（越久越快）
+      salvo: 0,                 // 交叉齐射窗口
       shotCd: rand(1.6, 3.4),   // 小怪首次开火延迟
       isBoss: false,
       dead: false,
@@ -103,7 +105,7 @@
       const chance = Math.min(
         CFG.AFFIX.MAX_CHANCE,
         CFG.AFFIX.BASE_CHANCE + (waveNum - CFG.AFFIX.START_WAVE) * CFG.AFFIX.PER_WAVE +
-        (chapter - 1) * CFG.AFFIX.PER_CHAPTER
+        (chapter - 1) * CFG.AFFIX.PER_CHAPTER + threatEliteChance()
       );
       const pool = ["shield", "haste", "split", "boom"];
       if (elite || Math.random() < chance) {
@@ -217,12 +219,28 @@
     if (coopIsGuest()) return;                          // 联机客户端的敌人由房主生成
     if (enemies.length >= CFG.LIMITS.ENEMIES) return;   // 达到上限则暂停生成
     if (boss && !boss.dead) return;                     // Boss 战期间暂停杂兵增援
+
+    // 追猎者：每章一只，锁定玩家持续追击，越拖越快
+    if (waveNum >= CFG.ENEMIES.hunter.minWave && !hunterSpawned) {
+      hunterTimer -= dt;
+      if (hunterTimer <= 0) {
+        hunterSpawned = true;
+        const h = spawnEnemy("hunter");
+        if (h) {
+          const cx = camera.x + view.w / 2;
+          const cy = camera.y + view.h * 0.24;
+          addText(cx, cy, "追猎者锁定", "#ff8fa3", 20);
+          emit(h.x, h.y, 18, "#ff2d55", 220, 3, 0.6);
+        }
+      }
+    }
+
     spawnTimer -= dt;
     if (spawnTimer > 0) return;
 
     spawnTimer = Math.max(CFG.WAVE.SPAWN_MIN,
       CFG.WAVE.SPAWN_BASE - (waveNum - 1) * 0.065 - (chapter - 1) * 0.06) *
-      (chapterMod ? chapterMod.spawnMul || 1 : 1);
+      (chapterMod ? chapterMod.spawnMul || 1 : 1) / threatSpawnMul();
     const count = 1 + Math.floor(waveNum / 6) + Math.floor((chapter - 1) * 0.8) +
       (partyCount() - 1) * CFG.COOP.ENEMY_EXTRA_PER_EXTRA;
     for (let i = 0; i < count; i++) {
@@ -460,7 +478,7 @@
 
   function fireEnemyBullet(x, y, ang, speed, dmg, color, r, heavy) {
     if (ebullets.length >= CFG.LIMITS.EBULLETS) return null;
-    const sp = speed * view.scale * ebSpeedScale();
+    const sp = speed * view.scale * ebSpeedScale() * threatBulletMul();
     const b = {
       x, y,
       vx: Math.cos(ang) * sp,
@@ -480,6 +498,29 @@
     // 超载减速与诅咒（敌人移速）统一在此生效
     const es = ultTimer > 0 ? CFG.ULT.SLOW : 1;
     const sdt = dt * es;
+
+    // 交叉齐射：定期让 2~3 只远程敌机同步开火，形成交叉封锁
+    if (!coopIsGuest()) {
+      salvoTimer -= dt;
+      if (salvoTimer <= 0) {
+        salvoTimer = rand(5.5, 8.5) / (1 + threat * 0.05);
+        let picked = 0;
+        const n = enemies.length;
+        if (n > 1) {
+          const start = randInt(n);
+          for (let k = 0; k < n && picked < 3; k++) {
+            const e = enemies[(start + k) % n];
+            if (!e || e.dead || e.isBoss || e.synced || !CFG.ENEMY_GUN[e.type]) continue;
+            if (e.x < camera.x - 16 || e.x > camera.x + view.w + 16) continue;
+            if (e.y < camera.y - 16 || e.y > camera.y + view.h + 16) continue;
+            e.salvo = 1.2;
+            e.shotCd = Math.min(e.shotCd, 0.06);
+            picked++;
+          }
+        }
+      }
+    }
+
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (e.dead) continue;
@@ -511,6 +552,15 @@
         tgt = { x: nd.x, y: nd.y, r: nd.hitR };
       }
       let ang = Math.atan2(tgt.y - e.y, tgt.x - e.x);
+
+      // 追猎者：无视防线，锁定玩家；追击越久速度越快
+      if (e.type === "hunter") {
+        e.huntT = (e.huntT || 0) + sdt;
+        tgt = playerTgt;
+        defTgt = null;
+        ang = Math.atan2(playerTgt.y - e.y, playerTgt.x - e.x);
+        if (Math.random() < sdt * 7) emit(e.x, e.y, 1, "#ff2d55", 40, 1.6, 0.3);
+      }
 
       // 五边形：带横向摆动
       if (e.type === "penta") {
@@ -594,6 +644,7 @@
       }
 
       const sp = e.speed * view.scale * stats.enemySpeedMul * (e.dashTime > 0 ? 3.1 : 1) *
+        (e.type === "hunter" ? Math.min(1.75, 1 + (e.huntT || 0) * 0.012) : 1) *
         (e.warn > 0 ? 0.12 : 1) *
         (e.freezeT > 0 ? 0 : 1) *
         (e.slowT > 0 ? CFG.RUN.FIELD_SLOW : 1) *
@@ -662,16 +713,31 @@
       // ===== 小怪远程弹幕（稀疏；三角怪只近战不射击）=====
       const gun = CFG.ENEMY_GUN[e.type];
       if (gun && gun.count > 0) {
+        if (e.salvo > 0) e.salvo = Math.max(0, e.salvo - sdt);
         e.shotCd -= sdt;
         if (e.shotCd <= 0) {
           const inView = e.x > camera.x - 16 && e.x < camera.x + view.w + 16 &&
                          e.y > camera.y - 16 && e.y < camera.y + view.h + 16;
           const inRange = dist2(e.x, e.y, tgt.x, tgt.y) < (640 * view.scale) ** 2;
           if (inView && inRange) {
-            const base = Math.atan2(tgt.y - e.y, tgt.x - e.x);
-            const shots = gun.count + (gun.count > 1 ? Math.min(3, Math.floor((chapter - 1) / 2)) : 0);
+            // 预判射击：按目标当前速度计算提前量
+            let base = Math.atan2(tgt.y - e.y, tgt.x - e.x);
+            if (tgt === playerTgt) {
+              const spEff = gun.speed * view.scale * ebSpeedScale() * threatBulletMul();
+              const d = Math.hypot(tgt.x - e.x, tgt.y - e.y) || 1;
+              const lead = Math.min(0.8, d / spEff) * CFG.ENEMY_GUN.LEAD;
+              base = Math.atan2(
+                tgt.y + (tgt.velY || 0) * lead - e.y,
+                tgt.x + (tgt.velX || 0) * lead - e.x
+              );
+            }
+            const salvoShot = (e.salvo || 0) > 0;
+            if (salvoShot) e.salvo = 0;
+            const shots = gun.count + (gun.count > 1 ? Math.min(3, Math.floor((chapter - 1) / 2)) : 0) +
+              (salvoShot ? 1 : 0);
+            const spread = salvoShot ? Math.max(gun.spread, 0.18) : gun.spread;
             for (let k = 0; k < shots; k++) {
-              const off = shots === 1 ? 0 : (k / (shots - 1) - 0.5) * gun.spread;
+              const off = shots === 1 ? 0 : (k / (shots - 1) - 0.5) * spread;
               fireEnemyBullet(e.x, e.y, base + off, gun.speed, e.dmg * gun.dmgMul, e.color, 4.5);
             }
             e.shotCd = rand(gun.cd[0], gun.cd[1]) / Math.min(1.8, 1 + (chapter - 1) * 0.08);
@@ -737,6 +803,8 @@
     combo += 1;
     comboTimer = CFG.COMBO.TIME;
     if (combo > comboBest) comboBest = combo;
+    // 击杀推高威胁等级（仅房主/单机记录）
+    if (!coopIsGuest()) threat = Math.min(CFG.THREAT.MAX, threat + CFG.THREAT.KILL_RATE);
     const mul = comboMultiplier();
     score += Math.round(e.score * mul);
     credits += Math.round(
@@ -773,6 +841,13 @@
     if (e.type === "diamond") dropCore(e.x, e.y);
     // 精英有概率掉落芯片
     if (e.type === "diamond" && Math.random() < 0.38) dropChip(e.x, e.y);
+    // 追猎者：击杀给予额外奖励与提示
+    if (e.type === "hunter") {
+      dropCore(e.x, e.y);
+      for (let i = 0; i < 3; i++) spawnGem(e.x + rand(-22, 22), e.y + rand(-22, 22), 10);
+      addText(e.x, e.y - 26, "追猎者被终结", "#ff8fa3", 15);
+      emit(e.x, e.y, 26, "#ff2d55", 260, 4, 0.8);
+    }
 
     // 词缀：死亡分裂 / 死亡爆裂
     const affixes = e.affixes;

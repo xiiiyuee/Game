@@ -99,6 +99,18 @@
       comboEl.classList.add("hidden");
     }
 
+    // 威胁等级
+    const threatEl = document.getElementById("ui-threat");
+    if (threatEl) {
+      if (threat >= 0.6) {
+        threatEl.classList.remove("hidden");
+        threatEl.classList.toggle("hot", threat >= 6);
+        setText(document.getElementById("ui-threat-n"), Math.min(CFG.THREAT.MAX, Math.floor(threat) + 1));
+      } else {
+        threatEl.classList.add("hidden");
+      }
+    }
+
     // 超载能量
     const ePct = clamp(me.energy / CFG.ULT.MAX, 0, 1) * 100;
     document.getElementById("ui-ult").style.width = ePct.toFixed(1) + "%";
