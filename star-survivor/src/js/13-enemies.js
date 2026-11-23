@@ -26,9 +26,11 @@
 
   function weightedEnemyType() {
     const list = [];
+    const totalWave = (chapter - 1) * CFG.RUN.CHAPTER_WAVES + waveNum;
     for (const key in CFG.ENEMIES) {
       const def = CFG.ENEMIES[key];
       let w = def.weight;
+      if (def.minWave && totalWave < def.minWave) continue;
       if (key === "diamond") {
         w = waveNum >= CFG.WAVE.ELITE_WAVE ? 11 + (chapter - 1) * 2 : 0;
       }
@@ -86,6 +88,9 @@
       dashCd: rand(1, 2.4),
       dashTime: 0,
       dashAng: 0,
+      warn: 0,                  // 突刺者蓄力预警
+      healCd: rand(1.6, 3.2),   // 修补者治疗间隔
+      healPulse: 0,
       shotCd: rand(1.6, 3.4),   // 小怪首次开火延迟
       isBoss: false,
       dead: false,
@@ -498,7 +503,65 @@
         }
       }
 
+      // 棱堡：远程炮台，过近时后撤，中距离横向游走
+      if (e.type === "hex" && !defTgt) {
+        const pd = Math.hypot(playerTgt.x - e.x, playerTgt.y - e.y) || 1;
+        const desired = 300 * view.scale;
+        if (pd < desired * 0.82) ang += Math.PI;
+        else if (pd < desired * 1.25) ang += Math.PI / 2 * Math.sin(t * 1.1 + e.seed);
+      }
+
+      // 突刺者：原地蓄力预警，随后短暂高速冲刺
+      if (e.type === "dart") {
+        e.dashCd -= sdt;
+        if (e.dashTime > 0) {
+          e.dashTime -= sdt;
+          ang = e.dashAng;
+        } else if (e.warn > 0) {
+          e.warn -= sdt;
+          ang = e.dashAng;
+          if (e.warn <= 0) {
+            e.dashTime = 0.22;
+            emit(e.x, e.y, 8, e.color, 180, 2.6, 0.4);
+          }
+        } else if (e.dashCd <= 0) {
+          const pd = Math.hypot(playerTgt.x - e.x, playerTgt.y - e.y) || 1;
+          if (pd < 520 * view.scale) {
+            e.warn = 0.34;
+            e.dashAng = ang;
+            e.dashCd = rand(2.6, 3.8);
+            emit(e.x, e.y, 6, e.color, 120, 2.2, 0.4);
+          } else {
+            e.dashCd = 0.5;
+          }
+        }
+      }
+
+      // 修补者：周期性治疗周围友军
+      e.healPulse = Math.max(0, (e.healPulse || 0) - sdt);
+      if (e.type === "mender") {
+        e.healCd -= sdt;
+        if (e.healCd <= 0) {
+          e.healCd = CFG.ENEMY_SUPPORT.MENDER_CD * rand(0.9, 1.1);
+          const R = CFG.ENEMY_SUPPORT.MENDER_RADIUS * view.scale;
+          let healed = 0;
+          for (let k = 0; k < enemies.length && healed < CFG.ENEMY_SUPPORT.MENDER_MAX_TARGETS; k++) {
+            const o = enemies[k];
+            if (o === e || o.dead || o.isBoss || o.hp >= o.maxHp) continue;
+            if (dist2(e.x, e.y, o.x, o.y) > R * R) continue;
+            o.hp = Math.min(o.maxHp, o.hp + o.maxHp * CFG.ENEMY_SUPPORT.MENDER_HEAL);
+            healed += 1;
+            emit(o.x, o.y, 2, THEME.mint, 90, 1.8, 0.35);
+          }
+          if (healed > 0) {
+            e.healPulse = 0.6;
+            emit(e.x, e.y, 10, THEME.mint, 150, 2.4, 0.5);
+          }
+        }
+      }
+
       const sp = e.speed * view.scale * stats.enemySpeedMul * (e.dashTime > 0 ? 3.1 : 1) *
+        (e.warn > 0 ? 0.12 : 1) *
         (e.slowT > 0 ? CFG.RUN.FIELD_SLOW : 1) *
         (e.frostT > 0 ? CFG.SKILL.PHASE.ICE_SLOW : 1);
       e.slowT = Math.max(0, (e.slowT || 0) - sdt);

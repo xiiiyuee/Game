@@ -362,8 +362,34 @@
         rot = t * 0.9 + e.seed; fillA = 0.2; lw = 2;
       } else if (e.type === "penta") {
         sides = 5; rot = t * 1.4 + e.seed; fillA = 0.2; lw = 2;
+      } else if (e.type === "hex") {
+        sides = 6; rot = t * 0.5 + e.seed; fillA = 0.18; lw = 2.6;
+      } else if (e.type === "dart") {
+        sides = 4; rot = e.angle; fillA = 0.28; lw = 2;
+      } else if (e.type === "mender") {
+        sides = 6; rot = -t * 0.8 + e.seed; fillA = 0.2; lw = 2;
       }
       drawShape(0, 0, e.r, sides, rot, rgbaOf(e.color, fillA), e.color, lw);
+
+      // 突刺者蓄力指示线
+      if (e.type === "dart" && e.warn > 0) {
+        ctx.strokeStyle = rgbaOf(e.color, 0.45 + 0.35 * Math.sin(t * 22));
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(e.dashAng) * e.r * 3.2, Math.sin(e.dashAng) * e.r * 3.2);
+        ctx.stroke();
+      }
+
+      // 修补者治疗脉冲
+      if (e.type === "mender" && e.healPulse > 0) {
+        const hk = e.healPulse / 0.6;
+        ctx.strokeStyle = rgbaOf(THEME.mint, 0.55 * hk);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, e.r + 6 + (1 - hk) * 16, 0, TAU);
+        ctx.stroke();
+      }
 
       // 受击闪白：用同样的轮廓整块变白，命中确认更干净
       const fl = e.hitFlash || 0;

@@ -103,12 +103,26 @@
       square:  { name: "重甲",   hp: 38, speed: 58,  dmg: 12, xp: 5,  score: 16, r: 15,   color: "#4d7cff", weight: 26 },
       penta:   { name: "游弋者", hp: 26, speed: 80,  dmg: 10, xp: 4,  score: 13, r: 13.5, color: "#b06bff", weight: 20 },
       diamond: { name: "裂星精英", hp: 82, speed: 108, dmg: 18, xp: 11, score: 40, r: 16,  color: "#ff9f2e", weight: 0 },
+      // 棱堡：远程炮台，保持距离并三连射
+      hex:     { name: "棱堡",   hp: 72, speed: 46,  dmg: 14, xp: 6,  score: 22, r: 16,   color: "#8ea6ff", weight: 10, minWave: 6 },
+      // 突刺者：蓄力预警后高速冲刺
+      dart:    { name: "突刺者", hp: 22, speed: 128, dmg: 11, xp: 4,  score: 15, r: 11,   color: "#ff3ea5", weight: 8,  minWave: 3 },
+      // 修补者：为周围敌人持续回血，优先击杀目标
+      mender:  { name: "修补者", hp: 30, speed: 74,  dmg: 6,  xp: 5,  score: 18, r: 13,   color: "#6dffc9", weight: 6,  minWave: 8 },
     },
     // 小怪远程弹幕：间隔范围（秒）、弹速、伤害倍率、每次弹数、扇形角（三角怪不射击）
     ENEMY_GUN: {
       square:  { cd: [4.4, 5.8], speed: 165, dmgMul: 0.55, count: 1, spread: 0 },
       penta:   { cd: [3.2, 4.4], speed: 185, dmgMul: 0.5,  count: 1, spread: 0 },
       diamond: { cd: [2.9, 4.0], speed: 200, dmgMul: 0.6,  count: 3, spread: 0.4 },
+      hex:     { cd: [4.6, 6.0], speed: 155, dmgMul: 0.5,  count: 3, spread: 0.36 },
+    },
+    // 修补者光环：同一时刻最多治疗 5 名友军
+    ENEMY_SUPPORT: {
+      MENDER_CD: 3.2,
+      MENDER_RADIUS: 170,
+      MENDER_HEAL: 0.06,
+      MENDER_MAX_TARGETS: 5,
     },
     BOSS: {
       name: "虚空之眼 · 吞噬者",
