@@ -10,6 +10,7 @@
     const dashBtn = document.getElementById("dash-btn");
     const pauseBtn = document.getElementById("pause-btn");
     const ultBtn = document.getElementById("ult-btn");
+    const skillBtn = document.getElementById("skill-btn");
 
     const RADIUS = 46;
 
@@ -64,6 +65,12 @@
       e.preventDefault();
       if (state === "playing") intent.ult = true;
     });
+    if (skillBtn) {
+      skillBtn.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        if (state === "playing") intent.skill = true;
+      });
+    }
     pauseBtn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       if (state === "playing" || state === "paused") togglePause();
@@ -193,15 +200,30 @@
   }
 
   // 开局武器选择
+  let pendingWeapon = "pulse";
+
   function openWeaponSelect() {
     document.getElementById("ov-menu").classList.add("hidden");
     document.getElementById("ov-weapon").classList.remove("hidden");
     document.getElementById("ov-weapon").scrollTop = 0;
   }
 
+  // 选完武器后进入技能选择
+  function openSkillSelect(weaponKey) {
+    if (weaponKey) pendingWeapon = weaponKey;
+    document.getElementById("ov-weapon").classList.add("hidden");
+    document.getElementById("ov-skill").classList.remove("hidden");
+    document.getElementById("ov-skill").scrollTop = 0;
+  }
+
   document.getElementById("weapon-cards").addEventListener("click", (e) => {
     const btn = e.target.closest("[data-weapon]");
-    if (btn) startGame(btn.dataset.weapon);
+    if (btn) openSkillSelect(btn.dataset.weapon);
+  });
+
+  document.getElementById("skill-cards").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-skill]");
+    if (btn) startGame(pendingWeapon, btn.dataset.skill);
   });
 
   // 特效档位：流畅模式减少辉光与粒子，降低手机发热

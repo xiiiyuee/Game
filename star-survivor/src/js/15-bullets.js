@@ -22,7 +22,10 @@
     if (ownerId) {
       e.lastHit = ownerId;                 // 个人伤害 / 击杀归属（P4-07）
       const op = coopPlayerById(ownerId);
-      if (op) op.damage += Math.max(0, dmg);
+      if (op) {
+        op.damage += Math.max(0, dmg);
+        gainSkillEnergy(op, CFG.SKILL.HIT_GAIN);   // 命中返技能能量
+      }
     }
 
     // 受击闪白 + 分档反馈（P0）：普通命中轻，暴击/精英/Boss 重
@@ -224,6 +227,23 @@
       b.x += b.vx * dt * slow;
       b.y += b.vy * dt * slow;
       b.life -= dt * slow;
+
+      // 擦弹回流：在命中判定前吸收近距离掠过的敌弹（房主裁决）
+      if (!coopIsGuest() && !b.heavy) {
+        let grazed = false;
+        for (let k = 0; k < players.length; k++) {
+          const p = players[k];
+          if (p.down || p.eliminated || !(p.grazeActive > 0)) continue;
+          const gr = p.r + CFG.SKILL.GRAZE.RADIUS;
+          if (dist2(b.x, b.y, p.x, p.y) <= gr * gr) {
+            grazeAbsorb(p, b);
+            b.dead = true;
+            grazed = true;
+            break;
+          }
+        }
+        if (grazed) { ebullets.splice(i, 1); continue; }
+      }
 
       // 命中防线：炮塔/缓速场会替玩家挡弹并被破坏
       if (!b.dead) {

@@ -9,6 +9,7 @@
     pollInputIntent();
     if (intent.dash) { intent.dash = false; tryDash(); coopMarkEdge("dash"); }
     if (intent.ult) { intent.ult = false; activateUltimate(); coopMarkEdge("ult"); }
+    if (intent.skill) { intent.skill = false; tryCastSkill(); }
 
     // Boss 击杀特写：慢动作 + 延迟进入下一星域
     if (victoryTimer > 0) {
@@ -89,6 +90,8 @@
     if (state !== "playing") return false;
 
     updateDrones(dt, elapsed);
+    updateSkillEffects(dt);
+    if (state !== "playing") { updateParticles(dt); return false; }
     updateDefenses(dt);
     updateEnemies(dt, elapsed);
     if (state !== "playing") { updateParticles(dt); return false; }

@@ -110,6 +110,19 @@
       ready ? (document.body.classList.contains("touch") ? "超载就绪" : "超载就绪 · E")
             : `超载 ${Math.floor(ePct)}%`);
 
+    // 主动技能能量
+    const sd = skillDef(me);
+    const sPct = clamp((me.skillEnergy || 0) / CFG.SKILL.MAX, 0, 1) * 100;
+    const sReady = (me.skillEnergy || 0) >= CFG.SKILL.MAX && (me.skillLock || 0) <= 0;
+    const skillBar = document.getElementById("skill-bar");
+    document.getElementById("ui-skill").style.width = sPct.toFixed(1) + "%";
+    skillBar.classList.toggle("ready", sReady);
+    const skillBtn = document.getElementById("skill-btn");
+    if (skillBtn) skillBtn.classList.toggle("ready", sReady);
+    setText(document.getElementById("ui-skill-text"),
+      sReady ? (document.body.classList.contains("touch") ? `${sd.name}就绪` : `${sd.name}就绪 · Q`)
+             : `${sd.name} ${Math.floor(sPct)}%`);
+
     const total = Math.max(0, Math.floor(elapsed));
     const mm = Math.floor(total / 60);
     const ss = total % 60;

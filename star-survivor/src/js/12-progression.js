@@ -112,6 +112,34 @@
         return `攻击范围 <b>+${Math.round(m * 100)}%</b><br>${Math.round(s.range)} → ${Math.round(s.range * (1 + m))}`;
       },
     },
+    /* ---------- 主动技能成长：正向反馈而非纯数值 ---------- */
+    {
+      id: "skill_charge", name: "能量循环", icon: "⚙", max: 4,
+      base: 0.3, minRarity: 0, skill: true,
+      apply(s, m) { s.skillGainMul *= 1 + m; },
+      desc(s, m) {
+        return `技能能量获取 <b>+${Math.round(m * 100)}%</b><br>被动回复与命中返能同步提升`;
+      },
+    },
+    {
+      id: "skill_power", name: "技能增幅", icon: "✧", max: 3,
+      base: 0.25, minRarity: 0, skill: true,
+      apply(s, m) { s.skillPowerMul *= 1 + m; },
+      desc(s, m) {
+        return `技能伤害 <b>+${Math.round(m * 100)}%</b><br>残影 / 重力井内爆更强`;
+      },
+    },
+    {
+      id: "skill_flow", name: "过载循环", icon: "↻", max: 3,
+      base: 0.15, minRarity: 1, skill: true,
+      apply(s, m, p) {
+        s.skillDurationMul *= 1 + m;
+        if (p) p.skillEnergy = Math.min(CFG.SKILL.MAX, (p.skillEnergy || 0) + 15);
+      },
+      desc(s, m) {
+        return `技能持续 <b>+${Math.round(m * 100)}%</b><br>施放立即返还 <b>15</b> 能量`;
+      },
+    },
     /* ---------- 诅咒强化：强力但带代价 ---------- */
     {
       id: "curse_blood", name: "血债契约", icon: "☠", max: 2, base: 0.3, curse: true,
@@ -326,6 +354,7 @@
       const rIdx = RARITIES.indexOf(rarity);
       const pool = UPGRADES.filter((d) => {
         if (d.curse) return false;
+        if (d.skill && !lp.skill) return false;
         if ((stacks[d.id] || 0) >= d.max) return false;
         if (d.minRarityIndex !== undefined && rIdx < d.minRarityIndex) return false;
         return !chosen.has(d.id);
@@ -342,6 +371,7 @@
       const rIdx = 2;
       const pool = UPGRADES.filter((d) => {
         if (d.curse) return false;
+        if (d.skill && !lp.skill) return false;
         if ((stacks[d.id] || 0) >= d.max) return false;
         if (d.minRarityIndex !== undefined && rIdx < d.minRarityIndex) return false;
         return true;

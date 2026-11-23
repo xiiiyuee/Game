@@ -21,6 +21,10 @@
       drones: 0,                 // 守护无人机数量
       shieldMax: P.SHIELD_MAX,
       shieldRegen: P.SHIELD_REGEN,
+      // 主动技能成长（升级卡修正）
+      skillGainMul: 1,           // 技能能量获取倍率
+      skillPowerMul: 1,          // 技能伤害倍率
+      skillDurationMul: 1,       // 技能持续倍率
       // 事件 / 进化 / 诅咒修正
       xpMul: 1,               // 经验获取倍率
       takenMul: 1,            // 受到伤害倍率（诅咒）
@@ -61,6 +65,15 @@
       trailCd: 0,
       hitFlash: 0,
       energy: 0,                 // 超载能量
+      skill: chosenSkill || "phase", // 本局主动技能
+      skillEnergy: 0,            // 技能能量 0..MAX
+      skillLock: 0,              // 施放后短锁
+      grazeActive: 0,            // 擦弹回流剩余时间
+      grazeStacks: 0,            // 擦弹层数（强化射击）
+      phaseTime: 0,              // 相位冲刺剩余时间
+      phaseLeft: 0,              // 待生成残影数
+      phaseSpawn: 0,             // 残影生成计时
+      phaseDir: { x: 1, y: 0 },
       xp: 0,                     // 个人经验 / 等级（联机各自成长，P4-01）
       level: 1,
       xpNeed: CFG.XP.BASE,
@@ -170,6 +183,8 @@
     fields = [];
     walls = [];
     buildGhosts = [];
+    gravityWells = [];
+    skillShadows = [];
     defDamageTaken = 0;
     defLost = 0;
     coreDrops = [];

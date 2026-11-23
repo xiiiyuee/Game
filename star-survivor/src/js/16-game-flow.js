@@ -24,8 +24,9 @@
     try { localStorage.setItem("sf_tutor_seen", "1"); } catch (err) {}
   }
 
-  function startGame(weaponKey) {
+  function startGame(weaponKey, skillKey) {
     if (weaponKey && CFG.WEAPONS[weaponKey]) chosenWeapon = weaponKey;
+    if (skillKey && SKILL_DEFS[skillKey]) chosenSkill = skillKey;
     resetGame();
     hideAllOverlays();
     document.getElementById("hud").classList.remove("hidden");
@@ -135,7 +136,7 @@
   }
 
   function hideAllOverlays() {
-    ["ov-menu", "ov-weapon", "ov-pause", "ov-upgrade", "ov-result", "ov-shop", "ov-build", "ov-theme", "ov-meta", "ov-trader"].forEach((id) => {
+    ["ov-menu", "ov-weapon", "ov-skill", "ov-pause", "ov-upgrade", "ov-result", "ov-shop", "ov-build", "ov-theme", "ov-meta", "ov-trader"].forEach((id) => {
       document.getElementById(id).classList.add("hidden");
     });
   }
@@ -931,6 +932,7 @@
         Math.round(p.shield), Math.round(p.stats.shieldMax),
         p.down ? 1 : 0, Math.round(p.downTimer || 0), p.eliminated ? 1 : 0,
         p.level || 1, p.kills || 0,
+        p.skill || "", Math.round(p.skillEnergy || 0),
       ]);
     }
     return arr;
@@ -1034,6 +1036,7 @@
       t: "snap", v: COOP_SNAP_VER, s: coopSnapSeq, pl: coopSnapshotList(),
       cr: Math.round(credits), co: cores, rv: revives,
       df: coopDefenseList(),
+      sg: coopWellList(),
       dd: Math.round(defDamageTaken),
       dl: defLost,
     });
@@ -1070,6 +1073,10 @@
         p.level = e[11] || 1;
         p.kills = e[12] || 0;
       }
+      if (e.length >= 15) {
+        if (e[13]) p.skill = e[13];
+        p.skillEnergy = e[14] || 0;
+      }
       coopInterpPush(id, p.x, p.y, p.facing);
     }
     // 团队共享资源（D-03）：星币 / 核心 / 保险由房主同步
@@ -1077,6 +1084,7 @@
     if (typeof d.co === "number" && d.co !== cores) cores = d.co;
     if (typeof d.rv === "number" && d.rv !== revives) revives = d.rv;
     if (d.df) coopApplyDefenses(d.df);       // 炮塔/缓速场及耐久由房主同步
+    if (d.sg) coopApplyWells(d.sg);          // 重力井表现由房主同步
     if (typeof d.dd === "number") defDamageTaken = d.dd;
     if (typeof d.dl === "number") defLost = d.dl;
     refreshHud();
@@ -1107,6 +1115,10 @@
       player.level = e[11] || player.level;
       player.kills = e[12] || 0;
       syncProgressGlobals(player);
+    }
+    if (e.length >= 15) {
+      if (e[13]) player.skill = e[13];
+      player.skillEnergy = e[14] || 0;
     }
     if (player.hp < hpBefore - 0.5) {
       if (coopGuestShop) coopCloseShopUI();     // 受击关闭个人商店
@@ -2237,6 +2249,7 @@
         bulletR: s.bulletR, drones: s.drones || 0,
         explodeOnHit: !!s.explodeOnHit, echoBurst: !!s.echoBurst, twinPulse: !!s.twinPulse,
         pulseBlast: !!s.pulseBlast, scatterBlast: !!s.scatterBlast, railShard: !!s.railShard,
+        skillGainMul: s.skillGainMul, skillPowerMul: s.skillPowerMul, skillDurationMul: s.skillDurationMul,
       },
       chips: p.chips.map((c) => ({ kind: c.kind, name: c.name, icon: c.icon, tier: c.tier, value: c.value, score: c.score })),
       stacks: Object.assign({}, p.stacks),
@@ -2524,6 +2537,11 @@
       if (dist2(dd.x, dd.y, p.x, p.y) > maxD * maxD) { coopInReject(); return; }
       if (q.act === "repair") repairDefense(dd);
       else upgradeDefense(dd);
+    } else if (d.k === "skill") {
+      // 队友主动技能：房主校验能量后执行（重力井落点可指定）
+      if (p.down || p.eliminated) return;
+      const sx = Number(q.x), sy = Number(q.y);
+      castSkill(p, isFinite(sx) ? sx : undefined, isFinite(sy) ? sy : undefined);
     }
   }
 

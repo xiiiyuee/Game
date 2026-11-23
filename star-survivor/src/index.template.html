@@ -23,6 +23,7 @@
     <div class="bar shield"><i id="ui-shield"></i><span id="ui-shield-text">50 / 50</span></div>
     <div class="bar xp"><i id="ui-xp"></i><span id="ui-xp-text">0 / 8</span></div>
     <div class="bar ult" id="ult-bar"><i id="ui-ult"></i><span id="ui-ult-text">超载 0%</span></div>
+    <div class="bar skill" id="skill-bar"><i id="ui-skill"></i><span id="ui-skill-text">技能 0%</span></div>
     <div class="team-list hidden" id="team-list"></div>
   </div>
   <div class="hud-right">
@@ -122,6 +123,32 @@
       </button>
     </div>
     <p class="note">手机同样适用：点选卡片后进入战斗</p>
+  </div>
+</div>
+
+<!-- 开局主动技能选择 -->
+<div class="overlay hidden" id="ov-skill">
+  <div class="panel wide">
+    <h2>选择战术技能</h2>
+    <p class="sub">主动改变弹幕、走位与资源循环 · 战斗中按 <b>Q</b> 释放</p>
+    <div class="cards weapon-cards" id="skill-cards">
+      <button class="card rarity-rare weapon" data-skill="phase">
+        <div class="card-top"><span class="card-ic">⇢</span><span class="card-rt">机动</span></div>
+        <h3>相位冲刺</h3>
+        <p>高速穿过弹幕与敌人<br>留下 <b>3</b> 个残影向敌人补射</p>
+      </button>
+      <button class="card rarity-epic weapon" data-skill="well">
+        <div class="card-top"><span class="card-ic">◎</span><span class="card-rt">控场</span></div>
+        <h3>重力井</h3>
+        <p>在前方生成引力场<br>吸附敌人与弹幕，结束时<b>内爆</b></p>
+      </button>
+      <button class="card rarity-common weapon" data-skill="graze">
+        <div class="card-top"><span class="card-ic">◌</span><span class="card-rt">生存</span></div>
+        <h3>擦弹回流</h3>
+        <p>持续吸收擦过的子弹<br>转化为<b>护盾</b>与<b>强化射击</b></p>
+      </button>
+    </div>
+    <p class="note">能量靠时间与命中敌人积累 · 冷却期间仍可继续蓄能</p>
   </div>
 </div>
 
@@ -236,6 +263,7 @@
     <div><b>WASD</b><span>移动</span></div>
     <div><b>空格</b><span>冲刺</span></div>
     <div><b>E</b><span>超载</span></div>
+    <div><b>Q</b><span>战术技能</span></div>
     <div><b>B</b><span>建造</span></div>
     <div><b>F</b><span>升级 / 修复防线</span></div>
     <div><b>ESC</b><span>暂停</span></div>
@@ -254,6 +282,7 @@
 <div id="touch">
   <div id="joystick"><div id="knob"></div></div>
   <div class="touch-btns">
+    <button id="skill-btn">技能</button>
     <button id="ult-btn">超载</button>
     <button id="dash-btn">冲刺</button>
     <button id="pause-btn">II</button>

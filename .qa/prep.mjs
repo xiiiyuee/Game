@@ -37,6 +37,19 @@ const hook = `
     get upgradeRerollUsed() { return upgradeRerollUsed; },
     rerollUpgrade, updateUpgradeMeta, openUpgrade, syncProgressGlobals,
     maybeShowTutorial, closeTutorial,
+    // 主动技能
+    get chosenSkill() { return chosenSkill; }, set chosenSkill(v) { chosenSkill = v; },
+    get gravityWells() { return gravityWells; },
+    get skillShadows() { return skillShadows; },
+    get bullets() { return bullets; },
+    get ebullets() { return ebullets; },
+    get intent() { return intent; },
+    SKILL_DEFS, UPGRADES, skillDef, castSkill, tryCastSkill, gainSkillEnergy, updateSkillEffects,
+    updateBullets, getLocalPlayer,
+    get chosenWeapon() { return chosenWeapon; },
+    coopWellList, coopApplyWells, coopIsGuest,
+    get roomCode() { return roomCode; },
+    spawnPlayerBullet,
   };
 `;
 html = html.slice(0, idx) + hook + html.slice(idx);

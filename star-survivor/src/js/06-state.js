@@ -68,6 +68,9 @@
   let comboTimer = 0;              // 连杀保持倒计时
   let comboBest = 0;               // 本局最高连杀
   let chosenWeapon = "pulse";      // 本局选择的武器
+  let chosenSkill = "phase";       // 本局选择的主动技能
+  let gravityWells = [];           // 重力井（房主模拟，客机按快照表现）
+  let skillShadows = [];           // 相位冲刺残影
   let slowmo = 0;                  // Boss 击杀慢动作剩余时间
   let victoryTimer = 0;            // Boss 击杀后的结算延迟
   let victoryFlash = 0;            // Boss 击杀白闪

@@ -446,6 +446,9 @@
     const blink = p.invuln > 0 && Math.floor(t * 18) % 2 === 0;
     const red = p.hitFlash > 0;
 
+    // 擦弹回流力场
+    drawGrazeAura(p, t);
+
     // 护盾环
     if (p.shield > 0.5) {
       ctx.strokeStyle = rgbaOf(THEME.cyan, 0.18 + (p.shield / p.stats.shieldMax) * 0.25);
@@ -1063,8 +1066,10 @@
       drawChipDrops(t);
       drawCores(t);
       drawTrader(t);
+      drawGravityWells(t);
       drawBullets();
       drawEnemies(t);
+      drawSkillShadows(t);
       // 其他玩家先画，本地玩家最后画在最上层
       for (let i = 0; i < players.length; i++) {
         if (players[i] !== me) drawPlayer(t, players[i]);

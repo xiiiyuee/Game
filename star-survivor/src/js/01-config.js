@@ -178,6 +178,19 @@
       RANGE_MUL: 0.85,        // 索敌范围倍率
       SPEED_MUL: 0.95,
     },
+    // 主动技能：能量靠被动回复与命中敌人积累，冷却期间仍可继续蓄能
+    SKILL: {
+      MAX: 100,              // 技能能量上限
+      PASSIVE: 2.6,          // 每秒被动回复
+      HIT_GAIN: 2,           // 命中敌人返能量
+      CAST_LOCK: 0.4,        // 施放后的短锁，避免连按
+      // 相位冲刺：穿越弹幕与敌人，沿路留下残影补射
+      PHASE: { TIME: 0.32, SPEED: 1080, SHADOWS: 3, SHADOW_DELAY: 0.16, SHADOW_DMG: 0.45, SHADOW_LIFE: 0.7 },
+      // 重力井：吸附敌人与弹幕，结束时内爆
+      WELL: { DIST: 190, RADIUS: 120, TIME: 2.4, PULL_ENEMY: 90, PULL_BULLET: 140, DMG: 26 },
+      // 擦弹回流：近距离掠过敌弹时吸收，转为护盾与强化射击
+      GRAZE: { TIME: 4.5, RADIUS: 38, MAX_STACKS: 10, DMG_PER: 0.06, SHIELD: 1, ENERGY: 1.5 },
+    },
     ULT: {
       MAX: 100,              // 能量上限
       GAIN_KILL: 7,          // 普通敌人击杀充能

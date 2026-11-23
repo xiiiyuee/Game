@@ -29,13 +29,38 @@
     p.dashCd = Math.max(0, p.dashCd - dt);
     p.hitFlash = Math.max(0, p.hitFlash - dt * 2.6);
 
+    // 主动技能：被动蓄能（冷却/施放锁期间照常积累）
+    p.skillLock = Math.max(0, (p.skillLock || 0) - dt);
+    if (p.skill && (p.skillEnergy || 0) < CFG.SKILL.MAX) {
+      const gain = CFG.SKILL.PASSIVE * (s.skillGainMul || 1) * dt;
+      p.skillEnergy = Math.min(CFG.SKILL.MAX, (p.skillEnergy || 0) + gain);
+    }
+    // 擦弹回流计时；结束时清空层数
+    if (p.grazeActive > 0) {
+      p.grazeActive = Math.max(0, p.grazeActive - dt);
+      if (p.grazeActive === 0) p.grazeStacks = 0;
+    }
+
     // 护盾恢复
     if (p.shieldDelay > 0) p.shieldDelay -= dt;
     else p.shield = Math.min(s.shieldMax, p.shield + s.shieldRegen * dt);
 
     const v = p.local ? readMoveInput() : { x: p.intent.mx || 0, y: p.intent.my || 0 };
 
-    if (p.dashTime > 0) {
+    if (p.phaseTime > 0) {
+      // 相位冲刺：高速位移、沿途留影，冲刺帧内几乎无敌
+      p.phaseTime = Math.max(0, p.phaseTime - dt);
+      const sp = CFG.SKILL.PHASE.SPEED * view.scale;
+      p.x += p.phaseDir.x * sp * dt;
+      p.y += p.phaseDir.y * sp * dt;
+      p.invuln = Math.max(p.invuln, 0.05);
+      p.phaseSpawn -= dt;
+      if (p.phaseSpawn <= 0 && p.phaseLeft > 0) {
+        p.phaseSpawn = CFG.SKILL.PHASE.TIME / CFG.SKILL.PHASE.SHADOWS;
+        p.phaseLeft -= 1;
+        spawnSkillShadow(p);
+      }
+    } else if (p.dashTime > 0) {
       p.dashTime -= dt;
       const sp = P.DASH_SPEED * view.scale;
       p.x += p.dashDir.x * sp * dt;
@@ -149,18 +174,20 @@
     p.facing = baseAng;
     const n = s.bulletCount;
     const spread = Math.min(1.0, 0.11 * (n - 1) + (s.spread || 0));
+    // 擦弹回流：层数转化为强化射击
+    const grazeMul = 1 + (p.grazeStacks || 0) * CFG.SKILL.GRAZE.DMG_PER;
 
     for (let i = 0; i < n; i++) {
       if (bullets.length >= CFG.LIMITS.BULLETS) break;
       const t = n === 1 ? 0.5 : i / (n - 1);
       const ang = baseAng + (t - 0.5) * spread;
-      spawnPlayerBullet(ang, undefined, undefined, p);
+      spawnPlayerBullet(ang, s.damage * grazeMul, undefined, p);
     }
 
     // 进化「双子脉冲」：每次射击追加两道侧向脉冲
     if (s.twinPulse) {
-      spawnPlayerBullet(baseAng - 0.12, s.damage * 0.7, undefined, p);
-      spawnPlayerBullet(baseAng + 0.12, s.damage * 0.7, undefined, p);
+      spawnPlayerBullet(baseAng - 0.12, s.damage * 0.7 * grazeMul, undefined, p);
+      spawnPlayerBullet(baseAng + 0.12, s.damage * 0.7 * grazeMul, undefined, p);
     }
 
     // 枪口火花

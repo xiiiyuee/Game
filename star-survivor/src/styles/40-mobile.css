@@ -48,6 +48,18 @@
     touch-action: none;
   }
   .touch-btns #dash-btn { box-shadow: 0 0 18px rgba(63, 229, 255, 0.15); }
+  .touch-btns #skill-btn {
+    border-color: rgba(176, 107, 255, 0.35);
+    color: #c9a6ff;
+    box-shadow: 0 0 18px rgba(140, 110, 255, 0.12);
+    opacity: 0.55;
+  }
+  .touch-btns #skill-btn.ready {
+    opacity: 1;
+    border-color: rgba(200, 160, 255, 0.95);
+    background: rgba(44, 24, 70, 0.7);
+    animation: ultPulse 1.1s ease-in-out infinite;
+  }
   .touch-btns #pause-btn { width: 46px; height: 46px; align-self: flex-end; font-size: 12px; }
   .touch-btns #ult-btn {
     border-color: rgba(255, 176, 60, 0.35);

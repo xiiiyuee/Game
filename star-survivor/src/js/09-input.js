@@ -5,7 +5,7 @@
 
   // 统一输入意图：键鼠 / 触屏都写入同一结构；联机时可直接序列化发送
   // mx,my 归一化移动向量；fire 开火；dash/ult 本帧一次性请求；aim 瞄准角（null = 自动索敌）
-  const intent = { mx: 0, my: 0, fire: false, dash: false, ult: false, aim: null };
+  const intent = { mx: 0, my: 0, fire: false, dash: false, ult: false, skill: false, aim: null };
 
   // 汇总当前帧移动 / 开火意图，由 simulate 每帧调用
   function pollInputIntent() {
@@ -30,6 +30,7 @@
     intent.fire = false;
     intent.dash = false;
     intent.ult = false;
+    intent.skill = false;
   }
 
   window.addEventListener("keydown", (e) => {
@@ -66,6 +67,10 @@
     }
     if (code === "KeyE") {
       if (state === "playing") intent.ult = true;
+      return;
+    }
+    if (code === "KeyQ") {
+      if (state === "playing") intent.skill = true;
       return;
     }
     if (code === "Space" || code === "ShiftLeft" || code === "ShiftRight") {

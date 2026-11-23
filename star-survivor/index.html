@@ -115,6 +115,10 @@
   .bar.ult i { background: linear-gradient(90deg, var(--orange), var(--gold)); box-shadow: 0 0 12px rgba(255, 180, 60, 0.55); }
   .bar.ult.ready i { animation: ultPulse 1.1s ease-in-out infinite; }
   .bar.ult span { font-size: 8px; letter-spacing: 1px; }
+  .bar.skill { height: 8px; }
+  .bar.skill i { background: linear-gradient(90deg, var(--purple, #b06bff), var(--cyan, #3fe5ff)); box-shadow: 0 0 10px rgba(140, 110, 255, 0.5); }
+  .bar.skill.ready i { animation: ultPulse 1.1s ease-in-out infinite; }
+  .bar.skill span { font-size: 8px; letter-spacing: 1px; }
   @keyframes ultPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.45); } }
 
   /* 队友状态：本地玩家血条下方，单机时整块隐藏 */
@@ -906,6 +910,18 @@
     touch-action: none;
   }
   .touch-btns #dash-btn { box-shadow: 0 0 18px rgba(63, 229, 255, 0.15); }
+  .touch-btns #skill-btn {
+    border-color: rgba(176, 107, 255, 0.35);
+    color: #c9a6ff;
+    box-shadow: 0 0 18px rgba(140, 110, 255, 0.12);
+    opacity: 0.55;
+  }
+  .touch-btns #skill-btn.ready {
+    opacity: 1;
+    border-color: rgba(200, 160, 255, 0.95);
+    background: rgba(44, 24, 70, 0.7);
+    animation: ultPulse 1.1s ease-in-out infinite;
+  }
   .touch-btns #pause-btn { width: 46px; height: 46px; align-self: flex-end; font-size: 12px; }
   .touch-btns #ult-btn {
     border-color: rgba(255, 176, 60, 0.35);
@@ -1054,6 +1070,7 @@
     <div class="bar shield"><i id="ui-shield"></i><span id="ui-shield-text">50 / 50</span></div>
     <div class="bar xp"><i id="ui-xp"></i><span id="ui-xp-text">0 / 8</span></div>
     <div class="bar ult" id="ult-bar"><i id="ui-ult"></i><span id="ui-ult-text">超载 0%</span></div>
+    <div class="bar skill" id="skill-bar"><i id="ui-skill"></i><span id="ui-skill-text">技能 0%</span></div>
     <div class="team-list hidden" id="team-list"></div>
   </div>
   <div class="hud-right">
@@ -1153,6 +1170,32 @@
       </button>
     </div>
     <p class="note">手机同样适用：点选卡片后进入战斗</p>
+  </div>
+</div>
+
+<!-- 开局主动技能选择 -->
+<div class="overlay hidden" id="ov-skill">
+  <div class="panel wide">
+    <h2>选择战术技能</h2>
+    <p class="sub">主动改变弹幕、走位与资源循环 · 战斗中按 <b>Q</b> 释放</p>
+    <div class="cards weapon-cards" id="skill-cards">
+      <button class="card rarity-rare weapon" data-skill="phase">
+        <div class="card-top"><span class="card-ic">⇢</span><span class="card-rt">机动</span></div>
+        <h3>相位冲刺</h3>
+        <p>高速穿过弹幕与敌人<br>留下 <b>3</b> 个残影向敌人补射</p>
+      </button>
+      <button class="card rarity-epic weapon" data-skill="well">
+        <div class="card-top"><span class="card-ic">◎</span><span class="card-rt">控场</span></div>
+        <h3>重力井</h3>
+        <p>在前方生成引力场<br>吸附敌人与弹幕，结束时<b>内爆</b></p>
+      </button>
+      <button class="card rarity-common weapon" data-skill="graze">
+        <div class="card-top"><span class="card-ic">◌</span><span class="card-rt">生存</span></div>
+        <h3>擦弹回流</h3>
+        <p>持续吸收擦过的子弹<br>转化为<b>护盾</b>与<b>强化射击</b></p>
+      </button>
+    </div>
+    <p class="note">能量靠时间与命中敌人积累 · 冷却期间仍可继续蓄能</p>
   </div>
 </div>
 
@@ -1267,6 +1310,7 @@
     <div><b>WASD</b><span>移动</span></div>
     <div><b>空格</b><span>冲刺</span></div>
     <div><b>E</b><span>超载</span></div>
+    <div><b>Q</b><span>战术技能</span></div>
     <div><b>B</b><span>建造</span></div>
     <div><b>F</b><span>升级 / 修复防线</span></div>
     <div><b>ESC</b><span>暂停</span></div>
@@ -1285,6 +1329,7 @@
 <div id="touch">
   <div id="joystick"><div id="knob"></div></div>
   <div class="touch-btns">
+    <button id="skill-btn">技能</button>
     <button id="ult-btn">超载</button>
     <button id="dash-btn">冲刺</button>
     <button id="pause-btn">II</button>
@@ -1484,6 +1529,19 @@
       DMG_MUL: 0.45,          // 伤害 = 玩家伤害 × 该系数
       RANGE_MUL: 0.85,        // 索敌范围倍率
       SPEED_MUL: 0.95,
+    },
+    // 主动技能：能量靠被动回复与命中敌人积累，冷却期间仍可继续蓄能
+    SKILL: {
+      MAX: 100,              // 技能能量上限
+      PASSIVE: 2.6,          // 每秒被动回复
+      HIT_GAIN: 2,           // 命中敌人返能量
+      CAST_LOCK: 0.4,        // 施放后的短锁，避免连按
+      // 相位冲刺：穿越弹幕与敌人，沿路留下残影补射
+      PHASE: { TIME: 0.32, SPEED: 1080, SHADOWS: 3, SHADOW_DELAY: 0.16, SHADOW_DMG: 0.45, SHADOW_LIFE: 0.7 },
+      // 重力井：吸附敌人与弹幕，结束时内爆
+      WELL: { DIST: 190, RADIUS: 120, TIME: 2.4, PULL_ENEMY: 90, PULL_BULLET: 140, DMG: 26 },
+      // 擦弹回流：近距离掠过敌弹时吸收，转为护盾与强化射击
+      GRAZE: { TIME: 4.5, RADIUS: 38, MAX_STACKS: 10, DMG_PER: 0.06, SHIELD: 1, ENERGY: 1.5 },
     },
     ULT: {
       MAX: 100,              // 能量上限
@@ -2102,6 +2160,9 @@
   let comboTimer = 0;              // 连杀保持倒计时
   let comboBest = 0;               // 本局最高连杀
   let chosenWeapon = "pulse";      // 本局选择的武器
+  let chosenSkill = "phase";       // 本局选择的主动技能
+  let gravityWells = [];           // 重力井（房主模拟，客机按快照表现）
+  let skillShadows = [];           // 相位冲刺残影
   let slowmo = 0;                  // Boss 击杀慢动作剩余时间
   let victoryTimer = 0;            // Boss 击杀后的结算延迟
   let victoryFlash = 0;            // Boss 击杀白闪
@@ -2232,6 +2293,10 @@
       drones: 0,                 // 守护无人机数量
       shieldMax: P.SHIELD_MAX,
       shieldRegen: P.SHIELD_REGEN,
+      // 主动技能成长（升级卡修正）
+      skillGainMul: 1,           // 技能能量获取倍率
+      skillPowerMul: 1,          // 技能伤害倍率
+      skillDurationMul: 1,       // 技能持续倍率
       // 事件 / 进化 / 诅咒修正
       xpMul: 1,               // 经验获取倍率
       takenMul: 1,            // 受到伤害倍率（诅咒）
@@ -2272,6 +2337,15 @@
       trailCd: 0,
       hitFlash: 0,
       energy: 0,                 // 超载能量
+      skill: chosenSkill || "phase", // 本局主动技能
+      skillEnergy: 0,            // 技能能量 0..MAX
+      skillLock: 0,              // 施放后短锁
+      grazeActive: 0,            // 擦弹回流剩余时间
+      grazeStacks: 0,            // 擦弹层数（强化射击）
+      phaseTime: 0,              // 相位冲刺剩余时间
+      phaseLeft: 0,              // 待生成残影数
+      phaseSpawn: 0,             // 残影生成计时
+      phaseDir: { x: 1, y: 0 },
       xp: 0,                     // 个人经验 / 等级（联机各自成长，P4-01）
       level: 1,
       xpNeed: CFG.XP.BASE,
@@ -2381,6 +2455,8 @@
     fields = [];
     walls = [];
     buildGhosts = [];
+    gravityWells = [];
+    skillShadows = [];
     defDamageTaken = 0;
     defLost = 0;
     coreDrops = [];
@@ -2448,7 +2524,7 @@
 
   // 统一输入意图：键鼠 / 触屏都写入同一结构；联机时可直接序列化发送
   // mx,my 归一化移动向量；fire 开火；dash/ult 本帧一次性请求；aim 瞄准角（null = 自动索敌）
-  const intent = { mx: 0, my: 0, fire: false, dash: false, ult: false, aim: null };
+  const intent = { mx: 0, my: 0, fire: false, dash: false, ult: false, skill: false, aim: null };
 
   // 汇总当前帧移动 / 开火意图，由 simulate 每帧调用
   function pollInputIntent() {
@@ -2473,6 +2549,7 @@
     intent.fire = false;
     intent.dash = false;
     intent.ult = false;
+    intent.skill = false;
   }
 
   window.addEventListener("keydown", (e) => {
@@ -2511,6 +2588,10 @@
       if (state === "playing") intent.ult = true;
       return;
     }
+    if (code === "KeyQ") {
+      if (state === "playing") intent.skill = true;
+      return;
+    }
     if (code === "Space" || code === "ShiftLeft" || code === "ShiftRight") {
       if (state === "menu") { openWeaponSelect(); return; }
       if (state === "playing") { intent.dash = true; return; }
@@ -2546,6 +2627,7 @@
     const dashBtn = document.getElementById("dash-btn");
     const pauseBtn = document.getElementById("pause-btn");
     const ultBtn = document.getElementById("ult-btn");
+    const skillBtn = document.getElementById("skill-btn");
 
     const RADIUS = 46;
 
@@ -2600,6 +2682,12 @@
       e.preventDefault();
       if (state === "playing") intent.ult = true;
     });
+    if (skillBtn) {
+      skillBtn.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        if (state === "playing") intent.skill = true;
+      });
+    }
     pauseBtn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       if (state === "playing" || state === "paused") togglePause();
@@ -2729,15 +2817,30 @@
   }
 
   // 开局武器选择
+  let pendingWeapon = "pulse";
+
   function openWeaponSelect() {
     document.getElementById("ov-menu").classList.add("hidden");
     document.getElementById("ov-weapon").classList.remove("hidden");
     document.getElementById("ov-weapon").scrollTop = 0;
   }
 
+  // 选完武器后进入技能选择
+  function openSkillSelect(weaponKey) {
+    if (weaponKey) pendingWeapon = weaponKey;
+    document.getElementById("ov-weapon").classList.add("hidden");
+    document.getElementById("ov-skill").classList.remove("hidden");
+    document.getElementById("ov-skill").scrollTop = 0;
+  }
+
   document.getElementById("weapon-cards").addEventListener("click", (e) => {
     const btn = e.target.closest("[data-weapon]");
-    if (btn) startGame(btn.dataset.weapon);
+    if (btn) openSkillSelect(btn.dataset.weapon);
+  });
+
+  document.getElementById("skill-cards").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-skill]");
+    if (btn) startGame(pendingWeapon, btn.dataset.skill);
   });
 
   // 特效档位：流畅模式减少辉光与粒子，降低手机发热
@@ -3010,6 +3113,34 @@
         return `攻击范围 <b>+${Math.round(m * 100)}%</b><br>${Math.round(s.range)} → ${Math.round(s.range * (1 + m))}`;
       },
     },
+    /* ---------- 主动技能成长：正向反馈而非纯数值 ---------- */
+    {
+      id: "skill_charge", name: "能量循环", icon: "⚙", max: 4,
+      base: 0.3, minRarity: 0, skill: true,
+      apply(s, m) { s.skillGainMul *= 1 + m; },
+      desc(s, m) {
+        return `技能能量获取 <b>+${Math.round(m * 100)}%</b><br>被动回复与命中返能同步提升`;
+      },
+    },
+    {
+      id: "skill_power", name: "技能增幅", icon: "✧", max: 3,
+      base: 0.25, minRarity: 0, skill: true,
+      apply(s, m) { s.skillPowerMul *= 1 + m; },
+      desc(s, m) {
+        return `技能伤害 <b>+${Math.round(m * 100)}%</b><br>残影 / 重力井内爆更强`;
+      },
+    },
+    {
+      id: "skill_flow", name: "过载循环", icon: "↻", max: 3,
+      base: 0.15, minRarity: 1, skill: true,
+      apply(s, m, p) {
+        s.skillDurationMul *= 1 + m;
+        if (p) p.skillEnergy = Math.min(CFG.SKILL.MAX, (p.skillEnergy || 0) + 15);
+      },
+      desc(s, m) {
+        return `技能持续 <b>+${Math.round(m * 100)}%</b><br>施放立即返还 <b>15</b> 能量`;
+      },
+    },
     /* ---------- 诅咒强化：强力但带代价 ---------- */
     {
       id: "curse_blood", name: "血债契约", icon: "☠", max: 2, base: 0.3, curse: true,
@@ -3224,6 +3355,7 @@
       const rIdx = RARITIES.indexOf(rarity);
       const pool = UPGRADES.filter((d) => {
         if (d.curse) return false;
+        if (d.skill && !lp.skill) return false;
         if ((stacks[d.id] || 0) >= d.max) return false;
         if (d.minRarityIndex !== undefined && rIdx < d.minRarityIndex) return false;
         return !chosen.has(d.id);
@@ -3240,6 +3372,7 @@
       const rIdx = 2;
       const pool = UPGRADES.filter((d) => {
         if (d.curse) return false;
+        if (d.skill && !lp.skill) return false;
         if ((stacks[d.id] || 0) >= d.max) return false;
         if (d.minRarityIndex !== undefined && rIdx < d.minRarityIndex) return false;
         return true;
@@ -4115,13 +4248,38 @@
     p.dashCd = Math.max(0, p.dashCd - dt);
     p.hitFlash = Math.max(0, p.hitFlash - dt * 2.6);
 
+    // 主动技能：被动蓄能（冷却/施放锁期间照常积累）
+    p.skillLock = Math.max(0, (p.skillLock || 0) - dt);
+    if (p.skill && (p.skillEnergy || 0) < CFG.SKILL.MAX) {
+      const gain = CFG.SKILL.PASSIVE * (s.skillGainMul || 1) * dt;
+      p.skillEnergy = Math.min(CFG.SKILL.MAX, (p.skillEnergy || 0) + gain);
+    }
+    // 擦弹回流计时；结束时清空层数
+    if (p.grazeActive > 0) {
+      p.grazeActive = Math.max(0, p.grazeActive - dt);
+      if (p.grazeActive === 0) p.grazeStacks = 0;
+    }
+
     // 护盾恢复
     if (p.shieldDelay > 0) p.shieldDelay -= dt;
     else p.shield = Math.min(s.shieldMax, p.shield + s.shieldRegen * dt);
 
     const v = p.local ? readMoveInput() : { x: p.intent.mx || 0, y: p.intent.my || 0 };
 
-    if (p.dashTime > 0) {
+    if (p.phaseTime > 0) {
+      // 相位冲刺：高速位移、沿途留影，冲刺帧内几乎无敌
+      p.phaseTime = Math.max(0, p.phaseTime - dt);
+      const sp = CFG.SKILL.PHASE.SPEED * view.scale;
+      p.x += p.phaseDir.x * sp * dt;
+      p.y += p.phaseDir.y * sp * dt;
+      p.invuln = Math.max(p.invuln, 0.05);
+      p.phaseSpawn -= dt;
+      if (p.phaseSpawn <= 0 && p.phaseLeft > 0) {
+        p.phaseSpawn = CFG.SKILL.PHASE.TIME / CFG.SKILL.PHASE.SHADOWS;
+        p.phaseLeft -= 1;
+        spawnSkillShadow(p);
+      }
+    } else if (p.dashTime > 0) {
       p.dashTime -= dt;
       const sp = P.DASH_SPEED * view.scale;
       p.x += p.dashDir.x * sp * dt;
@@ -4235,18 +4393,20 @@
     p.facing = baseAng;
     const n = s.bulletCount;
     const spread = Math.min(1.0, 0.11 * (n - 1) + (s.spread || 0));
+    // 擦弹回流：层数转化为强化射击
+    const grazeMul = 1 + (p.grazeStacks || 0) * CFG.SKILL.GRAZE.DMG_PER;
 
     for (let i = 0; i < n; i++) {
       if (bullets.length >= CFG.LIMITS.BULLETS) break;
       const t = n === 1 ? 0.5 : i / (n - 1);
       const ang = baseAng + (t - 0.5) * spread;
-      spawnPlayerBullet(ang, undefined, undefined, p);
+      spawnPlayerBullet(ang, s.damage * grazeMul, undefined, p);
     }
 
     // 进化「双子脉冲」：每次射击追加两道侧向脉冲
     if (s.twinPulse) {
-      spawnPlayerBullet(baseAng - 0.12, s.damage * 0.7, undefined, p);
-      spawnPlayerBullet(baseAng + 0.12, s.damage * 0.7, undefined, p);
+      spawnPlayerBullet(baseAng - 0.12, s.damage * 0.7 * grazeMul, undefined, p);
+      spawnPlayerBullet(baseAng + 0.12, s.damage * 0.7 * grazeMul, undefined, p);
     }
 
     // 枪口火花
@@ -4452,7 +4612,10 @@
     if (ownerId) {
       e.lastHit = ownerId;                 // 个人伤害 / 击杀归属（P4-07）
       const op = coopPlayerById(ownerId);
-      if (op) op.damage += Math.max(0, dmg);
+      if (op) {
+        op.damage += Math.max(0, dmg);
+        gainSkillEnergy(op, CFG.SKILL.HIT_GAIN);   // 命中返技能能量
+      }
     }
 
     // 受击闪白 + 分档反馈（P0）：普通命中轻，暴击/精英/Boss 重
@@ -4655,6 +4818,23 @@
       b.y += b.vy * dt * slow;
       b.life -= dt * slow;
 
+      // 擦弹回流：在命中判定前吸收近距离掠过的敌弹（房主裁决）
+      if (!coopIsGuest() && !b.heavy) {
+        let grazed = false;
+        for (let k = 0; k < players.length; k++) {
+          const p = players[k];
+          if (p.down || p.eliminated || !(p.grazeActive > 0)) continue;
+          const gr = p.r + CFG.SKILL.GRAZE.RADIUS;
+          if (dist2(b.x, b.y, p.x, p.y) <= gr * gr) {
+            grazeAbsorb(p, b);
+            b.dead = true;
+            grazed = true;
+            break;
+          }
+        }
+        if (grazed) { ebullets.splice(i, 1); continue; }
+      }
+
       // 命中防线：炮塔/缓速场会替玩家挡弹并被破坏
       if (!b.dead) {
         const d = defenseAt(b.x, b.y, b.r);
@@ -4688,6 +4868,362 @@
   }
 
   /* =====================================================================
+   * 13.5 主动技能：相位冲刺 / 重力井 / 擦弹回流
+   * 能量由被动恢复 + 命中敌人积累；Q（或触屏技能键）释放
+   * ===================================================================*/
+  const SKILL_DEFS = {
+    phase: {
+      key: "phase", name: "相位冲刺", icon: "⇢", tag: "机动",
+      desc: "高速穿过弹幕与敌人，沿途留下 3 个残影向敌人补射",
+      short: "冲刺无敌 · 残影补射",
+    },
+    well: {
+      key: "well", name: "重力井", icon: "◎", tag: "控场",
+      desc: "在前方生成引力场，吸附敌人与弹幕，结束时内爆",
+      short: "聚怪 · 聚弹 · 内爆",
+    },
+    graze: {
+      key: "graze", name: "擦弹回流", icon: "◌", tag: "生存",
+      desc: "持续吸收擦过的子弹，转化为护盾与强化射击",
+      short: "擦弹充能 · 护盾反击",
+    },
+  };
+
+  function skillDef(p) {
+    const key = (p && p.skill) || chosenSkill;
+    return SKILL_DEFS[key] || SKILL_DEFS.phase;
+  }
+
+  // 命中敌人返能量（受能量获取倍率影响）
+  function gainSkillEnergy(p, v) {
+    if (!p || !p.skill || !(v > 0)) return;
+    const mul = (p.stats && p.stats.skillGainMul) || 1;
+    p.skillEnergy = Math.min(CFG.SKILL.MAX, (p.skillEnergy || 0) + v * mul);
+  }
+
+  function canCastSkill(p) {
+    return !!p && !!p.skill && state === "playing" &&
+      !p.down && !p.eliminated &&
+      (p.skillLock || 0) <= 0 &&
+      (p.skillEnergy || 0) >= CFG.SKILL.MAX;
+  }
+
+  // 本地玩家按 Q：客机只上报，由房主校验并执行
+  function tryCastSkill() {
+    const p = getLocalPlayer() || player;
+    if (!canCastSkill(p)) {
+      if (p && (p.skillEnergy || 0) < CFG.SKILL.MAX) {
+        addText(p.x, p.y - 40, "技能能量不足", "#8fb8d8", 12);
+      }
+      return;
+    }
+    if (roomCode && coopIsGuest()) {
+      let tx = p.x, ty = p.y;
+      if (p.skill === "well") {
+        const dist = CFG.SKILL.WELL.DIST * view.scale;
+        const tgt = nearestEnemy(p);
+        tx = tgt ? tgt.x : p.x + Math.cos(p.facing) * dist;
+        ty = tgt ? tgt.y : p.y + Math.sin(p.facing) * dist;
+      }
+      // 本地即时反馈，真实效果由房主裁决
+      p.skillEnergy = 0;
+      p.skillLock = CFG.SKILL.CAST_LOCK;
+      if (p.skill === "phase") {
+        const v = readMoveInput();
+        let dx = v.x, dy = v.y;
+        if (dx === 0 && dy === 0) { dx = Math.cos(p.facing); dy = Math.sin(p.facing); }
+        const len = Math.hypot(dx, dy) || 1;
+        p.phaseDir = { x: dx / len, y: dy / len };
+        p.phaseTime = CFG.SKILL.PHASE.TIME;
+        p.phaseLeft = CFG.SKILL.PHASE.SHADOWS;
+        p.phaseSpawn = 0;
+        p.invuln = Math.max(p.invuln, CFG.SKILL.PHASE.TIME + 0.08);
+      } else if (p.skill === "graze") {
+        p.grazeActive = CFG.SKILL.GRAZE.TIME * (p.stats.skillDurationMul || 1);
+        p.grazeStacks = 0;
+      }
+      emit(p.x, p.y, 14, THEME.cyanSoft, 200, 3, 0.5);
+      coopEventSeq += 1;
+      coopSendCtrl({ t: "ev", id: coopEventSeq, k: "skill", d: { x: tx, y: ty } });
+      return;
+    }
+    castSkill(p);
+  }
+
+  // 实际施放：房主 / 单机执行，客机由房主代为执行
+  function castSkill(p, aimX, aimY) {
+    if (!p || !p.skill) return false;
+    if (state !== "playing" || p.down || p.eliminated) return false;
+    if ((p.skillLock || 0) > 0) return false;
+    if ((p.skillEnergy || 0) < CFG.SKILL.MAX) return false;
+
+    p.skillEnergy = 0;
+    p.skillLock = CFG.SKILL.CAST_LOCK;
+
+    if (p.skill === "phase") {
+      const v = p.local ? readMoveInput() : { x: p.intent.mx || 0, y: p.intent.my || 0 };
+      let dx = v.x, dy = v.y;
+      if (dx === 0 && dy === 0) { dx = Math.cos(p.facing); dy = Math.sin(p.facing); }
+      const len = Math.hypot(dx, dy) || 1;
+      p.phaseDir = { x: dx / len, y: dy / len };
+      p.phaseTime = CFG.SKILL.PHASE.TIME;
+      p.phaseLeft = CFG.SKILL.PHASE.SHADOWS;
+      p.phaseSpawn = 0;
+      p.invuln = Math.max(p.invuln, CFG.SKILL.PHASE.TIME + 0.08);
+      emit(p.x, p.y, 16, THEME.cyan, 220, 3, 0.5);
+      sfxDash();
+    } else if (p.skill === "well") {
+      const dist = CFG.SKILL.WELL.DIST * view.scale;
+      let tx = p.x + Math.cos(p.facing) * dist;
+      let ty = p.y + Math.sin(p.facing) * dist;
+      if (isFinite(aimX) && isFinite(aimY)) {
+        // 客机指定落点：限制在可部署范围内
+        const dx = aimX - p.x, dy = aimY - p.y;
+        const d = Math.hypot(dx, dy);
+        const maxD = dist * 1.6;
+        if (d > maxD && d > 0.001) {
+          tx = p.x + (dx / d) * maxD;
+          ty = p.y + (dy / d) * maxD;
+        } else { tx = aimX; ty = aimY; }
+      } else {
+        const tgt = nearestEnemy(p);
+        if (tgt) { tx = tgt.x; ty = tgt.y; }
+      }
+      pushGravityWell(p, tx, ty);
+    } else if (p.skill === "graze") {
+      p.grazeActive = CFG.SKILL.GRAZE.TIME * (p.stats.skillDurationMul || 1);
+      p.grazeStacks = 0;
+      emit(p.x, p.y, 20, THEME.mint, 220, 3, 0.65);
+      addText(p.x, p.y - 40, "擦弹回流", THEME.mint, 15);
+      sfxLevelUp();
+    }
+    refreshHud(true);
+    return true;
+  }
+
+  function pushGravityWell(p, x, y) {
+    const dur = CFG.SKILL.WELL.TIME * (p.stats.skillDurationMul || 1);
+    gravityWells.push({
+      owner: p.id,
+      x, y,
+      r: CFG.SKILL.WELL.RADIUS * view.scale,
+      t: dur, maxT: dur,
+      seed: Math.random() * TAU,
+      synced: false,
+    });
+    emit(x, y, 24, THEME.violet, 240, 3.2, 0.65);
+    addText(x, y - 30, "重力井", THEME.violet, 15);
+    sfxUlt();
+  }
+
+  function spawnSkillShadow(p) {
+    if (skillShadows.length > 24) skillShadows.shift();
+    skillShadows.push({
+      owner: p.id,
+      x: p.x, y: p.y,
+      ang: p.facing,
+      t: CFG.SKILL.PHASE.SHADOW_DELAY,
+      life: CFG.SKILL.PHASE.SHADOW_LIFE,
+      fired: false,
+    });
+  }
+
+  function fireShadowBullet(s) {
+    const p = coopPlayerById(s.owner) || player;
+    if (!p) return;
+    if (bullets.length >= CFG.LIMITS.BULLETS) return;
+    let best = null;
+    let bestD = (p.stats.range * view.scale) * (p.stats.range * view.scale);
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (e.dead) continue;
+      const d = dist2(s.x, s.y, e.x, e.y);
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    const ang = best ? Math.atan2(best.y - s.y, best.x - s.x) : s.ang;
+    const sp = p.stats.bulletSpeed * view.scale * 0.9;
+    bullets.push({
+      bid: nextBulletId++,
+      owner: p.id,
+      x: s.x, y: s.y,
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp,
+      r: Math.max(2.5, (p.stats.bulletR || 4) * 0.8),
+      dmg: p.stats.damage * CFG.SKILL.PHASE.SHADOW_DMG * (p.stats.skillPowerMul || 1),
+      pierce: 0,
+      life: 1.0,
+      dead: false,
+      hit: new Set(),
+      ang,
+      color: THEME.cyanSoft,
+      shadow: true,
+    });
+  }
+
+  // 擦弹吸收：转护盾 + 叠加层数 + 少量回能
+  function grazeAbsorb(p, b) {
+    p.shield = Math.min(p.stats.shieldMax, p.shield + CFG.SKILL.GRAZE.SHIELD);
+    p.grazeStacks = Math.min(CFG.SKILL.GRAZE.MAX_STACKS, (p.grazeStacks || 0) + 1);
+    gainSkillEnergy(p, CFG.SKILL.GRAZE.ENERGY);
+    emit(b.x, b.y, 4, THEME.mint, 150, 2, 0.3);
+  }
+
+  function updateSkillEffects(dt) {
+    updateSkillShadows(dt);
+    updateGravityWells(dt);
+  }
+
+  function updateSkillShadows(dt) {
+    for (let i = skillShadows.length - 1; i >= 0; i--) {
+      const s = skillShadows[i];
+      s.t -= dt;
+      s.life -= dt;
+      if (!s.fired && s.t <= 0) {
+        s.fired = true;
+        if (!coopIsGuest()) fireShadowBullet(s);
+      }
+      if (s.life <= 0) skillShadows.splice(i, 1);
+    }
+  }
+
+  function updateGravityWells(dt) {
+    const pullE = CFG.SKILL.WELL.PULL_ENEMY * view.scale;
+    const pullB = CFG.SKILL.WELL.PULL_BULLET * view.scale;
+    for (let i = gravityWells.length - 1; i >= 0; i--) {
+      const w = gravityWells[i];
+      w.t -= dt;
+      w.seed += dt * 2.2;
+      if (coopIsGuest()) {
+        if (w.t <= 0) gravityWells.splice(i, 1);
+        continue;
+      }
+
+      // 吸附敌人（Boss 抗性更强）
+      for (let k = 0; k < enemies.length; k++) {
+        const e = enemies[k];
+        if (e.dead) continue;
+        const d = Math.hypot(w.x - e.x, w.y - e.y);
+        if (d > w.r || d < 0.001) continue;
+        const mul = e.isBoss ? 0.3 : 1;
+        e.x += ((w.x - e.x) / d) * pullE * mul * dt;
+        e.y += ((w.y - e.y) / d) * pullE * mul * dt;
+      }
+      // 吸附敌弹
+      for (let k = 0; k < ebullets.length; k++) {
+        const b = ebullets[k];
+        if (b.dead || b.synced) continue;
+        const d = Math.hypot(w.x - b.x, w.y - b.y);
+        if (d > w.r || d < 0.001) continue;
+        b.x += ((w.x - b.x) / d) * pullB * dt;
+        b.y += ((w.y - b.y) / d) * pullB * dt;
+      }
+
+      if (w.t <= 0) {
+        const p = coopPlayerById(w.owner) || player;
+        const power = (p && p.stats.skillPowerMul) || 1;
+        explodeAt(w.x, w.y, CFG.SKILL.WELL.DMG * power, null,
+          CFG.SKILL.WELL.RADIUS, THEME.violet, w.owner);
+        emit(w.x, w.y, 26, THEME.violet, 280, 3.6, 0.75);
+        gravityWells.splice(i, 1);
+        if (state !== "playing") return;
+      }
+    }
+  }
+
+  /* ===== 联机快照：重力井 ===== */
+  function coopWellList() {
+    const arr = [];
+    for (let i = 0; i < gravityWells.length; i++) {
+      const w = gravityWells[i];
+      arr.push([Math.round(w.x), Math.round(w.y), Math.round(w.r), Math.max(0, Math.round(w.t * 100) / 100)]);
+    }
+    return arr;
+  }
+
+  function coopApplyWells(list) {
+    if (!coopIsGuest()) return;
+    gravityWells = gravityWells.filter((w) => !w.synced);
+    if (!list) return;
+    for (let i = 0; i < list.length; i++) {
+      const row = list[i];
+      if (!row || row.length < 4) continue;
+      gravityWells.push({
+        x: row[0], y: row[1], r: row[2],
+        t: row[3], maxT: row[3] || 1,
+        seed: Math.random() * TAU, synced: true,
+      });
+    }
+  }
+
+  /* ===== 渲染 ===== */
+  function drawGravityWells(t) {
+    for (let i = 0; i < gravityWells.length; i++) {
+      const w = gravityWells[i];
+      if (w.x < cull.x0 || w.x > cull.x1 || w.y < cull.y0 || w.y > cull.y1) continue;
+      ctx.save();
+      const a = 0.35 + 0.2 * Math.sin(t * 6 + w.seed);
+      drawGlow(THEME.violet, w.x, w.y, w.r * 0.95, 0.22);
+      for (let k = 0; k < 3; k++) {
+        const p = (t * 0.55 + k / 3 + w.seed * 0.12) % 1;
+        const rr = w.r * (0.25 + 0.75 * p);
+        ctx.globalAlpha = a * (1 - p);
+        ctx.strokeStyle = THEME.violet;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, rr, 0, TAU);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = a;
+      ctx.fillStyle = rgbaOf(THEME.violet, 0.1);
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, w.r * 0.22, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawSkillShadows(t) {
+    for (let i = 0; i < skillShadows.length; i++) {
+      const s = skillShadows[i];
+      if (s.x < cull.x0 || s.x > cull.x1 || s.y < cull.y0 || s.y > cull.y1) continue;
+      const a = clamp(s.life / CFG.SKILL.PHASE.SHADOW_LIFE, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = a * 0.55;
+      drawGlow(THEME.cyan, s.x, s.y, 22, 0.4);
+      ctx.translate(s.x, s.y);
+      ctx.rotate(s.ang + Math.PI / 2);
+      ctx.strokeStyle = THEME.cyanSoft;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(0, -12);
+      ctx.lineTo(8, 9);
+      ctx.lineTo(-8, 9);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawGrazeAura(p, t) {
+    if (!(p.grazeActive > 0)) return;
+    const rr = p.r + CFG.SKILL.GRAZE.RADIUS;
+    ctx.save();
+    ctx.globalAlpha = 0.35 + 0.12 * Math.sin(t * 8);
+    ctx.strokeStyle = THEME.mint;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, rr, 0, TAU);
+    ctx.stroke();
+    if (p.grazeStacks > 0) {
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = rgbaOf(THEME.mint, 0.65);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, rr + 3 + p.grazeStacks * 0.7, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  /* =====================================================================
    * 14. 游戏流程（开始 / 暂停 / 结束 / 重开）
    * ===================================================================*/
   let tutorHideTimer = 0;
@@ -4713,8 +5249,9 @@
     try { localStorage.setItem("sf_tutor_seen", "1"); } catch (err) {}
   }
 
-  function startGame(weaponKey) {
+  function startGame(weaponKey, skillKey) {
     if (weaponKey && CFG.WEAPONS[weaponKey]) chosenWeapon = weaponKey;
+    if (skillKey && SKILL_DEFS[skillKey]) chosenSkill = skillKey;
     resetGame();
     hideAllOverlays();
     document.getElementById("hud").classList.remove("hidden");
@@ -4824,7 +5361,7 @@
   }
 
   function hideAllOverlays() {
-    ["ov-menu", "ov-weapon", "ov-pause", "ov-upgrade", "ov-result", "ov-shop", "ov-build", "ov-theme", "ov-meta", "ov-trader"].forEach((id) => {
+    ["ov-menu", "ov-weapon", "ov-skill", "ov-pause", "ov-upgrade", "ov-result", "ov-shop", "ov-build", "ov-theme", "ov-meta", "ov-trader"].forEach((id) => {
       document.getElementById(id).classList.add("hidden");
     });
   }
@@ -5620,6 +6157,7 @@
         Math.round(p.shield), Math.round(p.stats.shieldMax),
         p.down ? 1 : 0, Math.round(p.downTimer || 0), p.eliminated ? 1 : 0,
         p.level || 1, p.kills || 0,
+        p.skill || "", Math.round(p.skillEnergy || 0),
       ]);
     }
     return arr;
@@ -5723,6 +6261,7 @@
       t: "snap", v: COOP_SNAP_VER, s: coopSnapSeq, pl: coopSnapshotList(),
       cr: Math.round(credits), co: cores, rv: revives,
       df: coopDefenseList(),
+      sg: coopWellList(),
       dd: Math.round(defDamageTaken),
       dl: defLost,
     });
@@ -5759,6 +6298,10 @@
         p.level = e[11] || 1;
         p.kills = e[12] || 0;
       }
+      if (e.length >= 15) {
+        if (e[13]) p.skill = e[13];
+        p.skillEnergy = e[14] || 0;
+      }
       coopInterpPush(id, p.x, p.y, p.facing);
     }
     // 团队共享资源（D-03）：星币 / 核心 / 保险由房主同步
@@ -5766,6 +6309,7 @@
     if (typeof d.co === "number" && d.co !== cores) cores = d.co;
     if (typeof d.rv === "number" && d.rv !== revives) revives = d.rv;
     if (d.df) coopApplyDefenses(d.df);       // 炮塔/缓速场及耐久由房主同步
+    if (d.sg) coopApplyWells(d.sg);          // 重力井表现由房主同步
     if (typeof d.dd === "number") defDamageTaken = d.dd;
     if (typeof d.dl === "number") defLost = d.dl;
     refreshHud();
@@ -5796,6 +6340,10 @@
       player.level = e[11] || player.level;
       player.kills = e[12] || 0;
       syncProgressGlobals(player);
+    }
+    if (e.length >= 15) {
+      if (e[13]) player.skill = e[13];
+      player.skillEnergy = e[14] || 0;
     }
     if (player.hp < hpBefore - 0.5) {
       if (coopGuestShop) coopCloseShopUI();     // 受击关闭个人商店
@@ -6926,6 +7474,7 @@
         bulletR: s.bulletR, drones: s.drones || 0,
         explodeOnHit: !!s.explodeOnHit, echoBurst: !!s.echoBurst, twinPulse: !!s.twinPulse,
         pulseBlast: !!s.pulseBlast, scatterBlast: !!s.scatterBlast, railShard: !!s.railShard,
+        skillGainMul: s.skillGainMul, skillPowerMul: s.skillPowerMul, skillDurationMul: s.skillDurationMul,
       },
       chips: p.chips.map((c) => ({ kind: c.kind, name: c.name, icon: c.icon, tier: c.tier, value: c.value, score: c.score })),
       stacks: Object.assign({}, p.stacks),
@@ -7213,6 +7762,11 @@
       if (dist2(dd.x, dd.y, p.x, p.y) > maxD * maxD) { coopInReject(); return; }
       if (q.act === "repair") repairDefense(dd);
       else upgradeDefense(dd);
+    } else if (d.k === "skill") {
+      // 队友主动技能：房主校验能量后执行（重力井落点可指定）
+      if (p.down || p.eliminated) return;
+      const sx = Number(q.x), sy = Number(q.y);
+      castSkill(p, isFinite(sx) ? sx : undefined, isFinite(sy) ? sy : undefined);
     }
   }
 
@@ -7406,6 +7960,19 @@
     setText(document.getElementById("ui-ult-text"),
       ready ? (document.body.classList.contains("touch") ? "超载就绪" : "超载就绪 · E")
             : `超载 ${Math.floor(ePct)}%`);
+
+    // 主动技能能量
+    const sd = skillDef(me);
+    const sPct = clamp((me.skillEnergy || 0) / CFG.SKILL.MAX, 0, 1) * 100;
+    const sReady = (me.skillEnergy || 0) >= CFG.SKILL.MAX && (me.skillLock || 0) <= 0;
+    const skillBar = document.getElementById("skill-bar");
+    document.getElementById("ui-skill").style.width = sPct.toFixed(1) + "%";
+    skillBar.classList.toggle("ready", sReady);
+    const skillBtn = document.getElementById("skill-btn");
+    if (skillBtn) skillBtn.classList.toggle("ready", sReady);
+    setText(document.getElementById("ui-skill-text"),
+      sReady ? (document.body.classList.contains("touch") ? `${sd.name}就绪` : `${sd.name}就绪 · Q`)
+             : `${sd.name} ${Math.floor(sPct)}%`);
 
     const total = Math.max(0, Math.floor(elapsed));
     const mm = Math.floor(total / 60);
@@ -8844,6 +9411,7 @@
     pollInputIntent();
     if (intent.dash) { intent.dash = false; tryDash(); coopMarkEdge("dash"); }
     if (intent.ult) { intent.ult = false; activateUltimate(); coopMarkEdge("ult"); }
+    if (intent.skill) { intent.skill = false; tryCastSkill(); }
 
     // Boss 击杀特写：慢动作 + 延迟进入下一星域
     if (victoryTimer > 0) {
@@ -8924,6 +9492,8 @@
     if (state !== "playing") return false;
 
     updateDrones(dt, elapsed);
+    updateSkillEffects(dt);
+    if (state !== "playing") { updateParticles(dt); return false; }
     updateDefenses(dt);
     updateEnemies(dt, elapsed);
     if (state !== "playing") { updateParticles(dt); return false; }
@@ -9408,6 +9978,9 @@
     if (!p) return;
     const blink = p.invuln > 0 && Math.floor(t * 18) % 2 === 0;
     const red = p.hitFlash > 0;
+
+    // 擦弹回流力场
+    drawGrazeAura(p, t);
 
     // 护盾环
     if (p.shield > 0.5) {
@@ -10026,8 +10599,10 @@
       drawChipDrops(t);
       drawCores(t);
       drawTrader(t);
+      drawGravityWells(t);
       drawBullets();
       drawEnemies(t);
+      drawSkillShadows(t);
       // 其他玩家先画，本地玩家最后画在最上层
       for (let i = 0; i < players.length; i++) {
         if (players[i] !== me) drawPlayer(t, players[i]);
