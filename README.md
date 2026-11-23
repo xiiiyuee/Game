@@ -9,9 +9,15 @@
 
 ## 在线试玩
 
-部署后地址：<https://xiiiyuee.github.io/Game/>
+最新可玩版：<https://37l3l4w2p1gt5uye81t.traesite.cn/>
 
-首次使用需在仓库 **Settings → Pages → Source** 选择 **GitHub Actions**，之后推送到 `main` 会自动构建并发布。
+离线留一份（单文件自包含，双击即玩）：
+
+```bash
+curl -L -o star-survivor-latest.html https://37l3l4w2p1gt5uye81t.traesite.cn/
+```
+
+> 仓库内的 Pages 工作流尚未启用，`https://xiiiyuee.github.io/Game/` 会返回 404，请以上面的地址为准。
 
 ## 玩法要点
 
@@ -54,6 +60,7 @@ npm run dev  # 构建并启动本地预览 http://localhost:4173
 
 ```
 Game/
+├─ AGENTS.md                 # 维护者 / AI agent 交接说明
 ├─ README.md
 ├─ LICENSE
 ├─ .gitignore
@@ -80,11 +87,25 @@ Game/
 
 ## 测试
 
-`star-survivor/tests/` 存放无头 Chrome 回归脚本，覆盖经验、稀有度、防线、联机、主动技能与冒烟测试。脚本依赖本机 `puppeteer-core` 与 Chrome，因此不纳入 CI，按需手动运行：
+`star-survivor/tests/` 存放无头 Chrome 回归脚本，覆盖冒烟、经验、稀有度、防线、联机、主动技能、技能改装、玩法与压迫机制。脚本依赖 `puppeteer-core` 与本机 Chrome，因此不纳入 CI，按需手动运行：
 
 ```bash
-node star-survivor/tests/prep.mjs   # 生成 /tmp/qa/sstest/index.html
+cd star-survivor
+npm i -D puppeteer-core
+# 按本机路径修改 tests/*.mjs 顶部的 CHROME 常量
+node tests/prep.mjs                  # 生成 /tmp/qa/sstest/index.html，可用 QA_OUT 覆盖
+node tests/smoke.mjs
+node tests/gameplay-test.mjs
+node tests/pressure-test.mjs
+node tests/coop-test.mjs
+node tests/defense-test.mjs
+node tests/xp-test.mjs
+node tests/skill-test.mjs
+node tests/skill-mod-test.mjs
+node tests/rarity-test.mjs
 ```
+
+接手维护、提交与发布规则见 [AGENTS.md](AGENTS.md)。
 
 ## 许可
 
