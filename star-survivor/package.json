@@ -1,11 +1,22 @@
 {
   "name": "star-survivor",
-  "private": true,
   "version": "1.0.0",
+  "private": true,
+  "description": "星域幸存者：单文件 Canvas 弹幕肉鸽，支持主动技能、塔防防线与联机合作。",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xiiiyuee/Game.git",
+    "directory": "star-survivor"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
     "check": "node scripts/check.mjs",
-    "test": "npm run build && npm run check"
+    "test": "npm run build && npm run check",
+    "dev": "npm run build && node scripts/serve.mjs",
+    "serve": "node scripts/serve.mjs"
   }
 }

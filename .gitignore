@@ -1,7 +1,10 @@
 node_modules/
+dist/
 target/
 __pycache__/
 .env
-dist/
 *.log
 .DS_Store
+
+# 本地截图与调试产物
+.screenshots/.tmp/

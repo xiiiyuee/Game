@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = "/workspace/star-survivor";
-const outDir = "/tmp/qa/sstest";
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const outDir = process.env.QA_OUT || "/tmp/qa/sstest";
 fs.mkdirSync(outDir, { recursive: true });
 
-let html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+let html = fs.readFileSync(path.join(root, "dist", "index.html"), "utf8");
 const marker = "})();";
 const idx = html.lastIndexOf(marker);
 if (idx < 0) throw new Error("找不到 IIFE 结尾");

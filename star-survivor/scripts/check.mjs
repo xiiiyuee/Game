@@ -41,9 +41,9 @@ for (const relativePath of manifest.scripts) {
   }
 }
 
-const htmlPath = path.join(root, "index.html");
+const htmlPath = path.join(root, "dist", "index.html");
 if (!fs.existsSync(htmlPath)) {
-  failures.push("缺少构建产物 index.html");
+  failures.push("缺少构建产物 dist/index.html");
 } else {
   const html = fs.readFileSync(htmlPath, "utf8");
   if ((html.match(/<style>/g) || []).length !== 1) failures.push("产物应只有一个 <style>");

@@ -23,7 +23,9 @@ html = html
     `(() => {\n  "use strict";\n\n${js}})();\n`
   );
 
-const outPath = path.join(root, "index.html");
+const distDir = path.join(root, "dist");
+fs.mkdirSync(distDir, { recursive: true });
+const outPath = path.join(distDir, "index.html");
 fs.writeFileSync(outPath, html, "utf8");
 
 const kb = (n) => `${(n / 1024).toFixed(1)} KB`;
