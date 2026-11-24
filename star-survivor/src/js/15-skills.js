@@ -340,6 +340,11 @@
     updateGravityWells(dt);
     updateFrostZones(dt);
     updateBeams(dt);
+    // 超载移动残影淡出
+    for (let i = ultTrails.length - 1; i >= 0; i--) {
+      ultTrails[i].life -= dt;
+      if (ultTrails[i].life <= 0) ultTrails.splice(i, 1);
+    }
   }
 
   /* ===== 灼蚀光束 ===== */
@@ -758,6 +763,29 @@
       ctx.arc(z.x, z.y, z.r * 0.92, 0, TAU);
       ctx.stroke();
       ctx.setLineDash([]);
+      ctx.restore();
+    }
+  }
+
+  // 超载移动残影：金色三角拖影，冲刺残影更亮更粗
+  function drawUltTrails() {
+    for (let i = 0; i < ultTrails.length; i++) {
+      const g = ultTrails[i];
+      if (g.x < cull.x0 || g.x > cull.x1 || g.y < cull.y0 || g.y > cull.y1) continue;
+      const a = clamp(g.life / g.max, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = a * (g.dash ? 0.7 : 0.5);
+      drawGlow("#ffd666", g.x, g.y, g.dash ? 26 : 18, 0.35);
+      ctx.translate(g.x, g.y);
+      ctx.rotate(g.ang + Math.PI / 2);
+      ctx.strokeStyle = g.dash ? "#fff2c4" : "#ffd666";
+      ctx.lineWidth = g.dash ? 2.6 : 1.7;
+      ctx.beginPath();
+      ctx.moveTo(0, -11);
+      ctx.lineTo(7, 8);
+      ctx.lineTo(-7, 8);
+      ctx.closePath();
+      ctx.stroke();
       ctx.restore();
     }
   }

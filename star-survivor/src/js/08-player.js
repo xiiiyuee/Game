@@ -204,6 +204,7 @@
     buildGhosts = [];
     gravityWells = [];
     skillShadows = [];
+    ultTrails = [];
     frostZones = [];
     defDamageTaken = 0;
     defLost = 0;

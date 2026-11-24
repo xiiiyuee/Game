@@ -78,6 +78,7 @@
   let chosenSkill = "phase";       // 本局选择的主动技能
   let gravityWells = [];           // 重力井（房主模拟，客机按快照表现）
   let skillShadows = [];           // 相位冲刺残影
+  let ultTrails = [];              // 超载期间的移动残影（纯表现）
   let frostZones = [];             // 相位改装「冰痕」留下的减速区
   let slowmo = 0;                  // Boss 击杀慢动作剩余时间
   let victoryTimer = 0;            // Boss 击杀后的结算延迟

@@ -116,11 +116,13 @@
     document.getElementById("ui-ult").style.width = ePct.toFixed(1) + "%";
     const ultBar = document.getElementById("ult-bar");
     const ready = me.energy >= CFG.ULT.MAX;
-    ultBar.classList.toggle("ready", ready);
-    document.getElementById("ult-btn").classList.toggle("ready", ready);
+    const overT = me.ultBuffT || 0;
+    ultBar.classList.toggle("ready", ready || overT > 0);
+    document.getElementById("ult-btn").classList.toggle("ready", ready || overT > 0);
     setText(document.getElementById("ui-ult-text"),
-      ready ? (document.body.classList.contains("touch") ? "超载就绪" : "超载就绪 · E")
-            : `超载 ${Math.floor(ePct)}%`);
+      overT > 0 ? `超载中 ${overT.toFixed(1)}s`
+        : ready ? (document.body.classList.contains("touch") ? "超载就绪" : "超载就绪 · E")
+        : `超载 ${Math.floor(ePct)}%`);
 
     // 主动技能能量（改装后显示「技能·改装」）
     const sdName = skillDisplayName(me);

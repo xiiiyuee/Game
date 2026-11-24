@@ -9,11 +9,21 @@
     const hasInput = v.x !== 0 || v.y !== 0;
     player.dashDir = hasInput ? { x: v.x, y: v.y } : { x: player.lastDir.x, y: player.lastDir.y };
     if (player.dashDir.x === 0 && player.dashDir.y === 0) player.dashDir = { x: 0, y: -1 };
-    player.dashTime = CFG.PLAYER.DASH_TIME;
-    player.dashCd = CFG.PLAYER.DASH_CD;
+    const overload = (player.ultBuffT || 0) > 0;
+    player.dashTime = CFG.PLAYER.DASH_TIME * (overload ? CFG.ULT.DASH_TIME_MUL : 1);
+    player.dashCd = CFG.PLAYER.DASH_CD * (overload ? CFG.ULT.DASH_CD_MUL : 1);
     player.phaseCarryT = 0;
     player.invuln = Math.max(player.invuln, CFG.PLAYER.DASH_INVULN);
-    emit(player.x, player.y, 12, "#7ef0ff", 180, 3, 0.45);
+    if (overload) {
+      // 超载冲刺：更重的起手反馈——定向震屏 + 金色爆发粒子 + 触觉
+      emit(player.x, player.y, 22, "#ffd666", 250, 3.4, 0.5);
+      shakeDirX = player.dashDir.x;
+      shakeDirY = player.dashDir.y;
+      shake = Math.max(shake, CFG.ULT.DASH_SHAKE * CFG.FX.SHAKE);
+      haptic(45);
+    } else {
+      emit(player.x, player.y, 12, "#7ef0ff", 180, 3, 0.45);
+    }
     sfxDash();
   }
 
@@ -118,14 +128,17 @@
       p.y += p.phaseDir.y * sp * dt;
     } else if (p.dashTime > 0) {
       p.dashTime -= dt;
-      const sp = P.DASH_SPEED * view.scale;
+      const sp = P.DASH_SPEED * view.scale *
+        ((p.ultBuffT || 0) > 0 ? CFG.ULT.DASH_SPEED_MUL : 1);
       p.x += p.dashDir.x * sp * dt;
       p.y += p.dashDir.y * sp * dt;
     } else if (v.x !== 0 || v.y !== 0) {
       p.lastDir.x = v.x;
       p.lastDir.y = v.y;
-      // 引导灼蚀光束时移速下降，形成输出与走位的取舍
-      const sp = s.moveSpeed * view.scale * (p.beamTime > 0 ? beamMoveMul(p) : 1);
+      // 引导灼蚀光束时移速下降；超载期间移速提升
+      const sp = s.moveSpeed * view.scale *
+        (p.beamTime > 0 ? beamMoveMul(p) : 1) *
+        ((p.ultBuffT || 0) > 0 ? CFG.ULT.MOVE_MUL : 1);
       p.x += v.x * sp * dt;
       p.y += v.y * sp * dt;
     }
@@ -162,6 +175,23 @@
       // 防线联动：炮塔光环内射击间隔缩短
       p.fireCd = s.fireInterval * defenseFireMul(p) *
         ((p.ultBuffT || 0) > 0 ? CFG.ULT.FIRE_MUL : 1);
+    }
+
+    // 超载移动残影：只有真正在移动时留下，冲刺期间效果更重
+    if ((p.ultBuffT || 0) > 0) {
+      const movingNow = v.x !== 0 || v.y !== 0 || p.dashTime > 0;
+      if (movingNow) {
+        p.ultTrailCd = (p.ultTrailCd || 0) - dt;
+        if (p.ultTrailCd <= 0) {
+          p.ultTrailCd = CFG.ULT.TRAIL_INTERVAL;
+          if (ultTrails.length > 48) ultTrails.shift();
+          ultTrails.push({
+            x: p.x, y: p.y, ang: p.facing,
+            life: CFG.ULT.TRAIL_LIFE, max: CFG.ULT.TRAIL_LIFE,
+            dash: p.dashTime > 0,
+          });
+        }
+      }
     }
 
     // 记录实际速度，供敌机预判射击

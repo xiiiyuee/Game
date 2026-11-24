@@ -578,7 +578,7 @@
       ctx.stroke();
     }
 
-    // 超载强化窗口：金色脉冲环，提示射速与伤害提升
+    // 超载强化窗口：双层金色脉冲环 + 旋转能量刻度
     if (p.ultBuffT > 0) {
       const ua = 0.35 + 0.2 * Math.sin(t * 14);
       ctx.strokeStyle = `rgba(255, 214, 102, ${ua})`;
@@ -586,6 +586,22 @@
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r + 6 + Math.sin(t * 9) * 2, 0, TAU);
       ctx.stroke();
+      ctx.strokeStyle = `rgba(255, 236, 170, ${0.22 + 0.12 * Math.sin(t * 11)})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r + 13, 0, TAU);
+      ctx.stroke();
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(t * 5.5);
+      ctx.strokeStyle = "rgba(255, 220, 120, 0.55)";
+      ctx.lineWidth = 3;
+      for (let k = 0; k < 4; k++) {
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r + 17, (k / 4) * TAU, (k / 4) * TAU + 0.38);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     // 受击方向指示：在来向画一段高亮弧，解决“不知道哪来的伤害”
@@ -1496,6 +1512,7 @@
       drawBullets();
       drawEnemies(t);
       drawSkillShadows(t);
+      drawUltTrails();
       // 其他玩家先画，本地玩家最后画在最上层
       for (let i = 0; i < players.length; i++) {
         if (players[i] !== me) drawPlayer(t, players[i]);
@@ -1519,11 +1536,18 @@
       drawThreatArrows(t);
     }
 
-    // 超载减速期间的青蓝滤镜
+    // 超载强化窗口：青蓝能量滤镜 + 金色边缘脉冲，强化“过载”观感
     if (state === "playing" && ultTimer > 0) {
-      const a = 0.05 + 0.025 * Math.sin(t * 8);
+      const a = 0.055 + 0.03 * Math.sin(t * 8);
       ctx.fillStyle = `rgba(80, 220, 255, ${a})`;
       ctx.fillRect(0, 0, view.w, view.h);
+      const k = clamp(ultTimer / CFG.ULT.SLOW_TIME, 0, 1);
+      const edge = 0.05 * k + 0.02 + 0.015 * Math.sin(t * 10);
+      ctx.fillStyle = `rgba(255, 200, 90, ${edge})`;
+      ctx.fillRect(0, 0, view.w, 3);
+      ctx.fillRect(0, view.h - 3, view.w, 3);
+      ctx.fillRect(0, 0, 3, view.h);
+      ctx.fillRect(view.w - 3, 0, 3, view.h);
     }
 
     // 受伤红色闪屏

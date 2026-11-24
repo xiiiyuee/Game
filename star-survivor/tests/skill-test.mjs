@@ -139,6 +139,42 @@ const ult = await page.evaluate(() => {
 ok("超载范围爆发、处决残血并进入强化窗口",
   ult.energy < 20 && ult.aHp < 1000 && ult.bDead && ult.buff > 0 && ult.slow > 0, ult);
 
+// 3e) 超载期间机动强化：移速、冲刺距离、冲刺 CD、移动残影
+const mobility = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  S.state = "playing";
+  const p = S.getLocalPlayer();
+  p.ultBuffT = S.CFG.ULT.SLOW_TIME;
+  const baseMove = p.stats.moveSpeed * S.view.scale * 0.1;
+  S.intent.mx = 1;
+  S.intent.my = 0;
+  const x0 = p.x;
+  S.updatePlayer(0.1, p);
+  const moveDist = p.x - x0;
+  const trails = S.ultTrails.length;
+  p.dashCd = 0;
+  p.x = 400;
+  p.y = 400;
+  S.tryDash();
+  const dashTime = p.dashTime;
+  const dashCd = p.dashCd;
+  const baseDash = S.CFG.PLAYER.DASH_SPEED * S.view.scale * 0.1;
+  const dx0 = p.x;
+  S.updatePlayer(0.1, p);
+  const dashDist = p.x - dx0;
+  return {
+    moveDist, baseMove, trails, dashDist, baseDash,
+    dashTime, baseDashTime: S.CFG.PLAYER.DASH_TIME,
+    dashCd, baseDashCd: S.CFG.PLAYER.DASH_CD,
+  };
+});
+ok("超载期间移速提升并留下移动残影",
+  mobility.moveDist > mobility.baseMove * 1.15 && mobility.trails > 0, mobility);
+ok("超载期间冲刺更远、冷却更短",
+  mobility.dashTime > mobility.baseDashTime && mobility.dashCd < mobility.baseDashCd &&
+  mobility.dashDist > mobility.baseDash * 1.15, mobility);
+
 // 4) 重力井：生成 + 到期内爆移除
 const well = await page.evaluate(() => {
   const S = window.__SS__;
