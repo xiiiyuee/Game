@@ -63,10 +63,10 @@
 
   function collectPod(p) {
     player.hp = Math.min(player.hpMax, player.hp + CFG.EVENTS.POD_HEAL);
-    addEnergy(CFG.EVENTS.POD_ENERGY);
+    addEnergy(CFG.ULT.MAX * CFG.EVENTS.POD_ENERGY_PCT);
     score += 30;
     emit(p.x, p.y, 22, "#8bffdc", 240, 3, 0.6);
-    addText(p.x, p.y - 22, `+${CFG.EVENTS.POD_HEAL} HP　能量 +${CFG.EVENTS.POD_ENERGY}`, "#8bffdc", 14);
+    addText(p.x, p.y - 22, `+${CFG.EVENTS.POD_HEAL} HP　能量 +${Math.round(CFG.EVENTS.POD_ENERGY_PCT * 100)}%`, "#8bffdc", 14);
     sfxLevelUp();
   }
 

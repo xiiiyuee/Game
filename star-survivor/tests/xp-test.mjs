@@ -60,7 +60,7 @@ const ok = (name, cond, info) => {
   else { fail++; console.log("FAIL " + name + (info ? " :: " + JSON.stringify(info) : "")); }
 };
 
-ok("1 级需求为 24", r.base === 24, r.base);
+ok("1 级需求为 26", r.base === 26, r.base);
 ok("60 经验只到 3 级", r.after60.level === 3, r.after60);
 ok("100 经验只到 4 级", r.after100.level === 4, r.after100);
 ok("300 经验只到 7 级", r.after300.level === 7, r.after300);

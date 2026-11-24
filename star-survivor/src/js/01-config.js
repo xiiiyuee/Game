@@ -8,10 +8,14 @@
       CLIMAX_WAVES: 3,            // 每章最后 3 波进入高潮节奏
       CLIMAX_SPAWN: 0.8,          // 高潮期刷怪间隔倍率（越低越密）
       CLIMAX_HAZARD: 0.75,        // 高潮期灾害间隔倍率
-      BOSS_HP_GROWTH: 1.8,        // 章节 Boss 生命成长
-      BOSS_DMG_GROWTH: 1.18,      // 章节 Boss 伤害成长
+      BOSS_HP_GROWTH: 1.88,       // 章节 Boss 生命成长（与普通敌人每章 ≈1.877 对齐）
+      BOSS_DMG_GROWTH: 1.2,       // 章节 Boss 伤害成长（与敌人伤害成长统一）
       ENEMY_HP_GROWTH: 1.065,     // 每个等效波次生命成长（跨章节连续，不回落）
       ENEMY_DMG_GROWTH: 1.2,      // 章节敌人伤害成长
+      ENEMY_DMG_PER_WAVE: 0.055,  // 每波敌人伤害成长（线性）
+      ENEMY_SPEED_PER_WAVE: 0.028, // 每波敌人移速成长（线性）
+      ENEMY_SPEED_PER_CHAPTER: 0.06, // 每章敌人移速成长（线性）
+      EBULLET_SPEED_PER_WAVE: 0.018, // 每波敌方弹速成长
       ENEMY_ARMOR_PER_CHAPTER: 0.04, // 每章获得减伤
       ENEMY_ARMOR_MAX: 0.5,       // 敌人减伤上限
       ENEMY_SPEED_CAP: 1.9,       // 敌人移速成长上限
@@ -66,6 +70,7 @@
       WALL_CHARGE_DMG: 1.6,       // 冲击波伤害（玩家伤害倍率）
       WALL_CHARGE_R: 115,         // 冲击波半径
       UPGRADE_REROLL_COST: 1,     // 刷新升级卡消耗核心
+      SHOP_PRICE_CHAPTER: 0.2,    // 商店 / 游商价格每章统一涨幅
       CORE_MAGNET: 170,
       CORE_PICKUP: 30,
     },
@@ -104,8 +109,8 @@
       CAMERA_SMOOTH: 10,          // 相机跟随平滑速度（越大越跟手）
     },
     XP: {
-      BASE: 24,                   // 1 级升 2 级所需经验（抬高前期门槛，避免几杀一级）
-      GROWTH: 1.26,               // 每级经验需求成长系数
+      BASE: 26,                   // 1 级升 2 级所需经验（抬高前期门槛，避免几杀一级）
+      GROWTH: 1.18,               // 每级经验需求成长系数（与敌人生命成长同量级，避免后期升级停滞）
       PICKUP: 135,                // 经验吸附范围
       COLLECT: 24,                // 实际拾取距离
     },
@@ -286,6 +291,7 @@
       PASSIVE: 2.2,          // 每秒被动回复
       HIT_GAIN: 0.7,         // 命中敌人返能量
       CAST_LOCK: 0.4,        // 施放后的短锁，避免连按
+      FLOW_REFUND_PCT: 0.15, // 「过载循环」施放返还能量（占上限比例）
       // 相位冲刺：穿越弹幕与敌人，沿路留下残影补射
       PHASE: {
         TIME: 0.365, SPEED: 1080, SHADOWS: 3, SHADOW_DELAY: 0.16, SHADOW_DMG: 0.45, SHADOW_LIFE: 0.7,
@@ -352,8 +358,8 @@
     },
     ULT: {
       MAX: 150,              // 能量上限（释放超载所需能量）
-      GAIN_KILL: 4,          // 普通敌人击杀充能
-      GAIN_ELITE: 11,        // 精英击杀充能
+      KILL_PCT: 0.027,       // 普通敌人击杀充能（占上限比例）
+      ELITE_PCT: 0.073,      // 精英击杀充能（占上限比例）
       RADIUS: 420,           // 爆发伤害半径
       DAMAGE: 150,           // 爆发基础伤害
       DAMAGE_STAT_MUL: 10,   // 额外伤害 = 玩家单发伤害 × 该倍率（随成长放大爆发）
@@ -389,7 +395,7 @@
       POD_INTERVAL: 30,      // 补给舱生成间隔
       POD_R: 15,
       POD_HEAL: 25,          // 拾取回复生命
-      POD_ENERGY: 45,        // 拾取回复超载能量
+      POD_ENERGY_PCT: 0.3,   // 拾取回复超载能量（占上限比例）
       MAX_PODS: 1,
       // 场地灾害：陨石雨 / 扫射激光，预警后落地，逼迫走位
       HAZARD: {
@@ -431,6 +437,12 @@
       PARTICLES: 340,             // 同屏粒子上限
       GEMS: 100,                  // 经验球上限
       NUMBERS: 40,                // 飘字上限
+      // 统一上限：所有成长系统共用，避免各处写死导致的数值断层
+      MIN_FIRE: 0.06,             // 玩家 / 炮塔射击间隔下限
+      MAX_FIRE: 1.2,              // 射击间隔上限（减速类改装）
+      MIN_ENEMY_FIRE: 0.08,       // 敌方射击间隔下限
+      MAX_CRIT: 0.8,              // 暴击率上限
+      MAX_ARMOR: 0.65,            // 玩家伤害减免上限
     },
     FX: {
       SHAKE: 1.0,                 // 屏幕震动强度倍率

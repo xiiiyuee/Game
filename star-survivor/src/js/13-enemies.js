@@ -13,10 +13,12 @@
   // 避免后期攻速/多重/暴击成长后敌人瞬间蒸发
   function playerDpsRatio() {
     const s = stats;
+    const base = CFG.PLAYER;
     const dps = (s.damage || 1) * Math.max(1, s.bulletCount || 1) *
-      (1 + (s.crit || 0) * ((s.critMult || 2) - 1)) /
-      Math.max(0.08, s.fireInterval || 0.34);
-    const baseDps = (10 * 1.08) / 0.34;
+      (1 + (s.crit || 0) * ((s.critMult || base.CRIT_MULT) - 1)) /
+      Math.max(CFG.LIMITS.MIN_FIRE, s.fireInterval || base.FIRE_INTERVAL);
+    // 基准 DPS 与初始武器同源，保证“成长倍率”在 1 级时严格等于 1
+    const baseDps = base.BASE_DAMAGE * (1 + base.CRIT * (base.CRIT_MULT - 1)) / base.FIRE_INTERVAL;
     return Math.max(1, dps / baseDps);
   }
   function playerPowerMul() {
@@ -34,14 +36,21 @@
     if (waveNum < start) return 0;
     return clamp((waveNum - start + 1) / CFG.RUN.CLIMAX_WAVES, 0, 1);
   }
+  // 统一成长基准：经验 / 星币与敌人生命使用同一倍率成长，
+  // 保证“每点生命对应的收益”跨章节恒定，不随难度攀升而贬值
+  function waveRewardMul() {
+    return Math.pow(CFG.RUN.ENEMY_HP_GROWTH,
+      (chapter - 1) * CFG.RUN.CHAPTER_WAVES + (waveNum - 1));
+  }
   function waveScaleSpeed() {
-    return Math.min(CFG.RUN.ENEMY_SPEED_CAP, 1 + (waveNum - 1) * 0.028 + (chapter - 1) * 0.06);
+    return Math.min(CFG.RUN.ENEMY_SPEED_CAP,
+      1 + (waveNum - 1) * CFG.RUN.ENEMY_SPEED_PER_WAVE + (chapter - 1) * CFG.RUN.ENEMY_SPEED_PER_CHAPTER);
   }
   function waveScaleDmg() {
-    return (1 + (waveNum - 1) * 0.055) * Math.pow(CFG.RUN.ENEMY_DMG_GROWTH, chapter - 1);
+    return (1 + (waveNum - 1) * CFG.RUN.ENEMY_DMG_PER_WAVE) * Math.pow(CFG.RUN.ENEMY_DMG_GROWTH, chapter - 1);
   }
   function ebSpeedScale() {
-    const base = 1 + (waveNum - 1) * 0.018 + (chapter - 1) * CFG.RUN.EBULLET_SPEED_PER_CHAPTER;
+    const base = 1 + (waveNum - 1) * CFG.RUN.EBULLET_SPEED_PER_WAVE + (chapter - 1) * CFG.RUN.EBULLET_SPEED_PER_CHAPTER;
     return Math.min(CFG.RUN.EBULLET_SPEED_CAP, base * (chapterMod ? chapterMod.ebMul || 1 : 1));
   }
 
@@ -101,7 +110,7 @@
       speed: def.speed * waveScaleSpeed() * threatSpeedMul() * (chapterMod ? chapterMod.speedMul || 1 : 1),
       dmg: def.dmg * waveScaleDmg(),
       armor: waveScaleArmor(),
-      xp: def.xp * (1 + (chapter - 1) * 0.3),
+      xp: def.xp * waveRewardMul(),
       score: def.score,
       color: THEME.enemy[typeKey] || def.color,
       angle: 0,
@@ -978,6 +987,7 @@
     score += Math.round(e.score * mul);
     credits += Math.round(
       (e.isBoss ? CFG.RUN.CREDIT_BOSS : e.type === "diamond" ? CFG.RUN.CREDIT_ELITE : CFG.RUN.CREDIT_KILL) *
+      waveRewardMul() *
       (chapterMod ? chapterMod.creditMul || 1 : 1)
     );
     if (e.type === "diamond") hitStop = Math.max(hitStop, 0.045);
@@ -1003,7 +1013,9 @@
       return;
     }
 
-    addEnergy(e.type === "diamond" ? CFG.ULT.GAIN_ELITE : CFG.ULT.GAIN_KILL);
+    addEnergy(e.type === "diamond"
+      ? CFG.ULT.MAX * CFG.ULT.ELITE_PCT
+      : CFG.ULT.MAX * CFG.ULT.KILL_PCT);
     emit(e.x, e.y, e.type === "diamond" ? 22 : 13, e.color, 210, e.type === "diamond" ? 3.4 : 2.6, 0.65);
     shake = Math.max(shake, (e.type === "diamond" ? 6 : 3) * CFG.FX.SHAKE);
     sfxExplode(false);

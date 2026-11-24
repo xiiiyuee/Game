@@ -161,7 +161,7 @@
   }
 
   function shopCost(def) {
-    return Math.round(def.base * (1 + (chapter - 1) * 0.18) * (1 + (shopCounts[def.id] || 0) * 0.45));
+    return Math.round(def.base * (1 + (chapter - 1) * CFG.RUN.SHOP_PRICE_CHAPTER) * (1 + (shopCounts[def.id] || 0) * 0.45));
   }
 
   function shopOfferFor(p) {
@@ -350,10 +350,10 @@
       case "dmg": s.damage = Math.max(1, s.damage + v * sign); break;
       case "atk":
         s.fireInterval = sign > 0
-          ? Math.max(0.06, s.fireInterval / (1 + v))
-          : Math.min(1.2, s.fireInterval * (1 + v));
+          ? Math.max(CFG.LIMITS.MIN_FIRE, s.fireInterval / (1 + v))
+          : Math.min(CFG.LIMITS.MAX_FIRE, s.fireInterval * (1 + v));
         break;
-      case "crit": s.crit = clamp(s.crit + v * sign, 0, 0.85); break;
+      case "crit": s.crit = clamp(s.crit + v * sign, 0, CFG.LIMITS.MAX_CRIT); break;
       case "pierce": s.pierce = Math.max(0, s.pierce + Math.round(v) * sign); break;
       case "speed":
         s.moveSpeed = sign > 0 ? s.moveSpeed * (1 + v) : s.moveSpeed / (1 + v);
@@ -584,7 +584,7 @@
   ];
 
   function traderCost(def) {
-    return Math.round(def.base * (1 + (chapter - 1) * 0.22));
+    return Math.round(def.base * (1 + (chapter - 1) * CFG.RUN.SHOP_PRICE_CHAPTER));
   }
 
   function spawnTrader() {

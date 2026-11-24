@@ -1,11 +1,12 @@
   /* =====================================================================
    * 10. 经验与升级系统
    * ===================================================================*/
+  // 稀有度：强度按统一公比 1.55 递进，权重合计 100
   const RARITIES = [
     { key: "common", name: "普通", weight: 52, mult: 1.0 },
-    { key: "rare",   name: "稀有", weight: 30, mult: 1.6 },
-    { key: "epic",   name: "史诗", weight: 14, mult: 2.35 },
-    { key: "legend", name: "传说", weight: 4,  mult: 3.2 },
+    { key: "rare",   name: "稀有", weight: 30, mult: 1.55 },
+    { key: "epic",   name: "史诗", weight: 14, mult: 2.4 },
+    { key: "legend", name: "传说", weight: 4,  mult: 3.72 },
   ];
 
   // 强化定义：apply 修改 stats / player；desc 展示数值变化
@@ -13,7 +14,7 @@
     {
       id: "rapid", name: "超频射击", icon: "⚡", max: 8,
       base: 0.09, minRarity: 0,
-      apply(s, m) { s.fireInterval = Math.max(0.06, s.fireInterval / (1 + m)); },
+      apply(s, m) { s.fireInterval = Math.max(CFG.LIMITS.MIN_FIRE, s.fireInterval / (1 + m)); },
       desc(s, m) {
         return `射速 <b>+${Math.round(m * 100)}%</b><br>射击间隔 ${s.fireInterval.toFixed(2)}s → ${(s.fireInterval / (1 + m)).toFixed(2)}s`;
       },
@@ -29,9 +30,9 @@
     {
       id: "crit", name: "致命校准", icon: "◈", max: 8,
       base: 0.05, minRarity: 0,
-      apply(s, m) { s.crit = Math.min(0.8, s.crit + m); },
+      apply(s, m) { s.crit = Math.min(CFG.LIMITS.MAX_CRIT, s.crit + m); },
       desc(s, m) {
-        return `暴击率 <b>+${Math.round(m * 100)}%</b><br>${Math.round(s.crit * 100)}% → ${Math.round(Math.min(0.8, s.crit + m) * 100)}%`;
+        return `暴击率 <b>+${Math.round(m * 100)}%</b><br>${Math.round(s.crit * 100)}% → ${Math.round(Math.min(CFG.LIMITS.MAX_CRIT, s.crit + m) * 100)}%`;
       },
     },
     {
@@ -98,9 +99,9 @@
     {
       id: "armor", name: "复合装甲", icon: "▣", max: 7,
       base: 0.05, minRarity: 0,
-      apply(s, m) { s.armor = Math.min(0.65, 1 - (1 - s.armor) * (1 - m)); },
+      apply(s, m) { s.armor = Math.min(CFG.LIMITS.MAX_ARMOR, 1 - (1 - s.armor) * (1 - m)); },
       desc(s, m) {
-        const after = Math.min(0.65, 1 - (1 - s.armor) * (1 - m));
+        const after = Math.min(CFG.LIMITS.MAX_ARMOR, 1 - (1 - s.armor) * (1 - m));
         return `伤害减免 <b>+${Math.round((after - s.armor) * 100)}%</b><br>${Math.round(s.armor * 100)}% → ${Math.round(after * 100)}%`;
       },
     },
@@ -134,10 +135,11 @@
       base: 0.15, minRarity: 1, skill: true,
       apply(s, m, p) {
         s.skillDurationMul *= 1 + m;
-        if (p) p.skillEnergy = Math.min(CFG.SKILL.MAX, (p.skillEnergy || 0) + 15);
+        if (p) p.skillEnergy = Math.min(CFG.SKILL.MAX, (p.skillEnergy || 0) + CFG.SKILL.MAX * CFG.SKILL.FLOW_REFUND_PCT);
       },
       desc(s, m) {
-        return `技能持续 <b>+${Math.round(m * 100)}%</b><br>施放立即返还 <b>15</b> 能量`;
+        const back = Math.round(CFG.SKILL.MAX * CFG.SKILL.FLOW_REFUND_PCT);
+        return `技能持续 <b>+${Math.round(m * 100)}%</b><br>施放立即返还 <b>${back}</b> 能量`;
       },
     },
     /* ---------- 诅咒强化：强力但带代价 ---------- */
@@ -150,7 +152,7 @@
     },
     {
       id: "curse_frenzy", name: "狂乱低语", icon: "☠", max: 1, base: 0.28, curse: true,
-      apply(s, m) { s.fireInterval = Math.max(0.06, s.fireInterval / (1 + m)); s.enemySpeedMul *= 1.12; },
+      apply(s, m) { s.fireInterval = Math.max(CFG.LIMITS.MIN_FIRE, s.fireInterval / (1 + m)); s.enemySpeedMul *= 1.12; },
       desc() {
         return `射速 <b>+28%</b><br>代价：敌人移速 <b>+12%</b>`;
       },
@@ -164,7 +166,7 @@
     },
     {
       id: "curse_glass", name: "易碎核心", icon: "☠", max: 2, base: 0.12, curse: true,
-      apply(s, m) { s.crit = Math.min(0.8, s.crit + m); s.shieldRegen *= 0.45; },
+      apply(s, m) { s.crit = Math.min(CFG.LIMITS.MAX_CRIT, s.crit + m); s.shieldRegen *= 0.45; },
       desc(s, m) {
         return `暴击率 <b>+${Math.round(m * 100)}%</b><br>代价：护盾恢复 <b>-55%</b>`;
       },
