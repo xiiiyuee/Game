@@ -1,5 +1,7 @@
 node_modules/
-dist/
+/dist/
+star-survivor/dist/*
+!star-survivor/dist/index.html
 target/
 __pycache__/
 .env

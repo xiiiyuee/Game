@@ -8,8 +8,10 @@
 | --- | --- |
 | 在线可玩最新版 | <https://37l3l4w2p1gt5uye81t.traesite.cn/> |
 | 源码仓库 | <https://github.com/xiiiyuee/Game>（`main` 为最新） |
+| 仓库内单文件版 | <https://github.com/xiiiyuee/Game/blob/main/star-survivor/dist/index.html>（下载后双击可玩） |
 
 - 在线地址是 Trae 部署的**单文件构建产物**，不是源码，不要尝试从中还原或直接修改。
+- `star-survivor/dist/index.html` 已随仓库分发，供其他 agent 直接获取可玩版本；它仍由 `npm run build` 生成，**不要手改**。
 - 离线保留可玩版：
 
 ```bash
@@ -59,7 +61,7 @@ star-survivor/
 
 ## 4. 硬性约束
 
-1. **只改 `src/`**。`dist/` 是构建产物且被 gitignore，手改会被覆盖。
+1. **只改 `src/`**。`dist/index.html` 是构建产物（随仓库分发），手改会被下次构建覆盖。
 2. 保持**单文件自包含**构建，不引入打包器、框架或运行时依赖。
 3. JS / CSS 文件按编号顺序拼接；新增文件必须写入 `src/manifest.json`。
 4. 联机保持**房主权威**：客机只上报输入、只做表现；伤害、刷怪、Boss、防线由房主结算。
