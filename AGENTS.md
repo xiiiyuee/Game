@@ -7,6 +7,7 @@
 | 用途 | 地址 |
 | --- | --- |
 | 在线可玩最新版 | <https://37l3l4w2p1gt5uye81t.traesite.cn/> |
+| GitHub Pages 在线版 | <https://xiiiyuee.github.io/Game/> |
 | 源码仓库 | <https://github.com/xiiiyuee/Game>（`main` 为最新） |
 | 仓库内单文件版 | <https://github.com/xiiiyuee/Game/blob/main/star-survivor/dist/index.html>（下载后双击可玩） |
 
@@ -18,7 +19,7 @@
 curl -L -o star-survivor-latest.html https://37l3l4w2p1gt5uye81t.traesite.cn/
 ```
 
-- 仓库内 GitHub Pages 工作流存在，但 Pages 未启用，`https://xiiiyuee.github.io/Game/` 返回 404，不要引用。
+- GitHub Pages 已启用（Source: GitHub Actions），每次推送 `main` 自动构建并发布到 `https://xiiiyuee.github.io/Game/`；工作流见 `.github/workflows/pages.yml`。
 - 其他 agent 无法发布到上述 Trae 站点（依赖本环境部署插件与授权）。上线由维护者执行。
 
 ## 2. 获取源码与本地运行
