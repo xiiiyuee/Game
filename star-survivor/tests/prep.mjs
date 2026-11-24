@@ -24,6 +24,7 @@ const hook = `
     get shake() { return shake; }, set shake(v) { shake = v; },
     get combo() { return combo; }, set combo(v) { combo = v; },
     spawnEnemy, damagePlayer, updateEnemies, coopAddRemote, coopEnemyPacket,
+    activateUltimate, get ultTimer() { return ultTimer; },
     weightedEnemyType,
     get waveNum() { return waveNum; }, set waveNum(v) { waveNum = v; },
     get chapter() { return chapter; }, set chapter(v) { chapter = v; },

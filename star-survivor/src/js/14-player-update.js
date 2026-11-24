@@ -35,6 +35,7 @@
     // 冲刺手感：起步扭曲环淡出、击杀充能窗口倒计时
     p.phaseRing = Math.max(0, (p.phaseRing || 0) - dt * 2.2);
     p.phaseRefundT = Math.max(0, (p.phaseRefundT || 0) - dt);
+    p.ultBuffT = Math.max(0, (p.ultBuffT || 0) - dt);
 
     // 低血量心跳：生命越低越急促，与屏幕边缘脉冲同步
     if (p === player && state === "playing") {
@@ -159,7 +160,8 @@
     if (p.fireCd <= 0 && target && !(p.beamTime > 0)) {
       fireAt(target, p);
       // 防线联动：炮塔光环内射击间隔缩短
-      p.fireCd = s.fireInterval * defenseFireMul(p);
+      p.fireCd = s.fireInterval * defenseFireMul(p) *
+        ((p.ultBuffT || 0) > 0 ? CFG.ULT.FIRE_MUL : 1);
     }
 
     // 记录实际速度，供敌机预判射击
@@ -268,12 +270,13 @@
     // 擦弹回流：层数转化为强化射击（护盾过载改装使层数增伤减半）
     const stackMul = p.skillMod === "graze_overcharge" ? CFG.SKILL.GRAZE.OVER_STACK_MUL : 1;
     const grazeMul = 1 + (p.grazeStacks || 0) * CFG.SKILL.GRAZE.DMG_PER * stackMul;
-    fireWeaponPattern(p, baseAng, grazeMul);
+    const ultMul = (p.ultBuffT || 0) > 0 ? CFG.ULT.DMG_MUL : 1;
+    fireWeaponPattern(p, baseAng, grazeMul * ultMul);
 
     // 进化「双子脉冲」：每次射击追加两道侧向脉冲
     if (s.twinPulse) {
-      spawnPlayerBullet(baseAng - 0.12, s.damage * 0.7 * grazeMul, undefined, p);
-      spawnPlayerBullet(baseAng + 0.12, s.damage * 0.7 * grazeMul, undefined, p);
+      spawnPlayerBullet(baseAng - 0.12, s.damage * 0.7 * grazeMul * ultMul, undefined, p);
+      spawnPlayerBullet(baseAng + 0.12, s.damage * 0.7 * grazeMul * ultMul, undefined, p);
     }
 
     // 枪口火花

@@ -73,6 +73,7 @@
       beamAcc: 0,                // 光束跳伤累计（用于合并显示）
       beamTextCd: 0,             // 跳伤数字刷新计时
       energy: 0,                 // 超载能量
+      ultBuffT: 0,               // 超载强化窗口剩余时间（射速/伤害提升）
       skill: chosenSkill || "phase", // 本局主动技能
       skillMod: "",              // 技能改装（互斥，见 SKILL_MODS）
       skillAwaken: "",           // 技能终极觉醒（改装后解锁）

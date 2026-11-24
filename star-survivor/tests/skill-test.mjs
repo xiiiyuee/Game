@@ -117,6 +117,28 @@ const refund = await page.evaluate(() => {
 });
 ok("冲刺窗口内击杀回充技能能量", refund.energy > 0 && refund.refundT === 0, refund);
 
+// 3d) 超载：范围爆发 + 残血处决 + 强化窗口
+const ult = await page.evaluate(() => {
+  const S = window.__SS__;
+  S.startGame("pulse", "phase");
+  const p = S.getLocalPlayer();
+  p.energy = S.CFG.ULT.MAX;
+  p.stats.damage = 20;
+  const a = S.spawnEnemy("square", p.x + 100, p.y);
+  a.hp = 1000;
+  a.hpMax = 1000;
+  const b = S.spawnEnemy("square", p.x - 100, p.y);
+  b.hp = 150;                       // 15% < EXEC，应被处决
+  b.hpMax = 1000;
+  S.activateUltimate();
+  return {
+    energy: p.energy, buff: p.ultBuffT, slow: S.ultTimer,
+    aHp: a.hp, bDead: !!b.dead,
+  };
+});
+ok("超载范围爆发、处决残血并进入强化窗口",
+  ult.energy < 20 && ult.aHp < 1000 && ult.bDead && ult.buff > 0 && ult.slow > 0, ult);
+
 // 4) 重力井：生成 + 到期内爆移除
 const well = await page.evaluate(() => {
   const S = window.__SS__;

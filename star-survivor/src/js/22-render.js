@@ -578,6 +578,16 @@
       ctx.stroke();
     }
 
+    // 超载强化窗口：金色脉冲环，提示射速与伤害提升
+    if (p.ultBuffT > 0) {
+      const ua = 0.35 + 0.2 * Math.sin(t * 14);
+      ctx.strokeStyle = `rgba(255, 214, 102, ${ua})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r + 6 + Math.sin(t * 9) * 2, 0, TAU);
+      ctx.stroke();
+    }
+
     // 受击方向指示：在来向画一段高亮弧，解决“不知道哪来的伤害”
     if (p.hitDirT > 0) {
       const k = clamp(p.hitDirT / 0.8, 0, 1);

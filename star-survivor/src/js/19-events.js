@@ -446,19 +446,22 @@
     emit(player.x, player.y, 12, "#c58bff", 240, 3, 0.5);
   }
 
-  // 终极技能「超载」：清弹 + 范围爆发 + 短时减速
+  // 终极技能「超载」：清弹 + 范围爆发 + 斩杀残血 + 短时强化窗口
   function activateUltimate() {
     if (state !== "playing" || player.energy < CFG.ULT.MAX) return;
     if (player.down || player.eliminated) return;
+    const U = CFG.ULT;
     player.energy = 0;
-    ultTimer = CFG.ULT.SLOW_TIME;
-    player.invuln = Math.max(player.invuln, CFG.ULT.INVULN);
+    ultTimer = U.SLOW_TIME;
+    player.ultBuffT = U.SLOW_TIME;   // 强化窗口：射速与伤害提升
+    player.invuln = Math.max(player.invuln, U.INVULN);
 
-    const R = CFG.ULT.RADIUS * view.scale;
+    const R = U.RADIUS * view.scale;
     pulses.push({ x: player.x, y: player.y, r: 24, max: R, life: 0.7, maxLife: 0.7 });
+    pulses.push({ x: player.x, y: player.y, r: 16, max: R * 0.62, life: 0.5, maxLife: 0.5 });
 
     // 清除镜头范围内的敌方弹幕
-    const m = CFG.ULT.CLEAR_MARGIN;
+    const m = U.CLEAR_MARGIN;
     for (let i = ebullets.length - 1; i >= 0; i--) {
       const b = ebullets[i];
       if (b.x > camera.x - m && b.x < camera.x + view.w + m &&
@@ -468,19 +471,23 @@
       }
     }
 
-    // 范围伤害
+    // 范围伤害：基础 + 玩家输出成长；残血非 Boss 直接处决
+    const baseDmg = U.DAMAGE + (player.stats.damage || 0) * U.DAMAGE_STAT_MUL;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (e.dead) continue;
       const rr = R + e.r;
       if (dist2(player.x, player.y, e.x, e.y) <= rr * rr) {
-        hurtEnemy(e, CFG.ULT.DAMAGE * (e.isBoss ? 0.5 : 1), false, true, player.id);
+        const exec = !e.isBoss && e.hp <= e.hpMax * U.EXEC;
+        const d = exec ? e.hpMax * 2 : baseDmg * (e.isBoss ? U.BOSS_MUL : 1);
+        hurtEnemy(e, d, false, true, player.id);
         if (state !== "playing") break;
       }
     }
 
-    emit(player.x, player.y, 40, "#7ef0ff", 380, 4, 0.9);
-    shake = Math.max(shake, 14 * CFG.FX.SHAKE);
+    emit(player.x, player.y, 46, "#7ef0ff", 400, 4, 0.9);
+    emit(player.x, player.y, 20, "#ffd666", 300, 3, 0.7);
+    shake = Math.max(shake, 16 * CFG.FX.SHAKE);
     addText(player.x, player.y - 42, "超载爆发", "#ffd666", 20);
     sfxUlt();
     refreshHud(true);
